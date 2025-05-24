@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+.testimonials-swiper .swiper-button-next,
+.testimonials-swiper .swiper-button-prev {
+  color: currentColor;
+}
+
+.testimonials-swiper .swiper-pagination-bullet {
+  background-color: currentColor;
+  opacity: 0.5;
+}
+
+.testimonials-swiper .swiper-pagination-bullet-active {
+  opacity: 1;
+}
+
+@keyframes scroll {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+  
+  .animate-scroll {
+    animation: scroll 20s linear infinite;
+    /* display: flex; */
+    /* gap: 2rem; */
+  }
+
+  /* Add these styles */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: var(--calendar-icon-filter, none);
+  }
+  
+  .dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+  /* Add this to your CSS file */
+.date-input::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+  color: currentColor;
+}
+
+/* For browsers that hide the indicator */
+.date-input {
+  position: relative;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-fade-in-out {
+  animation: fadeInOut 3s ease-in-out;
+}
