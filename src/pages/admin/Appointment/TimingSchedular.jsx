@@ -7,6 +7,7 @@ import CustomInput from '../../../components/CustomInput';
 import CustomSelect from '../../../components/CustomSelect';
 import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmation';
 import { Calendar, Clock, AlertTriangle, CheckCircle, Plus, Trash2 } from 'lucide-react';
+import { getAuth } from 'firebase/auth';
 
 const TimingSchedular = () => {
   const { currentTheme } = useTheme();
@@ -202,7 +203,33 @@ const TimingSchedular = () => {
   const confirmRemoveLocation = async () => {
       try {
           const { locationIndex } = deleteConfirmation;
-          const updatedLocations = schedule.locations.filter((_, i) => i !== locationIndex);
+          if (locationIndex === null) return;
+
+          // Check if user is authenticated using localStorage
+          const adminToken = localStorage.getItem('adminToken');
+          const isAdminLoggedIn = localStorage.getItem('isAdminLoggedIn') === 'true';
+          
+          if (!adminToken || !isAdminLoggedIn) {
+              throw new Error('User must be authenticated');
+          }
+
+          setLoading(true);
+          
+          // Get the current schedule document
+          const scheduleRef = doc(db, 'settings', 'schedule');
+          const scheduleDoc = await getDoc(scheduleRef);
+          
+          if (!scheduleDoc.exists()) {
+              throw new Error('Schedule document not found');
+          }
+
+          const currentData = scheduleDoc.data();
+          const updatedLocations = currentData.locations.filter((_, i) => i !== locationIndex);
+          
+          // Update in Firestore with merge option
+          await setDoc(scheduleRef, {
+              locations: updatedLocations
+          }, { merge: true });
           
           // Update local state
           setSchedule(prev => ({
@@ -210,17 +237,13 @@ const TimingSchedular = () => {
               locations: updatedLocations
           }));
           
-          // Update in Firestore
-          await setDoc(doc(db, 'settings', 'schedule'), {
-              ...schedule,
-              locations: updatedLocations
-          });
-          
           setDeleteConfirmation({ show: false, periodId: null, locationIndex: null });
           showNotification('Location removed successfully');
       } catch (error) {
           console.error('Error removing location:', error);
-          showNotification('Failed to remove location', 'error');
+          showNotification(error.message || 'Failed to remove location', 'error');
+      } finally {
+          setLoading(false);
       }
   };
 
@@ -877,3 +900,34 @@ const TimingSchedular = () => {
 };
 
 export default TimingSchedular;
+
+
+const handleDeleteSlot = async (locationIndex, day) => {
+  try {
+    const updatedLocations = [...schedule.locations];
+    updatedLocations[locationIndex] = {
+      ...updatedLocations[locationIndex],
+      days: {
+        ...updatedLocations[locationIndex].days,
+        [day]: false
+      }
+    };
+
+    // Update local state
+    setSchedule(prev => ({
+      ...prev,
+      locations: updatedLocations
+    }));
+
+    // Update in Firestore
+    await setDoc(doc(db, 'settings', 'schedule'), {
+      ...schedule,
+      locations: updatedLocations
+    });
+
+    showNotification('Slot removed successfully');
+  } catch (error) {
+    console.error('Error removing slot:', error);
+    showNotification('Failed to remove slot', 'error');
+  }
+};
