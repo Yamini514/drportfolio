@@ -85,19 +85,17 @@ function AddAppointment() {
   };
 
   // Fetch time slots from Firebase based on selected date
+  // Add this helper function at the top of your component
+  const formatTimeSlot = (slot) => {
+    if (!slot) return '';
+    const cleanSlot = slot.replace(/["']/g, '').trim();
+    return cleanSlot;
+  };
+  
   const fetchTimeSlots = async (selectedDate, dayName) => {
-    setIsLoading(true);
     try {
-      if (dayName.toLowerCase() === 'sunday') {
-        setTimeSlots([]);
-        setIsSunday(true);
-        setIsLoading(false);
-        return;
-      }
+      setIsLoading(true);
       
-      setIsSunday(false);
-      
-      // First check if date is blocked
       const { blocked, reason } = await checkIfDateIsBlocked(selectedDate, dayName);
       if (blocked) {
         setIsDateBlocked(true);
@@ -105,80 +103,86 @@ function AddAppointment() {
         setTimeSlots([]);
         setIsLoading(false);
         return;
-      } else {
-        setIsDateBlocked(false);
-        setBlockReason('');
       }
       
-      // Then, check if the day is configured in admin settings
-      const scheduleDoc = await getDoc(doc(db, 'settings', 'schedule'));
-      if (scheduleDoc.exists()) {
-        const scheduleData = scheduleDoc.data();
-        const dayData = scheduleData[dayName.toLowerCase()];
-        setDaySchedule(dayData);
-        
-        if (!dayData || !dayData.isOpen || dayData.slots.length === 0) {
-          setTimeSlots([]);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Then fetch the specific slots for this date from the schedule collection
+      setIsDateBlocked(false);
+      setBlockReason('');
+      
+      // Query the schedule collection for the specific date
       const scheduleRef = collection(db, 'appointments/data/schedule');
-      const querySnapshot = await getDocs(query(scheduleRef, where("date", "==", selectedDate)));
-      const slots = [];
+      const q = query(scheduleRef, where("date", "==", selectedDate));
+      const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
-        querySnapshot.forEach((doc) => {
-          const scheduleData = doc.data();
-          slots.push(...scheduleData.timeSlots);
-        });
-      } else {
-        // If no specific schedule found for this date, generate slots based on day settings
-        if (daySchedule && daySchedule.isOpen) {
-          const generatedSlots = createTimeSlotsFromDaySchedule(daySchedule);
-          slots.push(...generatedSlots);
+        const scheduleData = querySnapshot.docs[0].data();
+        if (scheduleData.timeSlots && scheduleData.timeSlots.length > 0) {
+          // Filter out booked slots
+          const availableSlots = scheduleData.timeSlots.filter(slot => 
+            !bookedSlots[selectedDate]?.includes(slot.time)
+          );
+          setTimeSlots(availableSlots);
+          setDaySchedule({ isOpen: true });
         }
+      } else {
+        setTimeSlots([]);
+        setDaySchedule(null);
       }
-      
-      setTimeSlots(slots);
     } catch (error) {
       console.error('Error fetching time slots:', error);
+      setTimeSlots([]);
     } finally {
       setIsLoading(false);
     }
-  };
+};
 
   // Create time slots based on day schedule
   const createTimeSlotsFromDaySchedule = (daySchedule) => {
+
     if (!daySchedule) return [];
-
-    // If daySchedule is already an array of time slots, return it directly
+  
+    // If daySchedule is already an array of time slots
     if (Array.isArray(daySchedule)) {
-      return daySchedule;
+      return Array.from(new Set(daySchedule.map(slot => {
+        // Remove any quotes and format properly
+        const cleanSlot = slot.replace(/["']/g, '').trim();
+        return formatTimeSlot(cleanSlot);
+      })));
     }
-
+  
     // If slots is directly an array of time strings
     if (Array.isArray(daySchedule.slots)) {
-      return daySchedule.slots;
+      return Array.from(new Set(daySchedule.slots.map(slot => {
+        // Remove any quotes and format properly
+        const cleanSlot = slot.replace(/["']/g, '').trim();
+        return formatTimeSlot(cleanSlot);
+      })));
     }
-
-    // If no valid slots found
-    if (!daySchedule.isOpen || !daySchedule.slots) {
-      return [];
-    }
-
-    const allSlots = [];
-    
+  
+    // Add this helper function at the top of your component
+    const formatTimeSlot = (slot) => {
+      if (!slot) return '';
+      // Remove any quotes and extra spaces
+      const cleanSlot = slot.replace(/["']/g, '').trim();
+      // Split into hours and minutes if it's in the format "9:00", "10:30", etc.
+      const [time] = cleanSlot.split(',');
+      const [hours, minutes] = time.split(':').map(num => num.trim());
+      const hour = parseInt(hours);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${minutes} ${period}`;
+    };
+  
+    const allSlots = new Set(); // Use Set to prevent duplicates
+      
     try {
       Object.entries(daySchedule.slots).forEach(([key, slot]) => {
         // Handle if slot is already a formatted time string
         if (typeof slot === 'string') {
-          allSlots.push(slot);
+          allSlots.add(formatTimeSlot(slot));
           return;
         }
-
+  
+        // Rest of the code remains the same
         // Handle if slot has start/end format
         if (slot && typeof slot.start === 'string' && typeof slot.end === 'string') {
           const [startHour, startMinute] = slot.start.split(':').map(Number);
@@ -197,7 +201,7 @@ function AddAppointment() {
             const period = currentHour >= 12 ? 'PM' : 'AM';
             const timeSlot = `${displayHour}:${currentMinute.toString().padStart(2, '0')} ${period}`;
             
-            allSlots.push(timeSlot);
+            allSlots.add(timeSlot);
             
             currentMinute += 30;
             if (currentMinute >= 60) {
@@ -212,7 +216,7 @@ function AddAppointment() {
       return [];
     }
     
-    return allSlots;
+    return Array.from(allSlots);
   };
 
   useEffect(() => {
@@ -586,3 +590,4 @@ function AddAppointment() {
 }
 
 export default AddAppointment;
+

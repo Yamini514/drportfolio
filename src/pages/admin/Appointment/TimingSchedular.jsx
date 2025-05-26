@@ -11,7 +11,11 @@ import { Calendar, Clock, AlertTriangle, CheckCircle, Plus, Trash2 } from 'lucid
 const TimingSchedular = () => {
   const { currentTheme } = useTheme();
   const [schedule, setSchedule] = useState({
-    locations: []
+    locations: [],
+    defaultTimes: {
+      startTime: '09:00',
+      endTime: '17:00'
+    }
   });
   const [newLocation, setNewLocation] = useState({
     name: '',
@@ -82,9 +86,30 @@ const TimingSchedular = () => {
 
   const loadData = async () => {
     try {
+      setLoading(true); // Add loading state
       const scheduleDoc = await getDoc(doc(db, 'settings', 'schedule'));
       if (scheduleDoc.exists()) {
-        setSchedule(scheduleDoc.data());
+        const data = scheduleDoc.data();
+        setSchedule(data);
+        // Also update newLocation with the saved default times if they exist
+        if (data.defaultTimes) {
+          setNewLocation(prev => ({
+            ...prev,
+            startTime: data.defaultTimes.startTime || '09:00',
+            endTime: data.defaultTimes.endTime || '17:00'
+          }));
+        }
+      } else {
+        // If no document exists, create one with default values
+        const defaultSchedule = {
+          locations: [],
+          defaultTimes: {
+            startTime: '09:00',
+            endTime: '17:00'
+          }
+        };
+        await setDoc(doc(db, 'settings', 'schedule'), defaultSchedule);
+        setSchedule(defaultSchedule);
       }
 
       const blockedPeriodsDoc = await getDoc(doc(db, 'settings', 'blockedPeriods'));
@@ -94,36 +119,54 @@ const TimingSchedular = () => {
     } catch (error) {
       console.error('Error loading data:', error);
       setError('Failed to load schedule data');
+    } finally {
+      setLoading(false); // Clear loading state
     }
   };
 
-  const handleAddLocation = () => {
+  const handleAddLocation = async () => {
     if (!newLocation.name || !Object.values(newLocation.days).some(day => day)) {
       setError('Please provide location name and select at least one day');
       return;
     }
     
-    setSchedule(prev => ({
-      ...prev,
-      locations: [...(prev.locations || []), { ...newLocation }]
-    }));
-    
-    setNewLocation({
-      name: '',
-      startTime: '09:00',
-      endTime: '17:00',
-      days: {
-        monday: false,
-        tuesday: false,
-        wednesday: false,
-        thursday: false,
-        friday: false,
-        saturday: false,
-        sunday: false
-      }
-    });
-    showNotification('Location added successfully');
-  };
+    try {
+      const updatedLocations = [...(schedule.locations || []), { ...newLocation }];
+      
+      // Update local state
+      setSchedule(prev => ({
+        ...prev,
+        locations: updatedLocations
+      }));
+      
+      // Update in Firestore
+      await setDoc(doc(db, 'settings', 'schedule'), {
+        ...schedule,
+        locations: updatedLocations
+      });
+      
+      // Reset newLocation with safe defaultTimes access
+      setNewLocation({
+        name: '',
+        startTime: schedule.defaultTimes?.startTime || '09:00',
+        endTime: schedule.defaultTimes?.endTime || '17:00',
+        days: {
+          monday: false,
+          tuesday: false,
+          wednesday: false,
+          thursday: false,
+          friday: false,
+          saturday: false,
+          sunday: false
+        }
+      });
+      
+      showNotification('Location added successfully');
+    } catch (error) {
+      console.error('Error adding location:', error);
+      showNotification('Failed to add location', 'error');
+    }
+};
 
   const handleLocationChange = (field, value) => {
     setNewLocation(prev => ({
@@ -156,14 +199,29 @@ const TimingSchedular = () => {
     });
   };
 
-  const confirmRemoveLocation = () => {
-    const { locationIndex } = deleteConfirmation;
-    setSchedule(prev => ({
-      ...prev,
-      locations: prev.locations.filter((_, i) => i !== locationIndex)
-    }));
-    setDeleteConfirmation({ show: false, periodId: null, locationIndex: null });
-    showNotification('Location removed successfully');
+  const confirmRemoveLocation = async () => {
+      try {
+          const { locationIndex } = deleteConfirmation;
+          const updatedLocations = schedule.locations.filter((_, i) => i !== locationIndex);
+          
+          // Update local state
+          setSchedule(prev => ({
+              ...prev,
+              locations: updatedLocations
+          }));
+          
+          // Update in Firestore
+          await setDoc(doc(db, 'settings', 'schedule'), {
+              ...schedule,
+              locations: updatedLocations
+          });
+          
+          setDeleteConfirmation({ show: false, periodId: null, locationIndex: null });
+          showNotification('Location removed successfully');
+      } catch (error) {
+          console.error('Error removing location:', error);
+          showNotification('Failed to remove location', 'error');
+      }
   };
 
   const handleDateRangeChange = (field, value) => {
@@ -226,11 +284,24 @@ const TimingSchedular = () => {
     });
   };
 
-  const confirmRemoveBlockedPeriod = () => {
-    const { periodId } = deleteConfirmation;
-    setBlockedPeriods(prev => prev.filter(period => period.id !== periodId));
-    setDeleteConfirmation({ show: false, periodId: null, locationIndex: null });
-    showNotification('Blocked period removed');
+  const confirmRemoveBlockedPeriod = async () => {
+      try {
+          const { periodId } = deleteConfirmation;
+          // Remove from local state
+          setBlockedPeriods(prev => prev.filter(period => period.id !== periodId));
+          
+          // Update in Firestore
+          await setDoc(doc(db, 'settings', 'blockedPeriods'), { 
+              periods: blockedPeriods.filter(period => period.id !== periodId),
+              updatedAt: new Date().toISOString()
+          });
+          
+          setDeleteConfirmation({ show: false, periodId: null, locationIndex: null });
+          showNotification('Blocked period removed successfully');
+      } catch (error) {
+          console.error('Error removing blocked period:', error);
+          showNotification('Failed to remove blocked period', 'error');
+      }
   };
 
   const createTimeSlots = (location) => {
@@ -497,14 +568,14 @@ const TimingSchedular = () => {
               <table className="w-full border-collapse" style={{ borderColor: currentTheme.border }}>
                 <thead>
                   <tr style={{ backgroundColor: currentTheme.primary + '10' }}>
-                    <th className="p-3 text-left" style={{ color: currentTheme.text.primary }}>Location</th>
-                    <th className="p-3 text-left" style={{ color: currentTheme.text.primary }}>Timings</th>
+                    <th className="p-3 text-left w-1/4" style={{ color: currentTheme.text.primary }}>Location</th>
+                    <th className="p-3 text-left w-1/4" style={{ color: currentTheme.text.primary }}>Timings</th>
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                      <th key={day} className="p-3 text-center" style={{ color: currentTheme.text.primary }}>
+                      <th key={day} className="p-3 text-center w-12" style={{ color: currentTheme.text.primary }}>
                         {day}
                       </th>
                     ))}
-                    <th className="p-3"></th>
+                    <th className="p-3 w-16"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -522,24 +593,22 @@ const TimingSchedular = () => {
                         {location.startTime} - {location.endTime}
                       </td>
                       {Object.keys(location.days).map(day => (
-                        <td key={day} className="p-3 text-center">
-                          {location.days[day] ? (
-                            <CheckCircle size={16} className="mx-auto" style={{ color: currentTheme.primary }} />
-                          ) : (
-                            day === 'sunday' ? (
-                              <AlertTriangle size={16} className="mx-auto" style={{ color: '#ef4444' }} />
+                        <td key={day} className="p-3 text-center w-12">
+                          <div className="h-6 w-6 mx-auto flex items-center justify-center"> {/* Fixed width and height container */}
+                            {location.days[day] ? (
+                              <CheckCircle size={16} style={{ color: currentTheme.primary }} />
                             ) : (
-                              <span>-</span>
-                            )
-                          )}
+                              day === 'sunday' ? (
+                                <AlertTriangle size={16} style={{ color: '#ef4444' }} />
+                              ) : (
+                                <span className="inline-block w-4 text-center">-</span>
+                              )
+                            )}
+                          </div>
                         </td>
                       ))}
-                      <td className="p-3">
-                        <CustomButton
-                          variant="danger"
-                          onClick={() => handleRemoveLocation(index)}
-                          icon={Trash2}
-                        />
+                      <td className="p-3 w-16">
+                        <CustomButton variant="danger" onClick={() => handleRemoveLocation(index)} icon={Trash2} />
                       </td>
                     </tr>
                   ))}

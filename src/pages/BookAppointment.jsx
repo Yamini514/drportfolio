@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { format } from 'date-fns';
 import { db } from '../firebase/config';
-import { collection, getDocs, addDoc, doc, setDoc, getDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, setDoc, getDoc, query, where, onSnapshot } from 'firebase/firestore';
 import { Calendar, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
+
 
 function BookAppointment() {
   const { currentTheme } = useTheme();
@@ -101,55 +102,74 @@ function BookAppointment() {
   const fetchTimeSlots = async (date, dayName) => {
     setIsLoading(true);
     try {
-      // Check if the date is blocked
-      const blockedDatesRef = collection(db, 'settings/schedule/blockedDates');
-      const blockedSnapshot = await getDocs(query(blockedDatesRef, where("date", "==", date)));
-      
-      if (!blockedSnapshot.empty) {
-        const blockedData = blockedSnapshot.docs[0].data();
-        setIsDateBlocked(true);
-        setBlockReason(blockedData.reason || 'This date is blocked');
-        setTimeSlots([]);
-        return;
-      }
-      
-      // Get the day schedule
-      const dayScheduleRef = doc(db, 'settings/schedule');
-      const scheduleDoc = await getDoc(dayScheduleRef);
-      
-      if (scheduleDoc.exists()) {
-        const scheduleData = scheduleDoc.data();
-        const daySchedule = scheduleData[dayName.toLowerCase()];
-        setDaySchedule(daySchedule);
-        
-        if (!daySchedule || !daySchedule.isOpen) {
+      // First check if date is blocked
+      const { blocked, reason } = await checkIfDateIsBlocked(date, dayName);
+      if (blocked) {
+          setIsDateBlocked(true);
+          setBlockReason(reason);
           setTimeSlots([]);
+          setIsLoading(false);
           return;
-        }
       }
-
-      // Fetch the specific slots for this date from the schedule collection
+  
+      // Reset block status
+      setIsDateBlocked(false);
+      setBlockReason('');
+  
+      // Fetch schedule for the specific date
       const scheduleRef = collection(db, 'appointments/data/schedule');
-      const querySnapshot = await getDocs(query(scheduleRef, where("date", "==", date)));
-      const slots = [];
-      
+      const q = query(scheduleRef, where("date", "==", date));
+      const querySnapshot = await getDocs(q);
+  
       if (!querySnapshot.empty) {
-        querySnapshot.forEach((doc) => {
-          const scheduleData = doc.data();
-          slots.push(...scheduleData.timeSlots);
-        });
+          // Use the schedule from database
+          const scheduleData = querySnapshot.docs[0].data();
+          if (scheduleData.timeSlots && scheduleData.timeSlots.length > 0) {
+              // Filter out booked slots
+              const availableSlots = scheduleData.timeSlots.filter(slot => 
+                  !bookedSlots[date]?.includes(slot)
+              );
+              setTimeSlots(availableSlots);
+              setDaySchedule({ isOpen: true });
+          } else {
+              setTimeSlots([]);
+              setBookingMessage('No available slots for this date.');
+          }
       } else {
-        // If no specific schedule found for this date, generate slots based on day settings
-        if (daySchedule && daySchedule.isOpen) {
-          const generatedSlots = createTimeSlotsFromDaySchedule(daySchedule);
-          slots.push(...generatedSlots);
-        }
+          // If no specific schedule found, check the general day schedule
+          const dayScheduleRef = doc(db, 'settings/schedule');
+          const scheduleDoc = await getDoc(dayScheduleRef);
+          
+          if (scheduleDoc.exists()) {
+              const scheduleData = scheduleDoc.data();
+              const locations = scheduleData.locations || [];
+              
+              // Find a location that's open on this day
+              const availableLocation = locations.find(loc => loc.days[dayName.toLowerCase()]);
+              
+              if (availableLocation) {
+                  const slots = createTimeSlotsFromDaySchedule({
+                      startTime: availableLocation.startTime,
+                      endTime: availableLocation.endTime,
+                      isOpen: true
+                  });
+                  setTimeSlots(slots);
+                  setDaySchedule({ isOpen: true });
+              } else {
+                  setTimeSlots([]);
+                  setBookingMessage('No schedule available for this day.');
+                  setDaySchedule(null);
+              }
+          } else {
+              setTimeSlots([]);
+              setBookingMessage('No schedule configuration found.');
+              setDaySchedule(null);
+          }
       }
-      
-      setTimeSlots(slots);
     } catch (error) {
       console.error('Error fetching time slots:', error);
-      setNotification({ show: true, message: 'Error loading available time slots', type: 'error' });
+      setTimeSlots([]);
+      setBookingMessage('Error loading schedule. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +205,7 @@ function BookAppointment() {
           className={`p-3 rounded-lg text-center transition-colors ${selectedSlot === slot
             ? 'bg-blue-500 text-white'
             : bookedSlots[selectedDate]?.includes(slot)
-            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+          ? 'bg-red-900 text-gray-400 cursor-not-allowed'
             : 'bg-white hover:bg-blue-50 border border-gray-200'}`}
           disabled={bookedSlots[selectedDate]?.includes(slot)}
         >
@@ -219,51 +239,84 @@ function BookAppointment() {
   };
 
   // Load booked slots from Firebase
+  // Update the imports at the top of the file
+  // import { collection, getDocs, addDoc, doc, setDoc, getDoc, query, where, onSnapshot } from 'firebase/firestore';
+  
+  // Update the useEffect for fetching booked slots
   useEffect(() => {
-    const fetchBookedSlots = async () => {
-      try {
-        setIsLoading(true);
-        // Get the reference to the 'bookings' subcollection inside the 'data' document of 'appointments' collection
-        const bookingsRef = collection(db, 'appointments/data/bookings');
-        const querySnapshot = await getDocs(bookingsRef);
-        const slots = {};
-        
-        querySnapshot.forEach((doc) => {
-          const appointment = doc.data();
-          if (!slots[appointment.date]) {
-            slots[appointment.date] = [];
-          }
-          slots[appointment.date].push(appointment.time);
+  const fetchBookedSlots = async () => {
+    try {
+      setIsLoading(true);
+      const bookingsRef = collection(db, 'appointments/data/bookings');
+      const q = query(bookingsRef, where("date", "==", selectedDate));
+      
+      // Create data document if it doesn't exist
+      const dataDocRef = doc(db, 'appointments', 'data');
+      const dataDoc = await getDoc(dataDocRef);
+      
+      if (!dataDoc.exists()) {
+        await setDoc(dataDocRef, { 
+          created: new Date(),
+          description: 'Container for appointment bookings' 
         });
-        
-        setBookedSlots(slots);
-      } catch (error) {
-        console.error('Error fetching appointments:', error);
-        showNotification('Error loading booked appointments', 'error');
-      } finally {
-        setIsLoading(false);
       }
-    };
-    
-    // Make sure the "data" document exists
-    const createDataDocIfNeeded = async () => {
-      try {
-        const dataDocRef = doc(db, 'appointments', 'data');
-        const dataDoc = await getDoc(dataDocRef);
-        
-        if (!dataDoc.exists()) {
-          await setDoc(dataDocRef, { 
-            created: new Date(),
-            description: 'Container for appointment bookings' 
-          });
+
+      // Get initial slots
+      const querySnapshot = await getDocs(q);
+      const slots = {};
+      querySnapshot.forEach((doc) => {
+        const appointment = doc.data();
+        if (!slots[appointment.date]) {
+          slots[appointment.date] = [];
         }
-      } catch (error) {
-        console.error('Error checking data document:', error);
-      }
-    };
-    
-    createDataDocIfNeeded().then(() => fetchBookedSlots());
-  }, []);
+        slots[appointment.date].push(appointment.time);
+      });
+      setBookedSlots(slots);
+      setIsLoading(false);
+
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      showNotification('Error loading booked appointments', 'error');
+      setIsLoading(false);
+    }
+  };
+
+  if (selectedDate) {
+    fetchBookedSlots();
+  }
+}, [selectedDate]);
+  
+  // Update time slot rendering
+  {timeSlots.length > 0 && (
+    <div className="grid grid-cols-3 md:grid-cols-4 gap-4 mt-4">
+      {timeSlots.map((slot, index) => {
+        const isBooked = bookedSlots[selectedDate]?.includes(slot);
+        return (
+          <button
+            key={index}
+            onClick={() => !isBooked && handleSlotSelect(slot)}
+            className={`
+              p-3 rounded-lg text-center transition-colors flex items-center justify-center gap-2
+              ${selectedSlot === slot
+                ? 'bg-blue-500 text-white'
+                : isBooked
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white hover:bg-blue-50 border border-gray-200'
+              }
+            `}
+            disabled={isBooked}
+          >
+            <span>{slot}</span>
+            {isBooked ? (
+              <AlertTriangle size={16} className="text-gray-400" />
+            ) : (
+              <CheckCircle size={16} className="text-green-500" />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  )}
 
   // In the handleSubmit function
   const handleSubmit = async (e) => {
@@ -703,6 +756,33 @@ function BookAppointment() {
                 </div>
 
                 <div className="mb-4">
+                  <label 
+                    htmlFor="clinic" 
+                    className={`block mb-2 text-sm font-medium ${currentTheme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}
+                  >
+                    Select Clinic *
+                  </label>
+                  <select
+                    id="clinic"
+                    name="clinic"
+                    value={formData.clinic}
+                    onChange={handleInputChange}
+                    className={`bg-gray-50 border ${errors.clinic ? 'border-red-500' : 'border-gray-300'} 
+                      text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 
+                      block w-full p-2.5 ${currentTheme === 'dark' ? 'bg-gray-700 border-gray-600 placeholder-gray-400 text-white' : ''}`}
+                    required
+                  >
+                    <option value="">Choose a clinic</option>
+                    {clinics.map((clinic) => (
+                      <option key={clinic.id} value={clinic.id}>
+                        {clinic.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.clinic && <p className="mt-2 text-sm text-red-600">{errors.clinic}</p>}
+                </div>
+
+                <div className="mb-4">
                   <label className="block mb-2 font-medium">Previous Medical History (Optional)</label>
                   <textarea
                     name="medicalHistory"
@@ -756,4 +836,7 @@ function BookAppointment() {
 }
 
 export default BookAppointment;
+
+
+
 
