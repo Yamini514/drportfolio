@@ -476,28 +476,28 @@ function AddAppointment() {
 
         {/* Time Slots */}
         {selectedDate && timeSlots.length > 0 && !isLoading && (
-          <div className="mt-4 sm:mt-6">
-            <label className="block text-sm sm:text-base font-medium mb-2 sm:mb-3" style={{ color: currentTheme.text.primary }}>
-              Available Time Slots
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
-              {timeSlots.map((slot) => {
-                const isBooked = bookedSlots[selectedDate]?.includes(slot);
-                return (
-                  <CustomButton
-                    key={slot}
-                    variant={selectedSlot === slot ? 'primary' : isBooked ? 'danger' : 'secondary'}
-                    onClick={() => !isBooked && handleSlotSelect(slot)}
-                    className={`w-full justify-center text-sm sm:text-base py-2 px-3 ${isBooked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    icon={Clock}
-                  >
-                    {slot}
-                  </CustomButton>
-                );
-              })}
-            </div>
-          </div>
-        )}
+  <div className="mt-4 sm:mt-6">
+    <label className="block text-sm sm:text-base font-medium mb-2 sm:mb-3" style={{ color: currentTheme.text.primary }}>
+      Available Time Slots
+    </label>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+      {timeSlots.map((slot) => {
+        const isBooked = bookedSlots[selectedDate]?.includes(slot);
+        return (
+          <CustomButton
+            key={slot}
+            variant={selectedSlot === slot ? 'primary' : isBooked ? 'danger' : 'secondary'}
+            onClick={() => !isBooked && handleSlotSelect(slot)}
+            className={`w-full justify-center text-sm sm:text-base py-2 px-3 ${isBooked ? 'opacity-50 cursor-not-allowed' : ''}`}
+            icon={Clock}
+          >
+            {slot}
+          </CustomButton>
+        );
+      })}
+    </div>
+  </div>
+)}
 
         {showForm && (
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">

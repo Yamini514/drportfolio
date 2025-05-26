@@ -18,6 +18,7 @@ function BookAppointment() {
     email: '',
     phone: '',
     dob: '',
+    clinic: '', // Add this line
     reasonForVisit: '',
     appointmentType: 'Consultation',
     medicalHistory: ''
@@ -268,6 +269,11 @@ function BookAppointment() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
+    
+    // Add clinic validation
+    if (!formData.clinic) {
+      newErrors.clinic = 'Please select a clinic';
+    }
     
     // Name validation
     if (!formData.name.trim()) {
@@ -625,6 +631,19 @@ function BookAppointment() {
                     placeholder="10-digit phone number"
                   />
                   {errors.phone && <p className="mt-1 text-sm text-red-500">{errors.phone}</p>}
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium">Clinic</label>
+                  <input
+                    type="text"
+                    name="clinic"
+                    value={formData.clinic}
+                    onChange={handleInputChange}
+                    className="w-full p-3 rounded-md border"
+                    style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.surface }}
+                    placeholder="Enter clinic name"
+                  />
                 </div>
 
                 {/* Add this inside your form, after the existing phone input */}
