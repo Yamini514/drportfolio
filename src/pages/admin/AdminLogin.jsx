@@ -84,11 +84,11 @@ const AdminLogin = () => {
             Admin Login
           </h2>
           {/* Display dummy credentials for development */}
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
+          {/* <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
             <p className="text-blue-800 font-medium">Demo Credentials:</p>
             <p className="text-blue-600">Email: {exampleData.email}</p>
             <p className="text-blue-600">Password: {exampleData.password}</p>
-          </div>
+          </div> */}
         </div>
         <form onSubmit={handleLogin} className="mt-8 space-y-6">
           <div className="space-y-4">
