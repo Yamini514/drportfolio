@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
-// Remove Firebase imports since we're using dummy data
-// import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../../firebase/config';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
@@ -39,11 +39,13 @@ const AdminLogin = () => {
     setError('');
 
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Check dummy credentials
-      if (credentials.email === exampleData.email && credentials.password === exampleData.password) {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        credentials.email,
+        credentials.password
+      );
+
+      if (userCredential.user) {
         // Handle remember me functionality
         if (rememberMe) {
           localStorage.setItem('adminEmail', credentials.email);
@@ -53,17 +55,14 @@ const AdminLogin = () => {
           localStorage.removeItem('rememberMe');
         }
 
-        // Set a dummy auth token for session management
-        localStorage.setItem('adminToken', 'dummy-admin-token');
+        localStorage.setItem('adminToken', await userCredential.user.getIdToken());
         localStorage.setItem('isAdminLoggedIn', 'true');
         
         navigate('/admin/dashboard');
-      } else {
-        setError('Invalid credentials. Please try again.');
       }
     } catch (error) {
-      setError('Login failed. Please try again.');
       console.error('Login error:', error);
+      setError('Invalid credentials. Please try again.');
     } finally {
       setLoading(false);
     }

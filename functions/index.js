@@ -1,19 +1,42 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
 
-const {onRequest} = require("firebase-functions/v2/https");
-const logger = require("firebase-functions/logger");
+admin.initializeApp();
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+// Gmail and app password (App Password generated in Google Account settings)
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'yaminibangaru1@gmail.com',
+    pass: 'czxizksbidttzevf'  // ✅ Gmail App Password
+  }
+});
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+exports.sendEmailOnFormSubmit = functions.firestore
+  .document('contacts/{docId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    const { fullName, email } = data;
+
+    if (!email || !fullName) {
+      console.warn('Missing email or name in the contact form data.');
+      return null;
+    }
+
+    const mailOptions = {
+      from: 'yaminibangaru1@gmail.com',  // ✅ must match the authenticated user
+      to: email,
+      subject: 'Thank You for Contacting Us!',
+      text: `Hi ${fullName},\n\nThank you for reaching out to us. We have received your message and will get back to you shortly.\n\nBest regards,\nYour Team`
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Email sent to ${email}`);
+    } catch (error) {
+      console.error('❌ Error sending email:', error);
+    }
+
+    return null;
+  });

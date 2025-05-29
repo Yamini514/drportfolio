@@ -80,7 +80,7 @@ function ServicesContent() {
   };
 
   const handleEditClick = (service) => {
-    setEditingService(service);
+    setEditingService(service.id); // Store only the ID instead of the entire service object
     setFormData({
       title: service.title,
       description: service.description,
@@ -215,13 +215,22 @@ function ServicesContent() {
       } else {
         // Add new service
         const servicesCollection = collection(db, 'services');
+        
+        // Get the highest existing service ID number
+        const highestId = services.reduce((max, service) => {
+          const idNumber = parseInt(service.serviceId.replace('SRV', ''));
+          return isNaN(idNumber) ? max : Math.max(max, idNumber);
+        }, 0);
+        
+        // Generate new service ID
+        const newServiceId = `SRV${String(highestId + 1).padStart(3, '0')}`;
+        
         const docRef = await addDoc(servicesCollection, {
           ...formData,
+          serviceId: newServiceId, // Store the service ID in Firestore
           createdAt: currentDate,
           updatedAt: currentDate
         });
-        
-        const newServiceId = `SRV${String(services.length + 1).padStart(3, '0')}`;
         
         const newService = {
           id: docRef.id,
@@ -230,7 +239,7 @@ function ServicesContent() {
           createdAt: currentDate,
           updatedAt: currentDate
         };
-        setServices(prev => [newService, ...prev]); // Add new service at the beginning
+        setServices(prev => [newService, ...prev]);
       }
       
       setEditingService(null);

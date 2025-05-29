@@ -261,7 +261,7 @@ const TimingSchedular = () => {
     }));
   };
 
-  const addBlockedPeriod = () => {
+  const addBlockedPeriod = async () => {  // Make this function async
     if (!newBlock.startDate || (newBlock.type !== 'day' && !newBlock.endDate) || !newBlock.reason) {
       setError('Please fill all required fields');
       return;
@@ -282,21 +282,33 @@ const TimingSchedular = () => {
       }
     }
 
-    const newPeriod = {
-      id: Date.now().toString(),
-      ...newBlock,
-      createdAt: new Date().toISOString()
-    };
-    
-    setBlockedPeriods(prev => [...prev, newPeriod]);
-    setNewBlock({
-      type: 'day',
-      startDate: '',
-      endDate: '',
-      reason: ''
-    });
-    setError('');
-    showNotification('Blocked period added successfully');
+    try {
+      const newPeriod = {
+        id: Date.now().toString(),
+        ...newBlock,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Update in Firebase first
+      await setDoc(doc(db, 'settings', 'blockedPeriods'), { 
+        periods: [...blockedPeriods, newPeriod],
+        updatedAt: new Date().toISOString()
+      });
+
+      // Then update local state
+      setBlockedPeriods(prev => [...prev, newPeriod]);
+      setNewBlock({
+        type: 'day',
+        startDate: '',
+        endDate: '',
+        reason: ''
+      });
+      setError('');
+      showNotification('Blocked period added successfully');
+    } catch (error) {
+      console.error('Error adding blocked period:', error);
+      showNotification('Failed to add blocked period', 'error');
+    }
   };
 
   const removeBlockedPeriod = (id) => {
