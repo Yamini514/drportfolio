@@ -79,21 +79,6 @@ function BookAppointment() {
   const checkIfDateIsBlocked = async (dateStr, dayName) => {
     try {
       const date = new Date(dateStr);
-      
-      // Check doctor availability first
-      const availabilityQuery = query(
-        collection(db, 'doctorAvailability'),
-        where('startDate', '<=', dateStr),
-        where('endDate', '>=', dateStr)
-      );
-      
-      const availabilityDocs = await getDocs(availabilityQuery);
-      if (!availabilityDocs.empty) {
-        const doc = availabilityDocs.docs[0];
-        return { blocked: true, reason: doc.data().reason };
-      }
-      
-      // Then check other blocked periods
       const blockedPeriodsDoc = await getDoc(doc(db, 'settings', 'blockedPeriods'));
       
       if (blockedPeriodsDoc.exists()) {
@@ -130,7 +115,8 @@ function BookAppointment() {
     return cleanSlot;
   };
   
-
+  // Replace the existing fetchTimeSlots function with the same one as above
+  // const fetchTimeSlots = async (date, dayName) => {
   //     setIsLoading(true);
   //     try {
   //         // First check if date is blocked
@@ -190,7 +176,21 @@ function BookAppointment() {
   //                 currentHour += 1;
   //                 currentMinute = 0;
   //             }
-  //        
+  //         }
+  
+  //         setTimeSlots(slots);
+  //         setDaySchedule({ isOpen: true });
+  
+  //     } catch (error) {
+  //         console.error('Error fetching time slots:', error);
+  //         setTimeSlots([]);
+  //         setBookingMessage('Error loading schedule. Please try again.');
+  //     } finally {
+  //         setIsLoading(false);
+  //     }
+  // };
+
+
   const fetchTimeSlots = async (date, dayName) => {
     setIsLoading(true);
   
