@@ -474,12 +474,12 @@ function BookAppointment() {
           appointment_type: formData.appointmentType
         };
 
-        await emailjs.send(
-          'service_l920egs',
-          'template_iremp8a',
-          templateParams,
-          'BteJWtOh0EM3d8HljVxGO'
-        );
+        // await emailjs.send(
+        //   'service_l920egs',
+        //   'template_iremp8a',
+        //   templateParams,
+        //   'BteJWtOh0EM3d8HljVxGO'
+        // );
 
         setShowSuccess(true);
         setBookingMessage('Appointment booked successfully! Check your email for confirmation.');
