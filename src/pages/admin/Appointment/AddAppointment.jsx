@@ -6,10 +6,14 @@ import { collection, getDocs, addDoc, doc, setDoc, getDoc, query, where } from '
 import CustomInput from '../../../components/CustomInput';
 import CustomButton from '../../../components/CustomButton';
 import CustomSelect from '../../../components/CustomSelect';
+import emailjs from '@emailjs/browser';
+
 import { Calendar, Clock, AlertTriangle } from 'lucide-react';
 
 function AddAppointment() {
   const { currentTheme } = useTheme();
+  const [availableDates, setAvailableDates] = useState([]);
+
   const today = format(new Date(), 'yyyy-MM-dd');
   // Allow selection up to next year
   const nextYear = new Date();
@@ -17,6 +21,11 @@ function AddAppointment() {
   const maxDate = format(nextYear, 'yyyy-MM-dd');
   
   const [selectedDate, setSelectedDate] = useState('');
+  const [allowedDateRange, setAllowedDateRange] = useState({
+    startDate: '',
+    endDate: ''
+  });
+  
   const [selectedDayName, setSelectedDayName] = useState('');
   const [selectedSlot, setSelectedSlot] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -51,7 +60,25 @@ function AddAppointment() {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
-
+  useEffect(() => {
+    const fetchDateRange = async () => {
+      try {
+        const dateRangeDoc = await getDoc(doc(db, 'settings', 'dateRange'));
+        if (dateRangeDoc.exists()) {
+          const data = dateRangeDoc.data();
+          setAllowedDateRange({
+            startDate: data.startDate || '',
+            endDate: data.endDate || ''
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch date range:", error);
+      }
+    };
+  
+    fetchDateRange();
+  }, []);
+  
   // Check if a date is blocked by checking against blocked periods
   const checkIfDateIsBlocked = async (dateStr, dayName) => {
     try {
@@ -93,78 +120,130 @@ function AddAppointment() {
   };
   
   // Replace the existing fetchTimeSlots function with the same one as above
+  // const fetchTimeSlots = async (date, dayName) => {
+  //     setIsLoading(true);
+  //     try {
+  //         // First check if date is blocked
+  //         const { blocked, reason } = await checkIfDateIsBlocked(date, dayName);
+  //         if (blocked) {
+  //             setIsDateBlocked(true);
+  //             setBlockReason(reason);
+  //             setTimeSlots([]);
+  //             setIsLoading(false);
+  //             return;
+  //         }
+  
+  //         // Reset block status
+  //         setIsDateBlocked(false);
+  //         setBlockReason('');
+  
+  //         // Get the schedule settings first
+  //         const scheduleDoc = await getDoc(doc(db, 'settings', 'schedule'));
+  //         if (!scheduleDoc.exists()) {
+  //             setTimeSlots([]);
+  //             setBookingMessage('No schedule configuration found.');
+  //             return;
+  //         }
+  
+  //         const scheduleData = scheduleDoc.data();
+  //         const locations = scheduleData.locations || [];
+          
+  //         // Find a location that's open on this day
+  //         const availableLocation = locations.find(loc => loc.days[dayName.toLowerCase()]);
+  
+  //         if (!availableLocation) {
+  //             setTimeSlots([]);
+  //             return;
+  //         }
+  
+  //         // Generate time slots based on location's schedule
+  //         const slots = [];
+  //         const [startHour, startMinute] = availableLocation.startTime.split(':');
+  //         const [endHour, endMinute] = availableLocation.endTime.split(':');
+          
+  //         let currentHour = parseInt(startHour);
+  //         let currentMinute = parseInt(startMinute);
+  //         const endTimeInMinutes = parseInt(endHour) * 60 + parseInt(endMinute);
+  
+  //         while (currentHour * 60 + currentMinute < endTimeInMinutes) {
+  //             const displayHour = currentHour % 12 || 12;
+  //             const period = currentHour >= 12 ? 'PM' : 'AM';
+  //             const timeSlot = `${displayHour}:${currentMinute.toString().padStart(2, '0')} ${period}`;
+              
+  //             // Check if this slot is already booked
+  //             if (!bookedSlots[date]?.includes(timeSlot)) {
+  //                 slots.push(timeSlot);
+  //             }
+              
+  //             currentMinute += 30;
+  //             if (currentMinute >= 60) {
+  //                 currentHour += 1;
+  //                 currentMinute = 0;
+  //             }
+  //         }
+  
+  //         setTimeSlots(slots);
+  //         setDaySchedule({ isOpen: true });
+  
+  //     } catch (error) {
+  //         console.error('Error fetching time slots:', error);
+  //         setTimeSlots([]);
+  //         setBookingMessage('Error loading schedule. Please try again.');
+  //     } finally {
+  //         setIsLoading(false);
+  //     }
+  // };
+
+
   const fetchTimeSlots = async (date, dayName) => {
-      setIsLoading(true);
-      try {
-          // First check if date is blocked
-          const { blocked, reason } = await checkIfDateIsBlocked(date, dayName);
-          if (blocked) {
-              setIsDateBlocked(true);
-              setBlockReason(reason);
-              setTimeSlots([]);
-              setIsLoading(false);
-              return;
-          }
+    setIsLoading(true);
   
-          // Reset block status
-          setIsDateBlocked(false);
-          setBlockReason('');
-  
-          // Get the schedule settings first
-          const scheduleDoc = await getDoc(doc(db, 'settings', 'schedule'));
-          if (!scheduleDoc.exists()) {
-              setTimeSlots([]);
-              setBookingMessage('No schedule configuration found.');
-              return;
-          }
-  
-          const scheduleData = scheduleDoc.data();
-          const locations = scheduleData.locations || [];
-          
-          // Find a location that's open on this day
-          const availableLocation = locations.find(loc => loc.days[dayName.toLowerCase()]);
-  
-          if (!availableLocation) {
-              setTimeSlots([]);
-              return;
-          }
-  
-          // Generate time slots based on location's schedule
-          const slots = [];
-          const [startHour, startMinute] = availableLocation.startTime.split(':');
-          const [endHour, endMinute] = availableLocation.endTime.split(':');
-          
-          let currentHour = parseInt(startHour);
-          let currentMinute = parseInt(startMinute);
-          const endTimeInMinutes = parseInt(endHour) * 60 + parseInt(endMinute);
-  
-          while (currentHour * 60 + currentMinute < endTimeInMinutes) {
-              const displayHour = currentHour % 12 || 12;
-              const period = currentHour >= 12 ? 'PM' : 'AM';
-              const timeSlot = `${displayHour}:${currentMinute.toString().padStart(2, '0')} ${period}`;
-              
-              // Check if this slot is already booked
-              if (!bookedSlots[date]?.includes(timeSlot)) {
-                  slots.push(timeSlot);
-              }
-              
-              currentMinute += 30;
-              if (currentMinute >= 60) {
-                  currentHour += 1;
-                  currentMinute = 0;
-              }
-          }
-  
-          setTimeSlots(slots);
-          setDaySchedule({ isOpen: true });
-  
-      } catch (error) {
-          console.error('Error fetching time slots:', error);
-          setTimeSlots([]);
-          setBookingMessage('Error loading schedule. Please try again.');
-      } finally {
-          setIsLoading(false);
+    try {
+      // First check if date is blocked
+      const { blocked, reason } = await checkIfDateIsBlocked(date, dayName);
+      if (blocked) {
+        setIsDateBlocked(true);
+        setBlockReason(reason);
+        setTimeSlots([]);
+        setDaySchedule(null);
+        setIsLoading(false);
+        return;
       }
+  
+      setIsDateBlocked(false);
+      setBlockReason('');
+  
+      // Fetch pre-generated schedule slot for the selected date
+      const scheduleRef = collection(db, 'appointments/data/schedule');
+      const q = query(scheduleRef, where('date', '==', date));
+      const querySnapshot = await getDocs(q);
+  
+      if (querySnapshot.empty) {
+        setTimeSlots([]);
+        // setBookingMessage('No available slots for the selected date.');
+        setDaySchedule({ isOpen: false });
+        setIsLoading(false);
+        return;
+      }
+  
+      const docData = querySnapshot.docs[0].data();
+      const storedSlots = Array.isArray(docData.timeSlots) ? docData.timeSlots : [];
+  
+      // Remove already booked slots
+      const availableSlots = storedSlots.filter(slot => {
+        return !bookedSlots[date]?.includes(slot);
+      });
+  
+      setTimeSlots(availableSlots);
+      setDaySchedule({ isOpen: true });
+  
+    } catch (error) {
+      console.error('Error fetching time slots:', error);
+      setTimeSlots([]);
+      setBookingMessage('Error loading available slots. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const createTimeSlotsFromDaySchedule = (daySchedule) => {
