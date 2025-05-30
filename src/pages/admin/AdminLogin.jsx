@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../../context/ThemeContext';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../firebase/config';
-import CustomInput from '../../components/CustomInput';
-import CustomButton from '../../components/CustomButton';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import React, { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useTheme } from "../../context/ThemeContext";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../../firebase/config";
+import CustomInput from "../../components/CustomInput";
+import CustomButton from "../../components/CustomButton";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 
 const AdminLogin = () => {
   const { currentTheme } = useTheme();
   const navigate = useNavigate();
-  const [credentials, setCredentials] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const [credentials, setCredentials] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -19,16 +19,16 @@ const AdminLogin = () => {
   // Dummy admin credentials
   const exampleData = {
     email: "admin@gmail.com",
-    password: "admin@123"
+    password: "admin@123",
   };
 
   useEffect(() => {
     // Check for saved credentials when component mounts
-    const savedEmail = localStorage.getItem('adminEmail');
-    const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
-    
+    const savedEmail = localStorage.getItem("adminEmail");
+    const savedRememberMe = localStorage.getItem("rememberMe") === "true";
+
     if (savedEmail && savedRememberMe) {
-      setCredentials(prev => ({ ...prev, email: savedEmail }));
+      setCredentials((prev) => ({ ...prev, email: savedEmail }));
       setRememberMe(true);
     }
   }, []);
@@ -36,7 +36,7 @@ const AdminLogin = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       const userCredential = await signInWithEmailAndPassword(
@@ -48,38 +48,48 @@ const AdminLogin = () => {
       if (userCredential.user) {
         // Handle remember me functionality
         if (rememberMe) {
-          localStorage.setItem('adminEmail', credentials.email);
-          localStorage.setItem('rememberMe', 'true');
+          localStorage.setItem("adminEmail", credentials.email);
+          localStorage.setItem("rememberMe", "true");
         } else {
-          localStorage.removeItem('adminEmail');
-          localStorage.removeItem('rememberMe');
+          localStorage.removeItem("adminEmail");
+          localStorage.removeItem("rememberMe");
         }
 
-        localStorage.setItem('adminToken', await userCredential.user.getIdToken());
-        localStorage.setItem('isAdminLoggedIn', 'true');
-        
-        navigate('/admin/dashboard');
+        localStorage.setItem(
+          "adminToken",
+          await userCredential.user.getIdToken()
+        );
+        localStorage.setItem("isAdminLoggedIn", "true");
+
+        navigate("/admin/dashboard");
       }
     } catch (error) {
-      console.error('Login error:', error);
-      setError('Invalid credentials. Please try again.');
+      console.error("Login error:", error);
+      setError("Invalid credentials. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" 
-      style={{ backgroundColor: currentTheme.background }}>
-      <div 
+    <div
+      className="min-h-screen flex items-center justify-center px-4"
+      style={{ backgroundColor: currentTheme.background }}
+    >
+      <div
         className="max-w-md w-full space-y-8 p-8 rounded-xl"
-        style={{ 
+        style={{
           backgroundColor: currentTheme.surface,
-          boxShadow: `0 4px 6px -1px ${currentTheme.shadow || 'rgba(0, 0, 0, 0.1)'}, 0 2px 4px -1px ${currentTheme.shadow || 'rgba(0, 0, 0, 0.06)'}`,
+          boxShadow: `0 4px 6px -1px ${
+            currentTheme.shadow || "rgba(0, 0, 0, 0.1)"
+          }, 0 2px 4px -1px ${currentTheme.shadow || "rgba(0, 0, 0, 0.06)"}`,
         }}
       >
         <div className="text-center">
-          <h2 className="text-3xl font-bold" style={{ color: currentTheme.text.primary }}>
+          <h2
+            className="text-3xl font-bold"
+            style={{ color: currentTheme.text.primary }}
+          >
             Admin Login
           </h2>
           {/* Display dummy credentials for development */}
@@ -96,7 +106,9 @@ const AdminLogin = () => {
               name="email"
               placeholder="Email address"
               value={credentials.email}
-              onChange={(e) => setCredentials({ ...credentials, email: e.target.value })}
+              onChange={(e) =>
+                setCredentials({ ...credentials, email: e.target.value })
+              }
               required
             />
             <div className="relative">
@@ -105,7 +117,9 @@ const AdminLogin = () => {
                 name="password"
                 placeholder="Password"
                 value={credentials.password}
-                onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+                onChange={(e) =>
+                  setCredentials({ ...credentials, password: e.target.value })
+                }
                 required
               />
               <button
@@ -141,7 +155,15 @@ const AdminLogin = () => {
               <div className="text-red-500 text-sm text-center">{error}</div>
             )}
           </div>
-          
+          <div className="text-right">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              Forgot Password?
+            </Link>
+          </div>
+
           <CustomButton
             type="submit"
             loading={loading}
