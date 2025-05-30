@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, doc, setDoc, getDoc, addDoc } from "firebase/firestore";
+import { collection, doc, setDoc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../../firebase/config";
 import { useTheme } from "../../../context/ThemeContext";
 import CustomButton from "../../../components/CustomButton";
@@ -23,55 +23,93 @@ import { getAuth } from "firebase/auth";
 const TimingSchedular = () => {
   // const { currentTheme } = useTheme();
 
-  const handleSaveSchedule = async () => {
-    try {
-      // Validate the form
-      if (!newSchedule.name || !newSchedule.startDate || !newSchedule.endDate) {
-        showNotification('Please fill in all required fields', 'error');
-        return;
+  const checkForBookingConflicts = async (schedule) => {
+  try {
+    // Get all existing appointments for the date range
+    const appointmentsRef = collection(db, 'appointments');
+    const appointmentsSnapshot = await getDocs(query(appointmentsRef, 
+      where('date', '>=', schedule.startDate),
+      where('date', '<=', schedule.endDate)
+    ));
+    
+    const conflicts = [];
+    appointmentsSnapshot.forEach(doc => {
+      const appointment = doc.data();
+      if (appointment.time >= schedule.startTime && 
+          appointment.time <= schedule.endTime) {
+        conflicts.push({
+          date: appointment.date,
+          time: appointment.time
+        });
       }
+    });
+    
+    return conflicts;
+  } catch (error) {
+    console.error('Error checking conflicts:', error);
+    throw error;
+  }
+};
 
-      // Add the new schedule to the locations array
-      const updatedLocations = [...schedule.locations, newSchedule];
-      
-      // Update Firestore
-      await setDoc(doc(db, 'settings', 'schedule'), {
-        ...schedule,
-        locations: updatedLocations
-      });
-
-      // Update local state
-      setSchedule(prev => ({
-        ...prev,
-        locations: updatedLocations
-      }));
-
-      // Reset form and hide it
-      setNewSchedule({
-        name: '',
-        startTime: '09:00',
-        endTime: '17:00',
-        startDate: '',
-        endDate: '',
-        isActive: true,
-        days: {
-          monday: false,
-          tuesday: false,
-          wednesday: false,
-          thursday: false,
-          friday: false,
-          saturday: false,
-          sunday: false,
-        }
-      });
-      setShowAddScheduleForm(false);
-      
-      showNotification('Schedule saved successfully');
-    } catch (error) {
-      console.error('Error saving schedule:', error);
-      showNotification('Error saving schedule', 'error');
+const handleSaveSchedule = async () => {
+  try {
+    // Validate the form
+    if (!newSchedule.name || !newSchedule.startDate || !newSchedule.endDate) {
+      showNotification('Please fill in all required fields', 'error');
+      return;
     }
-  };
+
+    // Check for booking conflicts
+    const conflicts = await checkForBookingConflicts(newSchedule);
+    if (conflicts.length > 0) {
+      const conflictDates = conflicts.map(c => 
+        `${formatDate(c.date)} at ${c.time}`
+      ).join(', ');
+      showNotification(`Cannot save schedule. Conflicts found on: ${conflictDates}`, 'error');
+      return;
+    }
+
+    // Add the new schedule to the locations array
+    const updatedLocations = [...schedule.locations, newSchedule];
+      
+    // Update Firestore
+    await setDoc(doc(db, 'settings', 'schedule'), {
+      ...schedule,
+      locations: updatedLocations
+    });
+
+    // Update local state
+    setSchedule(prev => ({
+      ...prev,
+      locations: updatedLocations
+    }));
+
+    // Reset form and hide it
+    setNewSchedule({
+      name: '',
+      startTime: '09:00',
+      endTime: '17:00',
+      startDate: '',
+      endDate: '',
+      isActive: true,
+      days: {
+        monday: false,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+        saturday: false,
+        sunday: false,
+      }
+    });
+    setShowAddScheduleForm(false);
+      
+    showNotification('Schedule saved successfully');
+  } catch (error) {
+    console.error('Error saving schedule:', error);
+    showNotification('Error saving schedule', 'error');
+  }
+};
 
   const { currentTheme } = useTheme();
 
@@ -153,11 +191,15 @@ const TimingSchedular = () => {
             </div>
             <div className="col-span-2">
               <label className="font-medium" style={{ color: currentTheme.text.primary }}>Available Days</label>
-              <div className="flex gap-2 mt-1">
+              <div className="flex gap-2 mt-1 text-black">
                 {Object.entries(location.days).map(([day, isAvailable]) => (
                   <span 
                     key={day}
-                    className={`px-2 py-1 rounded ${isAvailable ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                    className={`px-2 py-1 rounded`}
+                    style={{
+                      backgroundColor: isAvailable ? currentTheme.success.light : currentTheme.error.light,
+                      color: isAvailable ? currentTheme.success.dark : currentTheme.error.dark
+                    }}
                   >
                     {day.charAt(0).toUpperCase() + day.slice(1)}
                   </span>

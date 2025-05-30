@@ -6,10 +6,17 @@ import { collection, getDocs, addDoc, doc, setDoc, getDoc, query, where } from '
 import CustomInput from '../components/CustomInput';
 import CustomButton from '../components/CustomButton';
 import CustomSelect from '../components/CustomSelect';
+import 'react-datepicker/dist/react-datepicker.css';
+import emailjs from '@emailjs/browser';
+
 import { Calendar, Clock, AlertTriangle } from 'lucide-react';
 
 function BookAppointment() {
   const { currentTheme } = useTheme();
+  const [bookedDates, setBookedDates] = useState([]);
+
+  // const [availableDates, setAvailableDates] = useState([]);
+
   const today = format(new Date(), 'yyyy-MM-dd');
   // Allow selection up to next year
   const nextYear = new Date();
@@ -23,6 +30,7 @@ function BookAppointment() {
   });
   
   const [selectedDayName, setSelectedDayName] = useState('');
+  const MAX_SLOTS_PER_DAY = 5;
   const [selectedSlot, setSelectedSlot] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -59,7 +67,7 @@ function BookAppointment() {
   useEffect(() => {
     const fetchDateRange = async () => {
       try {
-        const dateRangeDoc = await getDoc(doc(db, 'schedules'));
+        const dateRangeDoc = await getDoc(doc(db, 'settings', 'dateRange'));
         if (dateRangeDoc.exists()) {
           const data = dateRangeDoc.data();
           setAllowedDateRange({
@@ -114,83 +122,7 @@ function BookAppointment() {
     const cleanSlot = slot.replace(/["']/g, '').trim();
     return cleanSlot;
   };
-  
-  // Replace the existing fetchTimeSlots function with the same one as above
-  // const fetchTimeSlots = async (date, dayName) => {
-  //     setIsLoading(true);
-  //     try {
-  //         // First check if date is blocked
-  //         const { blocked, reason } = await checkIfDateIsBlocked(date, dayName);
-  //         if (blocked) {
-  //             setIsDateBlocked(true);
-  //             setBlockReason(reason);
-  //             setTimeSlots([]);
-  //             setIsLoading(false);
-  //             return;
-  //         }
-  
-  //         // Reset block status
-  //         setIsDateBlocked(false);
-  //         setBlockReason('');
-  
-  //         // Get the schedule settings first
-  //         const scheduleDoc = await getDoc(doc(db, 'settings', 'schedule'));
-  //         if (!scheduleDoc.exists()) {
-  //             setTimeSlots([]);
-  //             setBookingMessage('No schedule configuration found.');
-  //             return;
-  //         }
-  
-  //         const scheduleData = scheduleDoc.data();
-  //         const locations = scheduleData.locations || [];
-          
-  //         // Find a location that's open on this day
-  //         const availableLocation = locations.find(loc => loc.days[dayName.toLowerCase()]);
-  
-  //         if (!availableLocation) {
-  //             setTimeSlots([]);
-  //             return;
-  //         }
-  
-  //         // Generate time slots based on location's schedule
-  //         const slots = [];
-  //         const [startHour, startMinute] = availableLocation.startTime.split(':');
-  //         const [endHour, endMinute] = availableLocation.endTime.split(':');
-          
-  //         let currentHour = parseInt(startHour);
-  //         let currentMinute = parseInt(startMinute);
-  //         const endTimeInMinutes = parseInt(endHour) * 60 + parseInt(endMinute);
-  
-  //         while (currentHour * 60 + currentMinute < endTimeInMinutes) {
-  //             const displayHour = currentHour % 12 || 12;
-  //             const period = currentHour >= 12 ? 'PM' : 'AM';
-  //             const timeSlot = `${displayHour}:${currentMinute.toString().padStart(2, '0')} ${period}`;
-              
-  //             // Check if this slot is already booked
-  //             if (!bookedSlots[date]?.includes(timeSlot)) {
-  //                 slots.push(timeSlot);
-  //             }
-              
-  //             currentMinute += 30;
-  //             if (currentMinute >= 60) {
-  //                 currentHour += 1;
-  //                 currentMinute = 0;
-  //             }
-  //         }
-  
-  //         setTimeSlots(slots);
-  //         setDaySchedule({ isOpen: true });
-  
-  //     } catch (error) {
-  //         console.error('Error fetching time slots:', error);
-  //         setTimeSlots([]);
-  //         setBookingMessage('Error loading schedule. Please try again.');
-  //     } finally {
-  //         setIsLoading(false);
-  //     }
-  // };
-
-
+   
   const fetchTimeSlots = async (date, dayName) => {
     setIsLoading(true);
   
@@ -221,7 +153,8 @@ function BookAppointment() {
         setIsLoading(false);
         return;
       }
-  
+     
+      
       const docData = querySnapshot.docs[0].data();
       const storedSlots = Array.isArray(docData.timeSlots) ? docData.timeSlots : [];
   
@@ -241,89 +174,107 @@ function BookAppointment() {
       setIsLoading(false);
     }
   };
-
-  const createTimeSlotsFromDaySchedule = (daySchedule) => {
-
-    if (!daySchedule) return [];
+  useEffect(() => {
+    const fetchBookedDates = async () => {
+      const snapshot = await getDocs(collection(db, 'appointments/data/bookings'));
+      const counts = {};
   
-    // If daySchedule is already an array of time slots
-    if (Array.isArray(daySchedule)) {
-      return Array.from(new Set(daySchedule.map(slot => {
-        // Remove any quotes and format properly
-        const cleanSlot = slot.replace(/["']/g, '').trim();
-        return formatTimeSlot(cleanSlot);
-      })));
-    }
+      snapshot.forEach(doc => {
+        const date = doc.data().date;
+        counts[date] = (counts[date] || 0) + 1;
+      });
   
-    // If slots is directly an array of time strings
-    if (Array.isArray(daySchedule.slots)) {
-      return Array.from(new Set(daySchedule.slots.map(slot => {
-        // Remove any quotes and format properly
-        const cleanSlot = slot.replace(/["']/g, '').trim();
-        return formatTimeSlot(cleanSlot);
-      })));
-    }
+      const fullyBooked = Object.entries(counts)
+        .filter(([_, count]) => count >= MAX_SLOTS_PER_DAY)
+        .map(([date]) => date);
   
-    // Add this helper function at the top of your component
-    const formatTimeSlot = (slot) => {
-      if (!slot) return '';
-      // Remove any quotes and extra spaces
-      const cleanSlot = slot.replace(/["']/g, '').trim();
-      // Split into hours and minutes if it's in the format "9:00", "10:30", etc.
-      const [time] = cleanSlot.split(',');
-      const [hours, minutes] = time.split(':').map(num => num.trim());
-      const hour = parseInt(hours);
-      const period = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour % 12 || 12;
-      return `${displayHour}:${minutes} ${period}`;
+      setBookedDates(fullyBooked);
     };
   
-    const allSlots = new Set(); // Use Set to prevent duplicates
-      
-    try {
-      Object.entries(daySchedule.slots).forEach(([key, slot]) => {
-        // Handle if slot is already a formatted time string
-        if (typeof slot === 'string') {
-          allSlots.add(formatTimeSlot(slot));
-          return;
-        }
+    fetchBookedDates();
+  }, []);
+  // const createTimeSlotsFromDaySchedule = (daySchedule) => {
+
+  //   if (!daySchedule) return [];
   
-        // Rest of the code remains the same
-        // Handle if slot has start/end format
-        if (slot && typeof slot.start === 'string' && typeof slot.end === 'string') {
-          const [startHour, startMinute] = slot.start.split(':').map(Number);
-          const [endHour, endMinute] = slot.end.split(':').map(Number);
+  //   // If daySchedule is already an array of time slots
+  //   if (Array.isArray(daySchedule)) {
+  //     return Array.from(new Set(daySchedule.map(slot => {
+  //       // Remove any quotes and format properly
+  //       const cleanSlot = slot.replace(/["']/g, '').trim();
+  //       return formatTimeSlot(cleanSlot);
+  //     })));
+  //   }
+  
+  //   // If slots is directly an array of time strings
+  //   if (Array.isArray(daySchedule.slots)) {
+  //     return Array.from(new Set(daySchedule.slots.map(slot => {
+  //       // Remove any quotes and format properly
+  //       const cleanSlot = slot.replace(/["']/g, '').trim();
+  //       return formatTimeSlot(cleanSlot);
+  //     })));
+  //   }
+  
+  //   // Add this helper function at the top of your component
+  //   const formatTimeSlot = (slot) => {
+  //     if (!slot) return '';
+  //     // Remove any quotes and extra spaces
+  //     const cleanSlot = slot.replace(/["']/g, '').trim();
+  //     // Split into hours and minutes if it's in the format "9:00", "10:30", etc.
+  //     const [time] = cleanSlot.split(',');
+  //     const [hours, minutes] = time.split(':').map(num => num.trim());
+  //     const hour = parseInt(hours);
+  //     const period = hour >= 12 ? 'PM' : 'AM';
+  //     const displayHour = hour % 12 || 12;
+  //     return `${displayHour}:${minutes} ${period}`;
+  //   };
+  
+  //   const allSlots = new Set(); // Use Set to prevent duplicates
+      
+  //   try {
+  //     Object.entries(daySchedule.slots).forEach(([key, slot]) => {
+  //       // Handle if slot is already a formatted time string
+  //       if (typeof slot === 'string') {
+  //         allSlots.add(formatTimeSlot(slot));
+  //         return;
+  //       }
+  
+  //       // Rest of the code remains the same
+  //       // Handle if slot has start/end format
+  //       if (slot && typeof slot.start === 'string' && typeof slot.end === 'string') {
+  //         const [startHour, startMinute] = slot.start.split(':').map(Number);
+  //         const [endHour, endMinute] = slot.end.split(':').map(Number);
           
-          if (isNaN(startHour) || isNaN(startMinute) || isNaN(endHour) || isNaN(endMinute)) {
-            console.warn('Invalid time format:', slot);
-            return;
-          }
+  //         if (isNaN(startHour) || isNaN(startMinute) || isNaN(endHour) || isNaN(endMinute)) {
+  //           console.warn('Invalid time format:', slot);
+  //           return;
+  //         }
           
-          let currentHour = startHour;
-          let currentMinute = startMinute;
+  //         let currentHour = startHour;
+  //         let currentMinute = startMinute;
           
-          while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
-            const displayHour = currentHour % 12 || 12;
-            const period = currentHour >= 12 ? 'PM' : 'AM';
-            const timeSlot = `${displayHour}:${currentMinute.toString().padStart(2, '0')} ${period}`;
+  //         while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
+  //           const displayHour = currentHour % 12 || 12;
+  //           const period = currentHour >= 12 ? 'PM' : 'AM';
+  //           const timeSlot = `${displayHour}:${currentMinute.toString().padStart(2, '0')} ${period}`;
             
-            allSlots.add(timeSlot);
+  //           allSlots.add(timeSlot);
             
-            currentMinute += 30;
-            if (currentMinute >= 60) {
-              currentHour += 1;
-              currentMinute = 0;
-            }
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Error processing slots:', error);
-      return [];
-    }
+  //           currentMinute += 30;
+  //           if (currentMinute >= 60) {
+  //             currentHour += 1;
+  //             currentMinute = 0;
+  //           }
+  //         }
+  //       }
+  //     });
+  //   } catch (error) {
+  //     console.error('Error processing slots:', error);
+  //     return [];
+  //   }
     
-    return Array.from(allSlots);
-  };
+  //   return Array.from(allSlots);
+  // };
 
   useEffect(() => {
     const fetchBookedSlots = async () => {
@@ -345,6 +296,9 @@ function BookAppointment() {
         console.error('Error fetching appointments:', error);
       }
     };
+   
+
+
     
     const createDataDocIfNeeded = async () => {
       const dataDocRef = doc(db, 'appointments', 'data');
@@ -398,49 +352,46 @@ function BookAppointment() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
-    
+  
     if (!formData.name.trim()) newErrors.name = 'Name is required';
     if (!formData.email.trim()) newErrors.email = 'Email is required';
     else if (!/^\S+@\S+\.\S+$/.test(formData.email.trim())) newErrors.email = 'Please enter a valid email address';
-    
+  
     if (!formData.phone.trim()) newErrors.phone = 'Phone is required';
     else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) newErrors.phone = 'Please enter a valid 10-digit phone number';
-    
+  
     if (!formData.dob.trim()) newErrors.dob = 'Date of Birth is required';
     if (!formData.reasonForVisit.trim()) newErrors.reasonForVisit = 'Reason for visit is required';
     if (!formData.appointmentType) newErrors.appointmentType = 'Appointment type is required';
-    
+  
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
-
+  
     try {
       setIsLoading(true);
-      // Verify the slot is still available (double-check)
+  
       const bookingsRef = collection(db, 'appointments/data/bookings');
       const querySnapshot = await getDocs(query(
-        bookingsRef, 
+        bookingsRef,
         where("date", "==", selectedDate),
         where("time", "==", selectedSlot)
       ));
-      
+  
       if (!querySnapshot.empty) {
         setBookingMessage('This slot was just booked by someone else. Please select another time.');
-        
-        // Update local state to mark slot as booked
         const updatedBookedSlots = { ...bookedSlots };
         if (!updatedBookedSlots[selectedDate]) {
           updatedBookedSlots[selectedDate] = [];
         }
         updatedBookedSlots[selectedDate].push(selectedSlot);
         setBookedSlots(updatedBookedSlots);
-        
         setIsLoading(false);
         return;
       }
-      
-      // Add the appointment
+  
+      // Save to Firestore
       await addDoc(bookingsRef, {
         date: selectedDate,
         time: selectedSlot,
@@ -455,54 +406,56 @@ function BookAppointment() {
         createdAt: new Date(),
         status: 'pending'
       });
-
-      // Update local state
+  
+      // ✅ Send EmailJS email
+      const emailParams = {
+        email: formData.email,
+        name: formData.name,
+        date: selectedDate,
+        time: selectedSlot,
+        reason: formData.reasonForVisit
+      };
+      
+      // const emailResult = await sendEmail(emailParams);
+      // 
+  
+      try {
+        await emailjs.send(
+          'service_l920egs',
+          'template_iremp8a',
+          emailParams,
+          '2pSuAO6tF3T-sejH-'
+        );
+      } catch (emailErr) {
+        console.error('EmailJS error:', emailErr);
+      }
+  
+      // Update local UI
       const updatedBookedSlots = { ...bookedSlots };
       if (!updatedBookedSlots[selectedDate]) {
         updatedBookedSlots[selectedDate] = [];
       }
       updatedBookedSlots[selectedDate].push(selectedSlot);
       setBookedSlots(updatedBookedSlots);
-
-      try {
-        // After successful booking
-        const templateParams = {
-          to_email: formData.email,
-          to_name: formData.name,
-          appointment_date: selectedDate,
-          appointment_time: selectedSlot,
-          appointment_type: formData.appointmentType
-        };
-
-        // await emailjs.send(
-        //   'service_l920egs',
-        //   'template_iremp8a',
-        //   templateParams,
-        //   'BteJWtOh0EM3d8HljVxGO'
-        // );
-
-        setShowSuccess(true);
-        setBookingMessage('Appointment booked successfully! Check your email for confirmation.');
-        setTimeout(() => {
-          setShowSuccess(false);
-          setSelectedDate('');
-          setSelectedDayName('');
-          setSelectedSlot('');
-          setShowForm(false);
-          setFormData({ 
-            name: '', 
-            email: '', 
-            phone: '',
-            dob: '',
-            reasonForVisit: '',
-            appointmentType: 'Consultation',
-            medicalHistory: ''
-          });
-        }, 3000);
-      } catch (error) {
-        console.error('Error:', error);
-        setBookingMessage('Failed to book appointment. Please try again.');
-      }
+  
+      setShowSuccess(true);
+      setBookingMessage('Appointment booked and email sent!');
+      setTimeout(() => {
+        setShowSuccess(false);
+        setSelectedDate('');
+        setSelectedDayName('');
+        setSelectedSlot('');
+        setShowForm(false);
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          dob: '',
+          reasonForVisit: '',
+          appointmentType: 'Consultation',
+          medicalHistory: ''
+        });
+      }, 3000);
     } catch (error) {
       console.error('Error saving appointment:', error);
       setBookingMessage('Failed to book appointment. Please try again.');
@@ -510,6 +463,7 @@ function BookAppointment() {
       setIsLoading(false);
     }
   };
+  
 
   // Get the schedule status message
   const getScheduleStatusMessage = () => {
@@ -535,7 +489,7 @@ function BookAppointment() {
   return (
     <div className="p-0 sm:p-0 rounded-lg w-full max-w-4xl mx-auto overflow-hidden" style={{ backgroundColor: currentTheme.surface }}>
       <h2 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6" style={{ color: currentTheme.text.primary }}>
-        Book Appointment
+        Book Your appointment here
       </h2>
 
       {showSuccess && (

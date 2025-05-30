@@ -54,7 +54,7 @@ function CustomTable({ headers, children, onBulkDelete }) {
               onBulkDelete?.(selectedRows);
               setSelectedRows([]);
             }}
-            className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+            className="px-3 py-1 bg-red-500 text-black rounded hover:bg-red-600"
           >
             Delete Selected
           </button>
@@ -89,7 +89,7 @@ function CustomTable({ headers, children, onBulkDelete }) {
                   key={index}
                   className={`py-3 text-xs font-medium uppercase tracking-wider whitespace-nowrap overflow-hidden overflow-ellipsis ${index === 0 ? 'text-left pl-6' : 'text-center px-3'}`}
                   style={{ 
-                    color: '#ffffff',
+                    color: '#ffffff', // Keep white text for headers since they have primary color background
                     maxWidth: '150px',
                     textOverflow: 'ellipsis'
                   }}
