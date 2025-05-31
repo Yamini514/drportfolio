@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, doc, setDoc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, setDoc, getDoc,addDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../../firebase/config";
 import { useTheme } from "../../../context/ThemeContext";
 import CustomButton from "../../../components/CustomButton";
@@ -59,23 +59,56 @@ const handleSaveSchedule = async () => {
       return;
     }
 
-    // Check for booking conflicts
-    const conflicts = await checkForBookingConflicts(newSchedule);
-    if (conflicts.length > 0) {
-      const conflictDates = conflicts.map(c => 
-        `${formatDate(c.date)} at ${c.time}`
-      ).join(', ');
-      showNotification(`Cannot save schedule. Conflicts found on: ${conflictDates}`, 'error');
-      return;
-    }
+    // Generate time slots array based on start and end time
+    const generateTimeSlots = () => {
+      const slots = [];
+      const [startHour, startMinute] = newSchedule.startTime.split(':').map(Number);
+      const [endHour, endMinute] = newSchedule.endTime.split(':').map(Number);
+      
+      let currentHour = startHour;
+      let currentMinute = startMinute;
+      
+      while (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute)) {
+        const formattedHour = currentHour % 12 || 12;
+        const period = currentHour >= 12 ? 'PM' : 'AM';
+        slots.push(`${formattedHour}:${currentMinute.toString().padStart(2, '0')} ${period}`);
+        
+        currentMinute += 30; // 30-minute intervals
+        if (currentMinute >= 60) {
+          currentHour += 1;
+          currentMinute = 0;
+        }
+      }
+      
+      return slots;
+    };
+
+    const timeSlots = generateTimeSlots();
+
+    // Create the schedule object with all necessary data
+    const scheduleData = {
+      name: newSchedule.name,
+      startDate: newSchedule.startDate,
+      endDate: newSchedule.endDate,
+      startTime: newSchedule.startTime,
+      endTime: newSchedule.endTime,
+      isActive: newSchedule.isActive,
+      days: newSchedule.days,
+      timeSlots: timeSlots // Add the generated time slots array
+    };
 
     // Add the new schedule to the locations array
-    const updatedLocations = [...schedule.locations, newSchedule];
+    const updatedLocations = [...schedule.locations, scheduleData];
       
-    // Update Firestore
+    // Update Firestore with the complete data
     await setDoc(doc(db, 'settings', 'schedule'), {
-      ...schedule,
-      locations: updatedLocations
+      locations: updatedLocations,
+      defaultTimes: {
+        startTime: newSchedule.startTime,
+        endTime: newSchedule.endTime
+      },
+      startDate: newSchedule.startDate,
+      endDate: newSchedule.endDate
     });
 
     // Update local state
@@ -118,25 +151,6 @@ const handleSaveSchedule = async () => {
 
   const [viewingLocation, setViewingLocation] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
-  // const [showAddScheduleForm, setShowAddScheduleForm] = useState(false);
-
-  // const [newSchedule, setNewSchedule] = useState({
-  //   name: "",
-  //   startTime: "09:00",
-  //   endTime: "17:00",
-  //   startDate: "",
-  //   endDate: "",
-  //   isActive: true,
-  //   days: {
-  //     monday: false,
-  //     tuesday: false,
-  //     wednesday: false,
-  //     thursday: false,
-  //     friday: false,
-  //     saturday: false,
-  //     sunday: false,
-  //   },
-  // });
 
   const [schedule, setSchedule] = useState({
     locations: [],
@@ -144,7 +158,7 @@ const handleSaveSchedule = async () => {
       startTime: "09:00",
       endTime: "17:00",
     },
-    schedules: [], // Array to store all schedules including history
+    // Array to store all schedules including history
   });
 
   const [newSchedule, setNewSchedule] = useState({
@@ -218,22 +232,7 @@ const handleSaveSchedule = async () => {
   // Update the newLocation state to include date range
   const [showAddScheduleForm, setShowAddScheduleForm] = useState(false);
 
-  const [newLocation, setNewLocation] = useState({
-    name: "",
-    startTime: "09:00",
-    endTime: "17:00",
-    startDate: "",
-    endDate: "",
-    days: {
-      monday: false,
-      tuesday: false,
-      wednesday: false,
-      thursday: false,
-      friday: false,
-      saturday: false,
-      sunday: false,
-    },
-  });
+
   const [dateRange, setDateRange] = useState({
     startDate: "",
     endDate: "",
@@ -259,6 +258,7 @@ const handleSaveSchedule = async () => {
     locationIndex: null,
   });
 
+
   const getTodayString = () => {
     const today = new Date();
     return today.toISOString().split("T")[0];
@@ -279,6 +279,8 @@ const handleSaveSchedule = async () => {
       day: "numeric",
     });
   };
+ 
+  
 
   useEffect(() => {
     loadData();
@@ -334,7 +336,7 @@ const handleSaveSchedule = async () => {
       }
 
       // ✅ Load and set dateRange here
-      const dateRangeDoc = await getDoc(doc(db, "settings", "dateRange"));
+      const dateRangeDoc = await getDoc(doc(db, "settings", "schedule"));
       if (dateRangeDoc.exists()) {
         const storedRange = dateRangeDoc.data();
         setDateRange({
@@ -349,79 +351,89 @@ const handleSaveSchedule = async () => {
       setLoading(false); // Clear loading state
     }
   };
-
-  const handleAddLocation = async () => {
-    if (
-      !newLocation.name ||
-      !Object.values(newLocation.days).some((day) => day)
-    ) {
-      setError("Please provide location name and select at least one day");
-      return;
-    }
-
+  const generateScheduleDocuments = async () => {
     try {
-      const updatedLocations = [
-        ...(schedule.locations || []),
-        { ...newLocation },
-      ];
-
-      // Update local state
-      setSchedule((prev) => ({
-        ...prev,
-        locations: updatedLocations,
-      }));
-
-      // Update in Firestore
-      await setDoc(doc(db, "settings", "schedule"), {
-        ...schedule,
-        locations: updatedLocations,
-      });
-
-      // Reset newLocation with safe defaultTimes access
-      setNewLocation({
-        name: "",
-        startTime: schedule.defaultTimes?.startTime || "09:00",
-        endTime: schedule.defaultTimes?.endTime || "17:00",
-        days: {
-          monday: false,
-          tuesday: false,
-          wednesday: false,
-          thursday: false,
-          friday: false,
-          saturday: false,
-          sunday: false,
-        },
-      });
-
-      showNotification("Location added successfully");
+      setLoading(true);
+  
+      const dataDocRef = doc(db, "appointments", "data");
+      const dataDoc = await getDoc(dataDocRef);
+      if (!dataDoc.exists()) {
+        await setDoc(dataDocRef, {
+          created: new Date(),
+          description: "Container for appointment data",
+        });
+      }
+  
+      const scheduleRef = collection(db, "appointments/data/schedule");
+  
+      for (const location of schedule.locations || []) {
+        if (!location.startDate || !location.endDate) {
+          console.warn(`Skipping location "${location.name}" due to missing dates`);
+          continue;
+        }
+  
+        const startDate = new Date(location.startDate);
+        const endDate = new Date(location.endDate);
+  
+        if (startDate > endDate) {
+          console.warn(`Invalid date range for location "${location.name}"`);
+          continue;
+        }
+  
+        for (
+          let currentDate = new Date(startDate);
+          currentDate <= endDate;
+          currentDate.setDate(currentDate.getDate() + 1)
+        ) {
+          const dateString = currentDate.toISOString().split("T")[0];
+          const dayName = currentDate
+            .toLocaleDateString("en-US", { weekday: "long" })
+            .toLowerCase();
+  
+          if (dayName === "sunday") continue;
+          if (!location.days[dayName]) continue;
+  
+          const timeSlots = createTimeSlots(location);
+  
+          const isBlocked = blockedPeriods.some((period) => {
+            const blockStart = new Date(period.startDate);
+            if (period.type === "day") {
+              return blockStart.toDateString() === currentDate.toDateString();
+            }
+            const blockEnd = new Date(period.endDate);
+            return currentDate >= blockStart && currentDate <= blockEnd;
+          });
+  
+          if (!isBlocked && timeSlots.length > 0) {
+            await addDoc(scheduleRef, {
+              date: dateString,
+              dayName: dayName,
+              location: location.name,
+              timeSlots: timeSlots,
+              isOpen: true,
+              createdAt: new Date(),
+            });
+          }
+        }
+      }
+  
+      showNotification("Schedule documents generated successfully");
+      return true;
     } catch (error) {
-      console.error("Error adding location:", error);
-      showNotification("Failed to add location", "error");
+      console.error("Error generating schedule documents:", error);
+      setError("Failed to generate schedule documents: " + error.message);
+      return false;
+    } finally {
+      setLoading(false);
     }
   };
+  
 
-  const handleLocationChange = (field, value) => {
-    setNewLocation((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
 
-  const handleDayToggle = (day) => {
-    if (day === "sunday") {
-      setNewLocation((prev) => ({
-        ...prev,
-        days: { ...prev.days, sunday: false },
-      }));
-      showNotification("Sunday is set as unavailable by default", "error");
-      return;
-    }
 
-    setNewLocation((prev) => ({
-      ...prev,
-      days: { ...prev.days, [day]: !prev.days[day] },
-    }));
-  };
+
+
+
   const handleViewLocation = (location) => {
     setViewingLocation(location);
     setShowViewModal(true);
@@ -555,12 +567,12 @@ const handleSaveSchedule = async () => {
     }
   };
 
-  // const handleDateRangeChange = (field, value) => {
-  //   setDateRange((prev) => ({
-  //     ...prev,
-  //     [field]: value,
-  //   }));
-  // };
+  const handleDateRangeChange = (field, value) => {
+    setDateRange((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
 
   const handleNewBlockChange = (field, value) => {
     setNewBlock((prev) => ({
@@ -659,126 +671,70 @@ const handleSaveSchedule = async () => {
   };
 
   const createTimeSlots = (location) => {
-    const slots = [];
-    const [startHour] = location.startTime.split(":");
-    const [endHour] = location.endTime.split(":");
-
-    for (let hour = parseInt(startHour); hour < parseInt(endHour); hour++) {
-      const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-      const period = hour >= 12 ? "PM" : "AM";
-      slots.push(`${displayHour}:00 ${period}`);
-      slots.push(`${displayHour}:30 ${period}`);
-    }
-
-    return slots;
-  };
-
-  const generateScheduleDocuments = async () => {
     try {
-      if (!dateRange.startDate || !dateRange.endDate) {
-        setError("Please select a date range for schedule generation");
-        return false;
+      if (!location || !location.startTime || !location.endTime) {
+        console.error('Invalid location data:', location);
+        return [];
       }
 
-      setLoading(true);
-      const startDate = new Date(dateRange.startDate);
-      const endDate = new Date(dateRange.endDate);
+      const slots = [];
+      const [startHour] = location.startTime.split(':');
+      const [endHour] = location.endTime.split(':');
 
-      if (startDate > endDate) {
-        setError("Start date must be before end date");
-        setLoading(false);
-        return false;
+      for (let hour = parseInt(startHour); hour < parseInt(endHour); hour++) {
+        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        const period = hour >= 12 ? 'PM' : 'AM';
+        slots.push(`${displayHour}:00 ${period}`);
+        slots.push(`${displayHour}:30 ${period}`);
       }
 
-      const dataDocRef = doc(db, "appointments", "data");
-      const dataDoc = await getDoc(dataDocRef);
-      if (!dataDoc.exists()) {
-        await setDoc(dataDocRef, {
-          created: new Date(),
-          description: "Container for appointment data",
-        });
-      }
-
-      const scheduleRef = collection(db, "appointments/data/schedule");
-
-      for (
-        let currentDate = new Date(startDate);
-        currentDate <= endDate;
-        currentDate.setDate(currentDate.getDate() + 1)
-      ) {
-        const dateString = currentDate.toISOString().split("T")[0];
-        const dayName = currentDate
-          .toLocaleDateString("en-US", { weekday: "long" })
-          .toLowerCase();
-
-        if (dayName === "sunday") {
-          continue;
-        }
-
-        for (const location of schedule.locations || []) {
-          if (location.days[dayName]) {
-            const timeSlots = createTimeSlots(location);
-
-            const isBlocked = blockedPeriods.some((period) => {
-              const blockStart = new Date(period.startDate);
-              if (period.type === "day") {
-                return blockStart.toDateString() === currentDate.toDateString();
-              }
-              const blockEnd = new Date(period.endDate);
-              return currentDate >= blockStart && currentDate <= blockEnd;
-            });
-
-            if (!isBlocked && timeSlots.length > 0) {
-              await addDoc(scheduleRef, {
-                date: dateString,
-                dayName: dayName,
-                location: location.name,
-                timeSlots: timeSlots,
-                isOpen: true,
-                createdAt: new Date(),
-              });
-            }
-          }
-        }
-      }
-
-      showNotification("Schedule documents generated successfully");
-      return true;
+      return slots;
     } catch (error) {
-      console.error("Error generating schedule documents:", error);
-      setError("Failed to generate schedule documents: " + error.message);
-      return false;
-    } finally {
-      setLoading(false);
+      console.error('Error creating time slots:', error);
+      return [];
     }
   };
 
   const handleSave = async () => {
     setLoading(true);
-    setError("");
+    setError('');
 
     try {
       const updatedSchedule = {
         ...schedule,
         locations: schedule.locations.map((location) => ({
           ...location,
+          startTime: location.startTime || '09:00', // Provide default values
+          endTime: location.endTime || '17:00',    // Provide default values
           days: { ...location.days, sunday: false },
         })),
       };
 
-      // Save schedule
-      await setDoc(doc(db, "settings", "schedule"), updatedSchedule);
-
-      // Save blocked periods
-      await setDoc(doc(db, "settings", "blockedPeriods"), {
-        periods: blockedPeriods,
-        updatedAt: new Date().toISOString(),
+      // Save schedule with proper structure
+      await setDoc(doc(db, 'settings', 'schedule'), {
+        locations: updatedSchedule.locations.map(location => ({
+          name: location.name,
+          startTime: location.startTime,
+          endTime: location.endTime,
+          startDate: location.startDate,
+          endDate: location.endDate,
+          timings: createTimeSlots(location),
+          days: {
+            monday: location.days.monday || false,
+            tuesday: location.days.tuesday || false,
+            wednesday: location.days.wednesday || false,
+            thursday: location.days.thursday || false,
+            friday: location.days.friday || false,
+            saturday: location.days.saturday || false,
+            sunday: false
+          }
+        })),
+        updatedAt: new Date().toISOString()
       });
 
-      // ✅ Save dateRange
-      await setDoc(doc(db, "settings", "dateRange"), {
-        startDate: dateRange.startDate || "",
-        endDate: dateRange.endDate || "",
+      // Save blocked periods
+      await setDoc(doc(db, 'settings', 'blockedPeriods'), {
+        periods: blockedPeriods,
         updatedAt: new Date().toISOString(),
       });
 
@@ -786,14 +742,12 @@ const handleSaveSchedule = async () => {
       const success = await generateScheduleDocuments();
 
       if (success) {
-        showNotification(
-          "Schedule and availability settings saved successfully"
-        );
+        showNotification('Schedule and availability settings saved successfully');
       }
     } catch (error) {
-      console.error("Error saving data:", error);
-      setError("Failed to save changes: " + error.message);
-      showNotification("Failed to save changes", "error");
+      console.error('Error saving data:', error);
+      setError('Failed to save changes: ' + error.message);
+      showNotification('Failed to save changes', 'error');
     } finally {
       setLoading(false);
     }
