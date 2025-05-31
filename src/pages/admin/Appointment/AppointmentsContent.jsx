@@ -6,7 +6,7 @@ import CustomTable from '../../../components/CustomTable';
 import CustomSelect from '../../../components/CustomSelect';
 import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmation';
 import CustomInput from '../../../components/CustomInput';
-import { collection, getDocs, updateDoc, doc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, deleteDoc, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -28,8 +28,9 @@ function AppointmentsContent() {
   useEffect(() => {
     const fetchAppointments = async () => {
       try {
-        const appointmentsRef = collection(db, 'appointments/data/bookings');
-        const snapshot = await getDocs(appointmentsRef);
+        const appointmentsRef = collection(db, 'appointments');
+        const q = query(appointmentsRef, where('type', '==', 'booking')); // Add type filter
+        const snapshot = await getDocs(q);
         const appointmentsList = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),

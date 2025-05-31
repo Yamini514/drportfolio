@@ -25,6 +25,21 @@ const BlockedPeriods = () => {
     periodId: null
   });
 
+  const addBlockedPeriod = async () => {
+    try {
+      const blockData = {
+        ...newBlock,
+        type: 'blocked', // Add type to differentiate
+        createdAt: new Date().toISOString()
+      };
+      
+      await addDoc(collection(db, 'appointments'), blockData);
+    } catch (error) {
+      setError('Failed to add blocked period.');
+    }
+  };
+  
+  
   // Copy the following functions from TimingSchedular.jsx:
   // - getTodayString
   // - formatDate
@@ -144,3 +159,4 @@ const BlockedPeriods = () => {
 };
 
 export default BlockedPeriods;
+

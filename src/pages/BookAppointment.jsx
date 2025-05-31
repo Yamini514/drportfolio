@@ -65,14 +65,15 @@ function BookAppointment() {
     }
   };
   useEffect(() => {
+    // Update the fetchDateRange function
     const fetchDateRange = async () => {
       try {
         const dateRangeDoc = await getDoc(doc(db, 'settings', 'dateRange'));
         if (dateRangeDoc.exists()) {
           const data = dateRangeDoc.data();
           setAllowedDateRange({
-            startDate: data.startDate || '',
-            endDate: data.endDate || ''
+            startDate: data.startDate || today, // Set today as default if no start date
+            endDate: data.endDate || maxDate // Set maxDate as default if no end date
           });
         }
       } catch (error) {

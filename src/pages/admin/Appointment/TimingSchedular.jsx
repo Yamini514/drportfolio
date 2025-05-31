@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, doc, setDoc, getDoc,addDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, setDoc, getDoc, addDoc, getDocs, query, where, deleteDoc } from "firebase/firestore";
 import { db } from "../../../firebase/config";
 import { useTheme } from "../../../context/ThemeContext";
 import CustomButton from "../../../components/CustomButton";
@@ -75,7 +75,7 @@ const TimingSchedular = () => {
       const startDate = new Date(newSchedule.startDate);
       const isBlocked = blockedPeriods.some(period => {
         const blockStart = new Date(period.startDate);
-        if (period.type === "day") {
+        if (period.type === "date") {
           return blockStart.toDateString() === startDate.toDateString();
         }
         const blockEnd = new Date(period.endDate);
@@ -84,6 +84,22 @@ const TimingSchedular = () => {
 
       if (isBlocked) {
         errors.startDate = 'Selected date is blocked';
+      }
+    }
+
+    // Add end date validation
+    if (newSchedule.endDate) {
+      const endDate = new Date(newSchedule.endDate);
+      const startDate = new Date(newSchedule.startDate);
+      
+      if (endDate < startDate) {
+        errors.endDate = 'End date cannot be before start date';
+      }
+      
+      // Validate week selection when end date is provided
+      const hasSelectedDays = Object.values(newSchedule.days).some(day => day);
+      if (!hasSelectedDays) {
+        errors.days = 'Please select at least one day of the week';
       }
     }
 
@@ -141,7 +157,8 @@ const handleSaveSchedule = async () => {
 
     const scheduleData = {
       ...newSchedule,
-      createdAt: new Date().toISOString(), // For ordering
+      type: 'schedule', // Add type to differentiate
+      createdAt: new Date().toISOString(),
       isMultipleDays
     };
 
@@ -155,7 +172,7 @@ const handleSaveSchedule = async () => {
       return dateA - dateB;
     });
 
-    await setDoc(doc(db, 'settings', 'schedule'), {
+    await setDoc(doc(db, 'appointments', 'schedule'), {
       locations: updatedLocations,
       defaultTimes: {
         startTime: newSchedule.startTime,
@@ -300,6 +317,11 @@ const handleSaveSchedule = async () => {
     endDate: "",
     reason: "",
   });
+  const [newLocation, setNewLocation] = useState({
+    name: "",
+    startTime: "09:00",
+    endTime: "17:00",
+  })
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedTab, setSelectedTab] = useState("schedule");
@@ -312,6 +334,7 @@ const handleSaveSchedule = async () => {
     show: false,
     periodId: null,
     locationIndex: null,
+    scheduleId: null
   });
 
 
@@ -392,7 +415,7 @@ const handleSaveSchedule = async () => {
       }
 
       // ✅ Load and set dateRange here
-      const dateRangeDoc = await getDoc(doc(db, "settings", "schedule"));
+      const dateRangeDoc = await getDoc(doc(db, "appointments", "schedule"));
       if (dateRangeDoc.exists()) {
         const storedRange = dateRangeDoc.data();
         setDateRange({
@@ -421,16 +444,25 @@ const handleSaveSchedule = async () => {
       }
   
       const scheduleRef = collection(db, "appointments/data/schedule");
+      
+      const currentDate = new Date();
+      currentDate.setHours(0, 0, 0, 0);
   
       for (const location of schedule.locations || []) {
-        if (!location.startDate || !location.endDate) {
+        if (!location.startDate) {
           console.warn(`Skipping location "${location.name}" due to missing dates`);
           continue;
         }
   
         const startDate = new Date(location.startDate);
         const endDate = new Date(location.endDate);
-  
+
+        // Skip if start date is in the past
+        if (startDate < currentDate) {
+          console.warn(`Skipping location "${location.name}" due to past start date`);
+          continue;
+        }
+
         if (startDate > endDate) {
           console.warn(`Invalid date range for location "${location.name}"`);
           continue;
@@ -542,15 +574,70 @@ const handleSaveSchedule = async () => {
       showNotification('Error updating schedule', 'error');
     }
   };
-  const checkExistingBookings = async (scheduleId) => {
+  const checkExistingBookings = async (index) => {
   try {
+    const location = schedule.locations[index];
+    if (!location) return false;
+    
     const appointmentsRef = collection(db, 'appointments');
-    const q = query(appointmentsRef, where('scheduleId', '==', scheduleId));
+    const q = query(
+      appointmentsRef, 
+      where('date', '>=', location.startDate),
+      where('date', '<=', location.endDate || location.startDate)
+    );
     const snapshot = await getDocs(q);
     return !snapshot.empty;
   } catch (error) {
     console.error('Error checking bookings:', error);
     return false;
+  }
+};
+
+const handleDeleteClick = (index) => {
+  setDeleteConfirmation({
+    show: true,
+    scheduleId: index
+  });
+};
+
+const handleDeleteConfirm = async () => {
+  if (deleteConfirmation.scheduleId === null) return;
+  
+  try {
+    const index = deleteConfirmation.scheduleId;
+    const locationToDelete = schedule.locations[index];
+
+    // 1. Delete from settings/schedule
+    const updatedLocations = schedule.locations.filter((_, i) => i !== index);
+    await setDoc(doc(db, 'appointments', 'schedule'), {
+      ...schedule,
+      locations: updatedLocations
+    });
+
+    // 2. Delete generated schedule documents
+    const scheduleRef = collection(db, 'appointments/data/schedule');
+    const q = query(scheduleRef, where('location', '==', locationToDelete.name));
+    const querySnapshot = await getDocs(q);
+    
+    const deletePromises = querySnapshot.docs.map(doc => 
+      deleteDoc(doc.ref)
+    );
+    await Promise.all(deletePromises);
+
+    setSchedule(prev => ({
+      ...prev,
+      locations: updatedLocations
+    }));
+
+    setDeleteConfirmation({
+      show: false,
+      scheduleId: null
+    });
+
+    showNotification('Schedule deleted successfully');
+  } catch (error) {
+    console.error('Error deleting schedule:', error);
+    showNotification('Error deleting schedule', 'error');
   }
 };
 
@@ -565,18 +652,8 @@ const handleDeleteLocation = async (index) => {
       return;
     }
 
-    const updatedLocations = schedule.locations.filter((_, i) => i !== index);
-    await setDoc(doc(db, 'settings', 'schedule'), {
-      ...schedule,
-      locations: updatedLocations
-    });
-
-    setSchedule(prev => ({
-      ...prev,
-      locations: updatedLocations
-    }));
-
-    showNotification('Schedule deleted successfully');
+   
+    handleDeleteClick(index);
   } catch (error) {
     console.error('Error deleting schedule:', error);
     showNotification('Error deleting schedule', 'error');
@@ -919,6 +996,8 @@ const handleDeleteLocation = async (index) => {
         onConfirm={
           deleteConfirmation.periodId
             ? confirmRemoveBlockedPeriod
+            : deleteConfirmation.scheduleId !== null
+            ? handleDeleteConfirm
             : confirmRemoveLocation
         }
         title={
@@ -1030,7 +1109,7 @@ const handleDeleteLocation = async (index) => {
                       <Pencil size={16} />
                     </button>
                     <button
-                      onClick={() => handleDeleteLocation(index)}
+                      onClick={() => handleDeleteClick(index)}
                       className="p-2 rounded-full hover:bg-gray-100 text-red-500"
                     >
                       <Trash2 size={16} />
