@@ -3,6 +3,7 @@ import { useTheme } from '../context/ThemeContext';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { FaPhone, FaWhatsapp, FaEnvelope } from 'react-icons/fa'; // Updated import
+import emailjs from '@emailjs/browser';
 
 function ContactMe() {
   const { currentTheme } = useTheme();
@@ -74,23 +75,32 @@ function ContactMe() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Validate phone number before submission
+  
     if (!validatePhone(formData.phone)) {
       setPhoneError('Please enter a valid 10-digit mobile number starting with 6-9');
       return;
     }
-
+  
     try {
-      // Add timestamp
       const dataToSubmit = {
         ...formData,
         timestamp: new Date()
       };
-
-      // Add to Firestore
+  
       await addDoc(collection(db, 'contacts'), dataToSubmit);
-      
+  
+      // Send confirmation email using EmailJS
+      await emailjs.send(
+        'service_l920egs',
+        'template_iremp8a',
+        {
+          name: formData.fullName,
+          title: formData.message,
+          email: formData.email
+        },
+        '2pSuAO6tF3T-sejH-'
+      );
+  
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
@@ -103,11 +113,11 @@ function ContactMe() {
         });
       }, 3000);
     } catch (error) {
-      console.error('Error submitting form:', error);
+      console.error('Error submitting form or sending email:', error);
       alert('There was an error submitting your message. Please try again.');
     }
   };
-
+  
   return (
     <div id="contactme" className="px-5 pb-5 md:px-15 md:pb-5 lg:px-20" style={{ backgroundColor: currentTheme.background }}>
       <div className="container mx-auto">
