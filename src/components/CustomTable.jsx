@@ -47,7 +47,7 @@ function CustomTable({ headers, children, onBulkDelete }) {
       }}
     >
       {selectedRows.length > 0 && (
-        <div className="p-2 bg-red-100 flex justify-between items-center">
+        <div className="p-2  text-white flex justify-between items-center">
           <span>{selectedRows.length} items selected</span>
           <button
             onClick={() => {
@@ -155,7 +155,8 @@ function CustomTable({ headers, children, onBulkDelete }) {
                 ];
                 
                 return React.cloneElement(child, {
-                  className: `hover:bg-opacity-10 transition-colors duration-200 ease-in-out ${isSelected ? 'bg-blue-100' : ''} ${child.props.className || ''}`,
+                  className: `hover:bg-opacity-10 transition-colors duration-200 ease-in-out ${isSelected ? 'bg-blue-100 dark:bg-blue-900' : ''}
+} ${child.props.className || ''}`,
                   children: enhancedCells
                 });
               })

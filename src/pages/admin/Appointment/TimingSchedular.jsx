@@ -107,106 +107,39 @@ const TimingSchedular = () => {
 
 const handleSaveSchedule = async () => {
   try {
-    // Reset errors
-    setError("");
-
-    // Validate name
-    if (!newSchedule.name) {
-      showNotification('Location name is required', 'error');
+    if (!validateForm()) {
       return;
     }
 
-    // Validate start date
-    if (!newSchedule.startDate) {
-      showNotification('Start date is required', 'error');
-      return;
-    }
-
-    // Check for past dates
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     const startDate = new Date(newSchedule.startDate);
-    if (startDate < today) {
-      showNotification('Cannot select past dates', 'error');
-      return;
-    }
-
-    // Check if date is blocked
-    const isBlocked = blockedPeriods.some(period => {
-      const blockStart = new Date(period.startDate);
-      if (period.type === "day") {
-        return blockStart.toDateString() === startDate.toDateString();
-      }
-      const blockEnd = new Date(period.endDate);
-      return startDate >= blockStart && startDate <= blockEnd;
-    });
-
-    if (isBlocked) {
-      showNotification('Selected date is blocked', 'error');
-      return;
-    }
-
-    // Validate times
-    if (!newSchedule.startTime || !newSchedule.endTime) {
-      showNotification('Start and end time are required', 'error');
-      return;
-    }
-
-    // Check if it's more than one day
     const endDate = newSchedule.endDate ? new Date(newSchedule.endDate) : startDate;
     const isMultipleDays = endDate.getTime() !== startDate.getTime();
 
-    // Validate weeks selection for multiple days
+    // Only validate days selection for multiple day schedules
     if (isMultipleDays) {
       const hasSelectedDays = Object.values(newSchedule.days).some(day => day);
       if (!hasSelectedDays) {
-        showNotification('Please select at least one day of the week for multiple day schedule', 'error');
+        setFormErrors(prev => ({ ...prev, days: 'Please select at least one day for multiple day schedules' }));
         return;
       }
     }
 
-    // Generate time slots array based on start and end time
-    const generateTimeSlots = () => {
-      const slots = [];
-      const [startHour, startMinute] = newSchedule.startTime.split(':').map(Number);
-      const [endHour, endMinute] = newSchedule.endTime.split(':').map(Number);
-      
-      let currentHour = startHour;
-      let currentMinute = startMinute;
-      
-      while (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute)) {
-        const formattedHour = currentHour % 12 || 12;
-        const period = currentHour >= 12 ? 'PM' : 'AM';
-        slots.push(`${formattedHour}:${currentMinute.toString().padStart(2, '0')} ${period}`);
-        
-        currentMinute += 30; // 30-minute intervals
-        if (currentMinute >= 60) {
-          currentHour += 1;
-          currentMinute = 0;
-        }
-      }
-      
-      return slots;
-    };
-
-    const timeSlots = generateTimeSlots();
-
-    // Create the schedule object with all necessary data
     const scheduleData = {
-      name: newSchedule.name,
-      startDate: newSchedule.startDate,
-      endDate: newSchedule.endDate,
-      startTime: newSchedule.startTime,
-      endTime: newSchedule.endTime,
-      isActive: newSchedule.isActive,
-      days: newSchedule.days,
-      timeSlots: timeSlots // Add the generated time slots array
+      ...newSchedule,
+      createdAt: new Date().toISOString(), // For ordering
+      isMultipleDays
     };
 
-    // Add the new schedule to the locations array
-    const updatedLocations = [...schedule.locations, scheduleData];
-      
-    // Update Firestore with the complete data
+    // Sort locations by start date and creation time
+    const updatedLocations = [...schedule.locations, scheduleData].sort((a, b) => {
+      const dateA = new Date(a.startDate);
+      const dateB = new Date(b.startDate);
+      if (dateA.getTime() === dateB.getTime()) {
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      }
+      return dateA - dateB;
+    });
+
     await setDoc(doc(db, 'settings', 'schedule'), {
       locations: updatedLocations,
       defaultTimes: {
@@ -592,28 +525,46 @@ const handleSaveSchedule = async () => {
       showNotification('Error updating schedule', 'error');
     }
   };
-  const handleDeleteLocation = async (index) => {
-    try {
-      const updatedLocations = schedule.locations.filter((_, i) => i !== index);
-      
-      // Update Firestore
-      await setDoc(doc(db, 'settings', 'schedule'), {
-        ...schedule,
-        locations: updatedLocations
-      });
+  const checkExistingBookings = async (scheduleId) => {
+  try {
+    const appointmentsRef = collection(db, 'appointments');
+    const q = query(appointmentsRef, where('scheduleId', '==', scheduleId));
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  } catch (error) {
+    console.error('Error checking bookings:', error);
+    return false;
+  }
+};
 
-      // Update local state
-      setSchedule(prev => ({
-        ...prev,
-        locations: updatedLocations
-      }));
-
-      showNotification('Schedule deleted successfully');
-    } catch (error) {
-      console.error('Error deleting schedule:', error);
-      showNotification('Error deleting schedule', 'error');
+const handleDeleteLocation = async (index) => {
+  try {
+    const locationToDelete = schedule.locations[index];
+    
+    // Check for existing bookings
+    const hasBookings = await checkExistingBookings(locationToDelete.id);
+    if (hasBookings) {
+      showNotification('Cannot delete schedule with existing bookings', 'error');
+      return;
     }
-  };
+
+    const updatedLocations = schedule.locations.filter((_, i) => i !== index);
+    await setDoc(doc(db, 'settings', 'schedule'), {
+      ...schedule,
+      locations: updatedLocations
+    });
+
+    setSchedule(prev => ({
+      ...prev,
+      locations: updatedLocations
+    }));
+
+    showNotification('Schedule deleted successfully');
+  } catch (error) {
+    console.error('Error deleting schedule:', error);
+    showNotification('Error deleting schedule', 'error');
+  }
+};
 
   const confirmRemoveLocation = async () => {
     try {
@@ -1101,43 +1052,77 @@ const handleSaveSchedule = async () => {
           {showAddScheduleForm && (
             <div className="bg-white rounded-lg p-6 mb-6" style={{ backgroundColor: currentTheme.surface }}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <CustomInput
-                  label="Location Name"
-                  value={newSchedule.name}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, name: e.target.value })}
-                  placeholder="Enter location name"
-                />
-                <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <CustomInput
+                    label="Location Name"
+                    value={newSchedule.name}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, name: e.target.value })}
+                    placeholder="Enter location name"
+                  />
+                  {formErrors.name && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
+                  )}
+                </div>
+
+                <div>
+                  <CustomInput
+                    type="date"
+                    label="Start Date"
+                    value={newSchedule.startDate}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, startDate: e.target.value })}
+                    icon={<Calendar size={20} />}
+                  />
+                  {formErrors.startDate && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.startDate}</p>
+                  )}
+                </div>
+
+                <div>
+                  <CustomInput
+                    type="date"
+                    label="End Date (Optional)"
+                    value={newSchedule.endDate}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, endDate: e.target.value })}
+                    icon={<Calendar size={20} />}
+                  />
+                  {formErrors.endDate && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.endDate}</p>
+                  )}
+                </div>
+
+                <div>
                   <CustomInput
                     type="time"
                     label="Start Time"
                     value={newSchedule.startTime}
                     onChange={(e) => setNewSchedule({ ...newSchedule, startTime: e.target.value })}
+                    icon={<Clock size={20} />}
                   />
+                  {formErrors.startTime && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.startTime}</p>
+                  )}
+                </div>
+
+                <div>
                   <CustomInput
                     type="time"
                     label="End Time"
                     value={newSchedule.endTime}
                     onChange={(e) => setNewSchedule({ ...newSchedule, endTime: e.target.value })}
+                    icon={<Clock size={20} />}
                   />
+                  {formErrors.endTime && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.endTime}</p>
+                  )}
                 </div>
-                <CustomInput
-                  type="date"
-                  label="Start Date"
-                  value={newSchedule.startDate}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, startDate: e.target.value })}
-                />
-                <CustomInput
-                  type="date"
-                  label="End Date"
-                  value={newSchedule.endDate}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, endDate: e.target.value })}
-                />
               </div>
               
               <div className="mt-4">
                 <label className="block mb-2" style={{ color: currentTheme.text.primary }}>Available Days</label>
                 <div className="flex flex-wrap gap-3">
+                  {formErrors.days && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.days}</p>
+                  )}
                   {Object.entries(newSchedule.days).map(([day, isSelected]) => (
                     <button
                       key={day}

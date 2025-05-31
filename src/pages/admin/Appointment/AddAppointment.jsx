@@ -65,6 +65,20 @@ function AddAppointment() {
     }
   };
   useEffect(() => {
+    const fetchAvailableScheduleDates = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'appointments/data/schedule'));
+        const available = snapshot.docs.map(doc => doc.data().date);
+        setBookedDates(available); // Reuse this state to store available dates
+      } catch (error) {
+        console.error('Error fetching scheduled dates:', error);
+      }
+    };
+  
+    fetchAvailableScheduleDates();
+  }, []);
+  
+  useEffect(() => {
     const fetchDateRange = async () => {
       try {
         const dateRangeDoc = await getDoc(doc(db, 'settings', 'dateRange'));

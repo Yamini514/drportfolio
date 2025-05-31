@@ -114,6 +114,15 @@ function BookAppointment() {
       return { blocked: false, reason: '' };
     }
   };
+  const isDateUnavailable = (dateStr) => {
+    const date = new Date(dateStr);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+    return (
+      bookedDates.includes(dateStr) || // Fully booked
+      dayName === 'Sunday' || // Sunday
+      date < new Date(today) // Past date
+    );
+  };
 
   // Fetch time slots from Firebase based on selected date
   // Add this helper function at the top of your component
@@ -337,133 +346,148 @@ function BookAppointment() {
     }
   };
 
-  const handleSlotSelect = (slot) => {
-    if (bookedSlots[selectedDate]?.includes(slot)) {
-      setBookingMessage('This slot is already booked. Please select another time.');
+  // Add this function to check slot availability in real-time
+const checkSlotAvailability = async (date, slot) => {
+  try {
+    const bookingsRef = collection(db, 'appointments/data/bookings');
+    const q = query(bookingsRef, 
+      where('date', '==', date),
+      where('time', '==', slot)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.empty;
+  } catch (error) {
+    console.error('Error checking slot availability:', error);
+    return false;
+  }
+};
+
+// Update handleSlotSelect to check availability in real-time
+const handleSlotSelect = async (slot) => {
+  setIsLoading(true);
+  const isAvailable = await checkSlotAvailability(selectedDate, slot);
+  
+  if (!isAvailable) {
+    setBookingMessage('This slot was just booked. Please select another time.');
+    setShowForm(false);
+    setSelectedSlot('');
+    // Update booked slots
+    setBookedSlots(prev => ({
+      ...prev,
+      [selectedDate]: [...(prev[selectedDate] || []), slot]
+    }));
+  } else {
+    setSelectedSlot(slot);
+    setShowForm(true);
+    setBookingMessage('');
+  }
+  setIsLoading(false);
+};
+
+// Update form validation
+const validateForm = () => {
+  const newErrors = {};
+  
+  // Name validation
+  if (!formData.name.trim()) {
+    newErrors.name = 'Name is required';
+  } else if (formData.name.trim().length < 2) {
+    newErrors.name = 'Name must be at least 2 characters';
+  }
+
+  // Email validation
+  if (!formData.email.trim()) {
+    newErrors.email = 'Email is required';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+    newErrors.email = 'Please enter a valid email address';
+  }
+
+  // Phone validation
+  if (!formData.phone.trim()) {
+    newErrors.phone = 'Phone is required';
+  } else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
+    newErrors.phone = 'Please enter a valid 10-digit phone number';
+  }
+
+  // Date of Birth validation
+  if (!formData.dob.trim()) {
+    newErrors.dob = 'Date of Birth is required';
+  } else {
+    const dobDate = new Date(formData.dob);
+    const today = new Date();
+    if (dobDate >= today) {
+      newErrors.dob = 'Date of Birth cannot be in the future';
+    }
+  }
+
+  // Reason for visit validation
+  if (!formData.reasonForVisit.trim()) {
+    newErrors.reasonForVisit = 'Reason for visit is required';
+  } else if (formData.reasonForVisit.trim().length < 10) {
+    newErrors.reasonForVisit = 'Please provide more details about your visit';
+  }
+
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+};
+
+// Update handleSubmit with final availability check
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  if (!validateForm()) {
+    return;
+  }
+
+  try {
+    setIsLoading(true);
+
+    // Final check for slot availability
+    const isStillAvailable = await checkSlotAvailability(selectedDate, selectedSlot);
+    if (!isStillAvailable) {
+      setBookingMessage('This slot was just booked. Please select another time.');
       setShowForm(false);
       setSelectedSlot('');
       return;
     }
-    setSelectedSlot(slot);
-    setShowForm(true);
-    setBookingMessage('');
-  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const newErrors = {};
-  
-    if (!formData.name.trim()) newErrors.name = 'Name is required';
-    if (!formData.email.trim()) newErrors.email = 'Email is required';
-    else if (!/^\S+@\S+\.\S+$/.test(formData.email.trim())) newErrors.email = 'Please enter a valid email address';
-  
-    if (!formData.phone.trim()) newErrors.phone = 'Phone is required';
-    else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) newErrors.phone = 'Please enter a valid 10-digit phone number';
-  
-    if (!formData.dob.trim()) newErrors.dob = 'Date of Birth is required';
-    if (!formData.reasonForVisit.trim()) newErrors.reasonForVisit = 'Reason for visit is required';
-    if (!formData.appointmentType) newErrors.appointmentType = 'Appointment type is required';
-  
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+    // Check if date is blocked
+    const { blocked, reason } = await checkIfDateIsBlocked(selectedDate, selectedDayName);
+    if (blocked) {
+      setBookingMessage(`This date is not available: ${reason}`);
+      setShowForm(false);
       return;
     }
-  
-    try {
-      setIsLoading(true);
-  
-      const bookingsRef = collection(db, 'appointments/data/bookings');
-      const querySnapshot = await getDocs(query(
-        bookingsRef,
-        where("date", "==", selectedDate),
-        where("time", "==", selectedSlot)
-      ));
-  
-      if (!querySnapshot.empty) {
-        setBookingMessage('This slot was just booked by someone else. Please select another time.');
-        const updatedBookedSlots = { ...bookedSlots };
-        if (!updatedBookedSlots[selectedDate]) {
-          updatedBookedSlots[selectedDate] = [];
-        }
-        updatedBookedSlots[selectedDate].push(selectedSlot);
-        setBookedSlots(updatedBookedSlots);
-        setIsLoading(false);
-        return;
-      }
-  
-      // Save to Firestore
-      await addDoc(bookingsRef, {
-        date: selectedDate,
-        time: selectedSlot,
-        weekday: selectedDayName,
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        dob: formData.dob,
-        reasonForVisit: formData.reasonForVisit,
-        appointmentType: formData.appointmentType,
-        medicalHistory: formData.medicalHistory,
-        createdAt: new Date(),
-        status: 'pending'
-      });
-  
-      // ✅ Send EmailJS email
-      const emailParams = {
-        email: formData.email,
-        name: formData.name,
-        date: selectedDate,
-        time: selectedSlot,
-        reason: formData.reasonForVisit
-      };
-      
-      // const emailResult = await sendEmail(emailParams);
-      // 
-  
-      try {
-        await emailjs.send(
-          'service_l920egs',
-          'template_iremp8a',
-          emailParams,
-          '2pSuAO6tF3T-sejH-'
-        );
-      } catch (emailErr) {
-        console.error('EmailJS error:', emailErr);
-      }
-  
-      // Update local UI
-      const updatedBookedSlots = { ...bookedSlots };
-      if (!updatedBookedSlots[selectedDate]) {
-        updatedBookedSlots[selectedDate] = [];
-      }
-      updatedBookedSlots[selectedDate].push(selectedSlot);
-      setBookedSlots(updatedBookedSlots);
-  
-      setShowSuccess(true);
-      setBookingMessage('Appointment booked and email sent!');
-      setTimeout(() => {
-        setShowSuccess(false);
-        setSelectedDate('');
-        setSelectedDayName('');
-        setSelectedSlot('');
-        setShowForm(false);
-        setFormData({
-          name: '',
-          email: '',
-          phone: '',
-          dob: '',
-          reasonForVisit: '',
-          appointmentType: 'Consultation',
-          medicalHistory: ''
-        });
-      }, 3000);
-    } catch (error) {
-      console.error('Error saving appointment:', error);
-      setBookingMessage('Failed to book appointment. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
+
+    // Proceed with booking
+    const bookingsRef = collection(db, 'appointments/data/bookings');
+    await addDoc(bookingsRef, {
+      date: selectedDate,
+      time: selectedSlot,
+      weekday: selectedDayName,
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      dob: formData.dob,
+      reasonForVisit: formData.reasonForVisit,
+      appointmentType: formData.appointmentType,
+      medicalHistory: formData.medicalHistory,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    });
+
+    // Update UI
+    setShowSuccess(true);
+    setShowForm(false);
+    // Rest of the success handling code...
+
+  } catch (error) {
+    console.error('Error booking appointment:', error);
+    setBookingMessage('Error booking appointment. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Get the schedule status message
   const getScheduleStatusMessage = () => {
@@ -505,15 +529,28 @@ function BookAppointment() {
       )}
 
       <div className="space-y-4 sm:space-y-6">
+        // First, add this function before the return statement
+        
+        
+        // Then modify the CustomInput for date selection
         <CustomInput
           type="date"
           label="Select Date"
           value={selectedDate}
-          onChange={handleDateChange}
+          onChange={(e) => {
+            const date = e.target.value;
+            if (!isDateUnavailable(date)) {
+              handleDateChange(e);
+            }
+          }}
           min={today}
           max={maxDate}
           required
           className="w-full sm:w-auto"
+          style={{
+            opacity: isDateUnavailable(selectedDate) ? 0.5 : 1,
+            cursor: isDateUnavailable(selectedDate) ? 'not-allowed' : 'pointer'
+          }}
         />
 
         {/* Loading indicator */}

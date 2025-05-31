@@ -136,7 +136,8 @@ function AppointmentsContent() {
   useEffect(() => {
     const appointmentsRef = collection(db, 'appointments/data/bookings');
     const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
-
+    let hasInitialized = false;
+  
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const appointmentsList = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -144,12 +145,19 @@ function AppointmentsContent() {
         clientName: doc.data().name,
         status: doc.data().status || 'pending'
       }));
-
+  
+      // Skip notification on initial snapshot
+      if (!hasInitialized) {
+        hasInitialized = true;
+        setAppointments(appointmentsList);
+        return;
+      }
+  
+      // Process only new additions
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
           const newAppointment = change.doc.data();
-          
-          // Play notification sound with better error handling
+  
           try {
             notificationSound.currentTime = 0;
             notificationSound.play().catch(error => {
@@ -160,23 +168,24 @@ function AppointmentsContent() {
           } catch (error) {
             console.error('Error playing notification:', error);
           }
-          
+  
           setNotification({
             message: `New appointment booked by ${newAppointment.name} for ${newAppointment.date} at ${newAppointment.time}`,
             type: 'success'
           });
-
+  
           setTimeout(() => {
             setNotification(null);
           }, 5000);
         }
       });
-
+  
       setAppointments(appointmentsList);
     });
-
+  
     return () => unsubscribe();
   }, [notificationSound]);
+  
 
   // Individual Appointment Detail View Component
   const AppointmentDetailView = ({ appointment }) => {
