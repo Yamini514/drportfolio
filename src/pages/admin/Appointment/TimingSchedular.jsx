@@ -21,6 +21,7 @@ import { getAuth } from "firebase/auth";
 
 
 const TimingSchedular = () => {
+  const [isSaving, setIsSaving] = useState(false);
   const [formErrors, setFormErrors] = useState({
     name: '',
     startDate: '',
@@ -37,6 +38,10 @@ const TimingSchedular = () => {
 
     if (!newSchedule.name.trim()) {
       errors.name = 'Location name is required';
+    } else if (newSchedule.name.trim().length < 3) {
+      errors.name = 'Location name must be at least 3 characters';
+    } else if (!/^[a-zA-Z0-9\s-]+$/.test(newSchedule.name.trim())) {
+      errors.name = 'Location name can only contain letters, numbers, spaces and hyphens';
     }
 
     if (!newSchedule.startDate) {
@@ -45,6 +50,15 @@ const TimingSchedular = () => {
       const startDate = new Date(newSchedule.startDate);
       if (startDate < today) {
         errors.startDate = 'Cannot select past dates';
+      }
+
+      const existingSchedule = schedule.locations.find(loc => 
+        loc.startDate === newSchedule.startDate && 
+        loc.name !== newSchedule.name && 
+        loc.startTime === newSchedule.startTime
+      );
+      if (existingSchedule) {
+        errors.startDate = 'A schedule already exists for this date and time slot';
       }
     }
 
@@ -110,6 +124,7 @@ const handleSaveSchedule = async () => {
     if (!validateForm()) {
       return;
     }
+    setIsSaving(true);
 
     const startDate = new Date(newSchedule.startDate);
     const endDate = newSchedule.endDate ? new Date(newSchedule.endDate) : startDate;
@@ -180,6 +195,8 @@ const handleSaveSchedule = async () => {
   } catch (error) {
     console.error('Error saving schedule:', error);
     showNotification('Error saving schedule', 'error');
+  } finally {
+    setIsSaving(false);
   }
 };
 
@@ -1146,14 +1163,17 @@ const handleDeleteLocation = async (index) => {
                 }} variant="outlined">
                   Cancel
                 </CustomButton>
-                <CustomButton onClick={() => {
-                  if (editingIndex !== null) {
-                    handleLocationUpdate();
-                  } else {
-                    handleSaveSchedule();
-                  }
-                }}>
-                  {editingIndex !== null ? 'Update Changes' : 'Save Changes'}
+                <CustomButton 
+                  onClick={() => {
+                    if (editingIndex !== null) {
+                      handleLocationUpdate();
+                    } else {
+                      handleSaveSchedule();
+                    }
+                  }}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving...' : (editingIndex !== null ? 'Update Changes' : 'Save Changes')}
                 </CustomButton>
               </div>
             </div>
