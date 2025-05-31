@@ -21,7 +21,61 @@ import { getAuth } from "firebase/auth";
 
 
 const TimingSchedular = () => {
-  // const { currentTheme } = useTheme();
+  const [formErrors, setFormErrors] = useState({
+    name: '',
+    startDate: '',
+    endDate: '',
+    startTime: '',
+    endTime: '',
+    days: ''
+  });
+
+  const validateForm = () => {
+    const errors = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (!newSchedule.name.trim()) {
+      errors.name = 'Location name is required';
+    }
+
+    if (!newSchedule.startDate) {
+      errors.startDate = 'Start date is required';
+    } else {
+      const startDate = new Date(newSchedule.startDate);
+      if (startDate < today) {
+        errors.startDate = 'Cannot select past dates';
+      }
+    }
+
+    if (!newSchedule.startTime) {
+      errors.startTime = 'Start time is required';
+    }
+
+    if (!newSchedule.endTime) {
+      errors.endTime = 'End time is required';
+    }
+
+    // Check if date is blocked
+    if (newSchedule.startDate) {
+      const startDate = new Date(newSchedule.startDate);
+      const isBlocked = blockedPeriods.some(period => {
+        const blockStart = new Date(period.startDate);
+        if (period.type === "day") {
+          return blockStart.toDateString() === startDate.toDateString();
+        }
+        const blockEnd = new Date(period.endDate);
+        return startDate >= blockStart && startDate <= blockEnd;
+      });
+
+      if (isBlocked) {
+        errors.startDate = 'Selected date is blocked';
+      }
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const checkForBookingConflicts = async (schedule) => {
   try {
@@ -53,10 +107,62 @@ const TimingSchedular = () => {
 
 const handleSaveSchedule = async () => {
   try {
-    // Validate the form
-    if (!newSchedule.name || !newSchedule.startDate || !newSchedule.endDate) {
-      showNotification('Please fill in all required fields', 'error');
+    // Reset errors
+    setError("");
+
+    // Validate name
+    if (!newSchedule.name) {
+      showNotification('Location name is required', 'error');
       return;
+    }
+
+    // Validate start date
+    if (!newSchedule.startDate) {
+      showNotification('Start date is required', 'error');
+      return;
+    }
+
+    // Check for past dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startDate = new Date(newSchedule.startDate);
+    if (startDate < today) {
+      showNotification('Cannot select past dates', 'error');
+      return;
+    }
+
+    // Check if date is blocked
+    const isBlocked = blockedPeriods.some(period => {
+      const blockStart = new Date(period.startDate);
+      if (period.type === "day") {
+        return blockStart.toDateString() === startDate.toDateString();
+      }
+      const blockEnd = new Date(period.endDate);
+      return startDate >= blockStart && startDate <= blockEnd;
+    });
+
+    if (isBlocked) {
+      showNotification('Selected date is blocked', 'error');
+      return;
+    }
+
+    // Validate times
+    if (!newSchedule.startTime || !newSchedule.endTime) {
+      showNotification('Start and end time are required', 'error');
+      return;
+    }
+
+    // Check if it's more than one day
+    const endDate = newSchedule.endDate ? new Date(newSchedule.endDate) : startDate;
+    const isMultipleDays = endDate.getTime() !== startDate.getTime();
+
+    // Validate weeks selection for multiple days
+    if (isMultipleDays) {
+      const hasSelectedDays = Object.values(newSchedule.days).some(day => day);
+      if (!hasSelectedDays) {
+        showNotification('Please select at least one day of the week for multiple day schedule', 'error');
+        return;
+      }
     }
 
     // Generate time slots array based on start and end time
@@ -524,6 +630,20 @@ const handleSaveSchedule = async () => {
       }
 
       setLoading(true);
+
+      // Check for existing appointments
+      const locationToDelete = schedule.locations[locationIndex];
+      const conflicts = await checkForBookingConflicts(locationToDelete);
+
+      if (conflicts.length > 0) {
+        showNotification(`Cannot delete schedule - ${conflicts.length} appointments exist`, 'error');
+        setDeleteConfirmation({
+          show: false,
+          periodId: null,
+          locationIndex: null,
+        });
+        return;
+      }
 
       // Get the current schedule document
       const scheduleRef = doc(db, "settings", "schedule");
@@ -1025,7 +1145,7 @@ const handleSaveSchedule = async () => {
                         ...newSchedule,
                         days: { ...newSchedule.days, [day]: !isSelected }
                       })}
-                      className={`px-3 py-1 rounded-full ${isSelected ? 'bg-primary text-white' : 'bg-gray-200'}`}
+                      className={`px-3 py-1 rounded-full ${isSelected ? 'bg-primary text-white' : 'bg-gray-200 text-black'}`}
                       style={isSelected ? { backgroundColor: currentTheme.primary } : {}}
                     >
                       {day.charAt(0).toUpperCase() + day.slice(1)}
