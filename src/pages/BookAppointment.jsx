@@ -529,10 +529,6 @@ const handleSubmit = async (e) => {
       )}
 
       <div className="space-y-4 sm:space-y-6">
-        // First, add this function before the return statement
-        
-        
-        // Then modify the CustomInput for date selection
         <CustomInput
           type="date"
           label="Select Date"
