@@ -35,7 +35,6 @@ const TimingSchedular = () => {
     endDate: "",
     startTime: "",
     endTime: "",
-    days: "",
   });
   const [schedule, setSchedule] = useState({
     locations: [],
@@ -171,15 +170,6 @@ const TimingSchedular = () => {
       if (isEndBlocked) {
         errors.endDate = "Selected end date is blocked";
       }
-
-      // Validate days selection for multiple-day schedules
-      const isMultipleDays = endDate.getTime() !== startDate.getTime();
-      if (isMultipleDays) {
-        const hasSelectedDays = Object.values(newSchedule.days).some((day) => day);
-        if (!hasSelectedDays) {
-          errors.days = "Please select at least one day for multiple day schedules";
-        }
-      }
     }
 
     // Validate times
@@ -232,7 +222,7 @@ const TimingSchedular = () => {
       const location = schedule.locations[index];
       if (!location) return false;
 
-      const appointmentsRef = collection(db, "appointments","data","");
+      const appointmentsRef = collection(db, "appointments", "data", "");
       const q = query(
         appointmentsRef,
         where("date", ">=", location.startDate),
@@ -620,7 +610,9 @@ const TimingSchedular = () => {
             .toLowerCase();
 
           if (dayName === "sunday") continue;
-          if (!location.days[dayName]) continue;
+          // Only check days if at least one day is selected
+          const hasSelectedDays = Object.values(location.days).some((day) => day);
+          if (hasSelectedDays && !location.days[dayName]) continue;
 
           const timeSlots = createTimeSlots(location);
 
@@ -1115,12 +1107,9 @@ const TimingSchedular = () => {
               </div>
               <div className="mt-4">
                 <label className="block mb-2" style={{ color: currentTheme.text.primary }}>
-                  Available Days
+                  Available Days (Optional)
                 </label>
                 <div className="flex flex-wrap gap-3">
-                  {formErrors.days && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.days}</p>
-                  )}
                   {Object.entries(newSchedule.days).map(([day, isSelected]) => (
                     <button
                       key={day}
