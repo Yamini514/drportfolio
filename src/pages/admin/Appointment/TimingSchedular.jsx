@@ -35,6 +35,7 @@ const TimingSchedular = () => {
     endDate: "",
     startTime: "",
     endTime: "",
+    days: "",
   });
   const [schedule, setSchedule] = useState({
     locations: [],
@@ -50,6 +51,7 @@ const TimingSchedular = () => {
     startDate: "",
     endDate: "",
     isActive: true,
+    isEndDateUserDefined: false,
     days: {
       monday: false,
       tuesday: false,
@@ -76,6 +78,8 @@ const TimingSchedular = () => {
   const [viewingLocation, setViewingLocation] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showAddScheduleForm, setShowAddScheduleForm] = useState(false);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [lastSavedSchedule, setLastSavedSchedule] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState({
     show: false,
     periodId: null,
@@ -86,6 +90,18 @@ const TimingSchedular = () => {
   const getTodayString = () => {
     const today = new Date();
     return today.toISOString().split("T")[0];
+  };
+
+  const getMaxDateString = () => {
+    const maxDate = new Date();
+    maxDate.setMonth(maxDate.getMonth() + 3);
+    return maxDate.toISOString().split("T")[0];
+  };
+
+  const calculateEndDate = (startDate) => {
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + 3);
+    return endDate.toISOString().split("T")[0];
   };
 
   const showNotification = (message, type = "success") => {
@@ -102,10 +118,75 @@ const TimingSchedular = () => {
     });
   };
 
+  const checkScheduleConflicts = () => {
+    const startDate = new Date(newSchedule.startDate);
+    const hasSelectedDays = Object.values(newSchedule.days).some((day) => day);
+    let endDate;
+    if (newSchedule.endDate && newSchedule.isEndDateUserDefined) {
+      endDate = new Date(newSchedule.endDate);
+    } else if (hasSelectedDays) {
+      endDate = new Date(newSchedule.startDate);
+      endDate.setMonth(endDate.getMonth() + 3);
+    } else {
+      endDate = startDate;
+    }
+
+    for (const loc of schedule.locations) {
+      if (editingIndex !== null && schedule.locations[editingIndex] === loc) continue;
+
+      const locStartDate = new Date(loc.startDate);
+      const locEndDate = new Date(loc.endDate || loc.startDate);
+      const locHasSelectedDays = Object.values(loc.days).some((day) => day);
+
+      // Check date range overlap first
+      const dateRangeOverlap = startDate <= locEndDate && endDate >= locStartDate;
+      if (!dateRangeOverlap) continue;
+
+      // Check time overlap
+      const timeOverlap = newSchedule.startTime <= loc.endTime && newSchedule.endTime >= loc.startTime;
+      if (!timeOverlap) continue;
+
+      // Check for specific conflicts based on days
+      if (hasSelectedDays || locHasSelectedDays) {
+        for (
+          let d = new Date(Math.max(startDate, locStartDate));
+          d <= new Date(Math.min(endDate, locEndDate));
+          d.setDate(d.getDate() + 1)
+        ) {
+          const dayName = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+          const newScheduleDayActive = hasSelectedDays ? newSchedule.days[dayName] : true;
+          const locDayActive = locHasSelectedDays ? loc.days[dayName] : true;
+
+          if (newScheduleDayActive && locDayActive && timeOverlap) {
+            return [{
+              date: d.toISOString().split("T")[0],
+              day: dayName.charAt(0).toUpperCase() + dayName.slice(1),
+              location: loc.name,
+              startTime: loc.startTime,
+              endTime: loc.endTime,
+            }]; // Early exit after finding the first conflict
+          }
+        }
+      } else if (timeOverlap && dateRangeOverlap) {
+        return [{
+          date: loc.startDate,
+          day: new Date(loc.startDate).toLocaleDateString("en-US", { weekday: "long" }),
+          location: loc.name,
+          startTime: loc.startTime,
+          endTime: loc.endTime,
+        }]; // Early exit
+      }
+    }
+
+    return [];
+  };
+
   const validateForm = () => {
     const errors = {};
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const maxDate = new Date();
+    maxDate.setMonth(maxDate.getMonth() + 3);
 
     // Validate location name
     if (!newSchedule.name.trim()) {
@@ -123,17 +204,8 @@ const TimingSchedular = () => {
       const startDate = new Date(newSchedule.startDate);
       if (startDate < today) {
         errors.startDate = "Cannot select past dates";
-      }
-
-      // Check for existing schedule conflict
-      const existingSchedule = schedule.locations.find(
-        (loc) =>
-          loc.startDate === newSchedule.startDate &&
-          loc.name !== newSchedule.name &&
-          loc.startTime === newSchedule.startTime
-      );
-      if (existingSchedule) {
-        errors.startDate = "A schedule already exists for this date and time slot";
+      } else if (startDate > maxDate) {
+        errors.startDate = "Start date cannot be more than 3 months from today";
       }
 
       // Check if start date is blocked
@@ -150,12 +222,17 @@ const TimingSchedular = () => {
       }
     }
 
-    // Validate end date if provided
-    if (newSchedule.endDate) {
+    // Validate end date or days
+    const hasSelectedDays = Object.values(newSchedule.days).some((day) => day);
+    if (!newSchedule.endDate && !hasSelectedDays) {
+      errors.days = "Please select either an end date or specific days";
+    } else if (newSchedule.endDate && newSchedule.isEndDateUserDefined) {
       const startDate = new Date(newSchedule.startDate);
       const endDate = new Date(newSchedule.endDate);
       if (endDate < startDate) {
         errors.endDate = "End date cannot be before start date";
+      } else if (endDate > maxDate) {
+        errors.endDate = "End date cannot be more than 3 months from today";
       }
 
       // Check if end date is blocked
@@ -178,6 +255,16 @@ const TimingSchedular = () => {
     }
     if (!newSchedule.endTime) {
       errors.endTime = "End time is required";
+    } else if (newSchedule.startTime >= newSchedule.endTime) {
+      errors.endTime = "End time must be after start time";
+    }
+
+    // Check schedule conflicts
+    const conflicts = checkScheduleConflicts();
+    if (conflicts.length > 0) {
+      const firstConflict = conflicts[0];
+      const conflictMsg = ` There is an active schedule at  ${firstConflict.location} on ${firstConflict.day}, ${formatDate(firstConflict.date)}. Adjust the date or time to resolve.`;
+      errors.scheduleConflict = conflictMsg;
     }
 
     setFormErrors(errors);
@@ -186,7 +273,7 @@ const TimingSchedular = () => {
 
   const checkForBookingConflicts = async (schedule) => {
     try {
-      const appointmentsRef = collection(db, "appointments");
+      const appointmentsRef = collection(db, "appointments", "data", "schedule");
       const appointmentsSnapshot = await getDocs(
         query(
           appointmentsRef,
@@ -222,15 +309,20 @@ const TimingSchedular = () => {
       const location = schedule.locations[index];
       if (!location) return false;
 
-      const appointmentsRef = collection(db, "appointments", "data", "");
-      const q = query(
-        appointmentsRef,
-        where("date", ">=", location.startDate),
-        where("date", "<=", location.endDate || location.startDate),
-        where("location", "==", location.name)
-      );
+      const appointmentsRef = collection(db, "appointments", "data", "schedule");
+      const q = query(appointmentsRef, where("location", "==", location.name));
       const snapshot = await getDocs(q);
-      return !snapshot.empty;
+
+      const hasBookings = snapshot.docs.some((doc) => {
+        console.log("Has bookings:", hasBookings);
+        const appointment = doc.data();
+        const appointmentDate = new Date(appointment.date);
+        const startDate = new Date(location.startDate);
+        const endDate = new Date(location.endDate || location.startDate);
+        return appointmentDate >= startDate && appointmentDate <= endDate;
+      });
+
+      return hasBookings;
     } catch (error) {
       console.error("Error checking bookings:", error);
       return false;
@@ -240,32 +332,33 @@ const TimingSchedular = () => {
   const handleSaveSchedule = async () => {
     try {
       if (!validateForm()) {
-        showNotification("Please fix form errors before saving", "error");
+        // showNotification("Please fix form errors before saving: " + Object.values(formErrors).join("; "), "error");
         return;
       }
       setIsSaving(true);
 
       const startDate = new Date(newSchedule.startDate);
-      const endDate = newSchedule.endDate ? new Date(newSchedule.endDate) : startDate;
-      const isMultipleDays = endDate.getTime() !== startDate.getTime();
+      let endDate;
+      const hasSelectedDays = Object.values(newSchedule.days).some((day) => day);
+      if (newSchedule.endDate && newSchedule.isEndDateUserDefined) {
+        endDate = new Date(newSchedule.endDate);
+      } else if (hasSelectedDays) {
+        endDate = new Date(startDate);
+        endDate.setMonth(startDate.getMonth() + 3);
+      } else {
+        endDate = startDate;
+      }
 
       const scheduleData = {
         ...newSchedule,
         id: Date.now().toString(),
         type: "schedule",
         createdAt: new Date().toISOString(),
-        isMultipleDays,
-        endDate: newSchedule.endDate || newSchedule.startDate,
+        isMultipleDays: endDate.getTime() !== startDate.getTime(),
+        endDate: endDate.toISOString().split("T")[0],
       };
 
-      const updatedLocations = [...schedule.locations, scheduleData].sort((a, b) => {
-        const dateA = new Date(a.startDate);
-        const dateB = new Date(b.startDate);
-        if (dateA.getTime() === dateB.getTime()) {
-          return new Date(a.createdAt) - new Date(b.createdAt);
-        }
-        return dateA - dateB;
-      });
+      const updatedLocations = [...schedule.locations, scheduleData]; // Removed sorting here
 
       await setDoc(doc(db, "settings", "schedule"), {
         locations: updatedLocations,
@@ -273,15 +366,15 @@ const TimingSchedular = () => {
           startTime: newSchedule.startTime,
           endTime: newSchedule.endTime,
         },
-        startDate: newSchedule.startDate,
-        endDate: newSchedule.endDate || newSchedule.startDate,
       });
 
+      // Batch state updates
       setSchedule((prev) => ({
         ...prev,
         locations: updatedLocations,
       }));
-
+      setLastSavedSchedule(scheduleData);
+      setShowConfirmationModal(true);
       setNewSchedule({
         name: "",
         startTime: "09:00",
@@ -289,6 +382,7 @@ const TimingSchedular = () => {
         startDate: "",
         endDate: "",
         isActive: true,
+        isEndDateUserDefined: false,
         days: {
           monday: false,
           tuesday: false,
@@ -340,17 +434,26 @@ const TimingSchedular = () => {
 
       const locationToDelete = schedule.locations[locationIndex];
 
+      // 1. Delete from settings/schedule
       const updatedLocations = schedule.locations.filter((_, i) => i !== locationIndex);
       await setDoc(doc(db, "settings", "schedule"), {
         ...schedule,
         locations: updatedLocations,
       });
 
-      const scheduleRef = collection(db, "appointments/data/schedule");
+      // 2. Delete from appointments/data/schedule
+      const scheduleRef = collection(db, "appointments", "data", "schedule");
       const q = query(scheduleRef, where("location", "==", locationToDelete.name));
       const querySnapshot = await getDocs(q);
-      const deletePromises = querySnapshot.docs.map((doc) => deleteDoc(doc.ref));
+      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
       await Promise.all(deletePromises);
+
+      // 3. Delete from appointments/schedule if exists
+      try {
+        await deleteDoc(doc(db, "appointments", "schedule", locationToDelete.id));
+      } catch (error) {
+        console.log("No document in appointments/schedule to delete");
+      }
 
       setSchedule((prev) => ({
         ...prev,
@@ -379,18 +482,31 @@ const TimingSchedular = () => {
 
   const handleLocationUpdate = async () => {
     try {
-      if (!newSchedule.name || !newSchedule.startDate) {
-        showNotification("Please fill in all required fields", "error");
+      if (!validateForm()) {
+        showNotification("Please fix form errors before updating: " + Object.values(formErrors).join("; "), "error");
         return;
       }
 
-      if (!validateForm()) {
-        showNotification("Please fix form errors before updating", "error");
-        return;
+      const startDate = new Date(newSchedule.startDate);
+      let endDate;
+      const hasSelectedDays = Object.values(newSchedule.days).some((day) => day);
+      if (newSchedule.endDate && newSchedule.isEndDateUserDefined) {
+        endDate = new Date(newSchedule.endDate);
+      } else if (hasSelectedDays) {
+        endDate = new Date(startDate);
+        endDate.setMonth(startDate.getMonth() + 3);
+      } else {
+        endDate = startDate;
       }
+
+      const updatedSchedule = {
+        ...newSchedule,
+        endDate: endDate.toISOString().split("T")[0],
+        id: schedule.locations[editingIndex]?.id || Date.now().toString(),
+      };
 
       const updatedLocations = schedule.locations.map((loc, idx) =>
-        idx === editingIndex ? { ...newSchedule, id: loc.id || Date.now().toString() } : loc
+        idx === editingIndex ? updatedSchedule : loc
       );
 
       await setDoc(doc(db, "settings", "schedule"), {
@@ -403,6 +519,9 @@ const TimingSchedular = () => {
         locations: updatedLocations,
       }));
 
+      setLastSavedSchedule(updatedSchedule);
+      setShowConfirmationModal(true);
+
       setShowAddScheduleForm(false);
       setEditingIndex(null);
       setNewSchedule({
@@ -412,6 +531,7 @@ const TimingSchedular = () => {
         startDate: "",
         endDate: "",
         isActive: true,
+        isEndDateUserDefined: false,
         days: {
           monday: false,
           tuesday: false,
@@ -437,9 +557,14 @@ const TimingSchedular = () => {
 
   const handleEditLocation = (index) => {
     const locationToEdit = schedule.locations[index];
+    const hasSelectedDays = Object.values(locationToEdit.days).some((day) => day);
+    const adjustedLocation = {
+      ...locationToEdit,
+      endDate: locationToEdit.isEndDateUserDefined || !hasSelectedDays ? locationToEdit.endDate : "",
+    };
     setEditingIndex(index);
-    setEditingLocation({ ...locationToEdit });
-    setNewSchedule({ ...locationToEdit });
+    setEditingLocation({ ...adjustedLocation });
+    setNewSchedule({ ...adjustedLocation });
     setShowAddScheduleForm(true);
   };
 
@@ -465,8 +590,15 @@ const TimingSchedular = () => {
 
     const startDate = new Date(newBlock.startDate);
     const today = new Date(getTodayString());
+    const maxDate = new Date();
+    maxDate.setMonth(maxDate.getMonth() + 3);
+
     if (startDate < today) {
       setError("Cannot block past dates");
+      return;
+    }
+    if (startDate > maxDate) {
+      setError("Cannot block dates more than 3 months from today");
       return;
     }
 
@@ -474,6 +606,10 @@ const TimingSchedular = () => {
       const endDate = new Date(newBlock.endDate);
       if (endDate < startDate) {
         setError("End date must be after start date");
+        return;
+      }
+      if (endDate > maxDate) {
+        setError("End date cannot be more than 3 months from today");
         return;
       }
     }
@@ -610,7 +746,7 @@ const TimingSchedular = () => {
             .toLowerCase();
 
           if (dayName === "sunday") continue;
-          // Only check days if at least one day is selected
+
           const hasSelectedDays = Object.values(location.days).some((day) => day);
           if (hasSelectedDays && !location.days[dayName]) continue;
 
@@ -681,6 +817,7 @@ const TimingSchedular = () => {
             saturday: location.days.saturday || false,
             sunday: false,
           },
+          isEndDateUserDefined: location.isEndDateUserDefined || false,
         })),
         updatedAt: new Date().toISOString(),
       });
@@ -717,6 +854,8 @@ const TimingSchedular = () => {
       setSchedule((prev) => ({ ...prev, locations: updatedLocations }));
       setEditingIndex(null);
       setEditingLocation(null);
+      setLastSavedSchedule(editingLocation);
+      setShowConfirmationModal(true);
       showNotification("Location updated successfully");
     } catch (error) {
       console.error("Error saving edited location:", error);
@@ -751,6 +890,7 @@ const TimingSchedular = () => {
   };
 
   const ViewModal = ({ location, onClose }) => {
+    const hasSelectedDays = Object.values(location.days).some((day) => day);
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div
@@ -778,12 +918,93 @@ const TimingSchedular = () => {
                 {location.startTime} - {location.endTime}
               </p>
             </div>
+            <div>
+              <label className="font-medium" style={{ color: currentTheme.text.primary }}>
+                {hasSelectedDays && !location.isEndDateUserDefined ? "Starting From" : "Date Range"}
+              </label>
+              <p style={{ color: currentTheme.text.secondary }}>
+                {hasSelectedDays && !location.isEndDateUserDefined
+                  ? `${formatDate(location.startDate)} (Weekly for 3 months)`
+                  : `${formatDate(location.startDate)} - ${formatDate(location.endDate)}`}
+                {hasSelectedDays && location.isEndDateUserDefined && location.isMultipleDays && " (Recurring on selected days)"}
+              </p>
+            </div>
             <div className="col-span-2">
               <label className="font-medium" style={{ color: currentTheme.text.primary }}>
                 Available Days
               </label>
               <div className="flex gap-2 mt-1 text-black">
                 {Object.entries(location.days).map(([day, isAvailable]) => (
+                  <span
+                    key={day}
+                    className={`px-2 py-1 rounded`}
+                    style={{
+                      backgroundColor: isAvailable
+                        ? currentTheme.success.light
+                        : currentTheme.error.light,
+                      color: isAvailable ? currentTheme.success.dark : currentTheme.error.dark,
+                    }}
+                  >
+                    {day.charAt(0).toUpperCase() + day.slice(1)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <CustomButton onClick={onClose}>Close</CustomButton>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const ConfirmationModal = ({ schedule, onClose }) => {
+    const hasSelectedDays = Object.values(schedule.days).some((day) => day);
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div
+          className="bg-white rounded-lg p-6 w-full max-w-2xl"
+          style={{ backgroundColor: currentTheme.surface }}
+        >
+          <h2
+            className="text-2xl font-semibold mb-4"
+            style={{ color: currentTheme.text.primary }}
+          >
+            Schedule Saved Successfully
+          </h2>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="font-medium" style={{ color: currentTheme.text.primary }}>
+                Location Name
+              </label>
+              <p style={{ color: currentTheme.text.secondary }}>{schedule.name}</p>
+            </div>
+            <div>
+              <label className="font-medium" style={{ color: currentTheme.text.primary }}>
+                Timing
+              </label>
+              <p style={{ color: currentTheme.text.secondary }}>
+                {schedule.startTime} - {schedule.endTime}
+              </p>
+            </div>
+            <div>
+              <label className="font-medium" style={{ color: currentTheme.text.primary }}>
+                {hasSelectedDays && !schedule.isEndDateUserDefined ? "Starting From" : "Date Range"}
+              </label>
+              <p style={{ color: currentTheme.text.secondary }}>
+                {hasSelectedDays && !schedule.isEndDateUserDefined
+                  ? `${formatDate(schedule.startDate)} (Weekly for 3 months)`
+                  : `${formatDate(schedule.startDate)} - ${formatDate(schedule.endDate)}`}
+                {hasSelectedDays && schedule.isEndDateUserDefined && schedule.isMultipleDays && " (Recurring on selected days)"}
+              </p>
+            </div>
+            <div className="col-span-2">
+              <label className="font-medium" style={{ color: currentTheme.text.primary }}>
+                Available Days
+              </label>
+              <div className="flex gap-2 mt-1 text-black">
+                {Object.entries(schedule.days).map(([day, isAvailable]) => (
                   <span
                     key={day}
                     className={`px-2 py-1 rounded`}
@@ -908,6 +1129,13 @@ const TimingSchedular = () => {
         }
       />
 
+      {showConfirmationModal && lastSavedSchedule && (
+        <ConfirmationModal
+          schedule={lastSavedSchedule}
+          onClose={() => setShowConfirmationModal(false)}
+        />
+      )}
+
       <h2 className="text-2xl font-bold mb-6" style={{ color: currentTheme.text.primary }}>
         Configure Schedule & Availability
       </h2>
@@ -966,6 +1194,7 @@ const TimingSchedular = () => {
                     startDate: "",
                     endDate: "",
                     isActive: true,
+                    isEndDateUserDefined: false,
                     days: {
                       monday: false,
                       tuesday: false,
@@ -988,64 +1217,86 @@ const TimingSchedular = () => {
 
           {!showAddScheduleForm && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-              {schedule.locations.map((location, index) => (
-                <div
-                  key={index}
-                  className="rounded-lg p-6 shadow-md"
-                  style={{ backgroundColor: currentTheme.surface }}
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-xl font-semibold" style={{ color: currentTheme.text.primary }}>
-                      {location.name}
-                    </h3>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEditLocation(index)}
-                        className="p-2 rounded-full hover:bg-gray-100"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteLocation(index)}
-                        className="p-2 rounded-full hover:bg-gray-100 text-red-500"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+              {schedule.locations
+                .slice() // Create a shallow copy to avoid mutating the original array
+                .sort((a, b) => {
+                  const dateA = new Date(a.startDate);
+                  const dateB = new Date(b.startDate);
+                  if (dateA.getTime() === dateB.getTime()) {
+                    return new Date(a.createdAt) - new Date(b.createdAt);
+                  }
+                  return dateA - dateB;
+                })
+                .map((location, index) => {
+                  const hasSelectedDays = Object.values(location.days).some((day) => day);
+                  return (
+                    <div
+                      key={index}
+                      className="rounded-lg p-6 shadow-md"
+                      style={{ backgroundColor: currentTheme.surface }}
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-xl font-semibold" style={{ color: currentTheme.text.primary }}>
+                          {location.name}
+                        </h3>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditLocation(index)}
+                            className="p-2 rounded-full hover:bg-gray-100"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLocation(index)}
+                            className="p-2 rounded-full hover:bg-gray-100 text-red-500"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p style={{ color: currentTheme.text.secondary }}>
+                          <Clock size={16} className="inline mr-2" />
+                          {location.startTime} - {location.endTime}
+                        </p>
+                        <p style={{ color: currentTheme.text.secondary }}>
+                          <Calendar size={16} className="inline mr-2" />
+                          {hasSelectedDays && !location.isEndDateUserDefined
+                            ? `${formatDate(location.startDate)} (Weekly for 3 months)`
+                            : `${formatDate(location.startDate)} - ${formatDate(location.endDate)}`}
+                          {hasSelectedDays && location.isEndDateUserDefined && location.isMultipleDays && " (Recurring on selected days)"}
+                        </p>
+                      </div>
+                      <div className="mt-4">
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(location.days).map(([day, isAvailable]) => (
+                            <span
+                              key={day}
+                              className={`px-2 py-1 text-sm rounded ${
+                                isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {day.charAt(0).toUpperCase()}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p style={{ color: currentTheme.text.secondary }}>
-                      <Clock size={16} className="inline mr-2" />
-                      {location.startTime} - {location.endTime}
-                    </p>
-                    <p style={{ color: currentTheme.text.secondary }}>
-                      <Calendar size={16} className="inline mr-2" />
-                      {formatDate(location.startDate)} - {formatDate(location.endDate)}
-                    </p>
-                  </div>
-                  <div className="mt-4">
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(location.days).map(([day, isAvailable]) => (
-                        <span
-                          key={day}
-                          className={`px-2 py-1 text-sm rounded ${
-                            isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {day.charAt(0).toUpperCase()}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
             </div>
           )}
 
           {showAddScheduleForm && (
             <div className="bg-white rounded-lg p-6 mb-6" style={{ backgroundColor: currentTheme.surface }}>
+              {formErrors.scheduleConflict && (
+                <p className="text-red-500 text-sm mb-4">{formErrors.scheduleConflict}</p>
+              )}
+              {formErrors.days && (
+                <p className="text-red-500 text-sm mb-4">{formErrors.days}</p>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                <div className="md:col-span-2">
                   <CustomInput
                     label="Location Name"
                     value={newSchedule.name}
@@ -1056,58 +1307,70 @@ const TimingSchedular = () => {
                     <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
                   )}
                 </div>
-                <div>
-                  <CustomInput
-                    type="date"
-                    label="Start Date"
-                    value={newSchedule.startDate}
-                    onChange={(e) => setNewSchedule({ ...newSchedule, startDate: e.target.value })}
-                    icon={<Calendar size={20} />}
-                  />
-                  {formErrors.startDate && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.startDate}</p>
-                  )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <CustomInput
+                      type="date"
+                      label="Start Date"
+                      value={newSchedule.startDate}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, startDate: e.target.value })}
+                      icon={<Calendar size={20} />}
+                      min={getTodayString()}
+                      max={getMaxDateString()}
+                    />
+                    {formErrors.startDate && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.startDate}</p>
+                    )}
+                  </div>
+                  <div>
+                    <CustomInput
+                      type="date"
+                      label="End Date (Optional)"
+                      value={newSchedule.endDate}
+                      onChange={(e) => setNewSchedule({ 
+                        ...newSchedule, 
+                        endDate: e.target.value,
+                        isEndDateUserDefined: e.target.value !== "",
+                      })}
+                      icon={<Calendar size={20} />}
+                      min={newSchedule.startDate || getTodayString()}
+                      max={getMaxDateString()}
+                    />
+                    {formErrors.endDate && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.endDate}</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <CustomInput
-                    type="date"
-                    label="End Date (Optional)"
-                    value={newSchedule.endDate}
-                    onChange={(e) => setNewSchedule({ ...newSchedule, endDate: e.target.value })}
-                    icon={<Calendar size={20} />}
-                  />
-                  {formErrors.endDate && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.endDate}</p>
-                  )}
-                </div>
-                <div>
-                  <CustomInput
-                    type="time"
-                    label="Start Time"
-                    value={newSchedule.startTime}
-                    onChange={(e) => setNewSchedule({ ...newSchedule, startTime: e.target.value })}
-                    icon={<Clock size={20} />}
-                  />
-                  {formErrors.startTime && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.startTime}</p>
-                  )}
-                </div>
-                <div>
-                  <CustomInput
-                    type="time"
-                    label="End Time"
-                    value={newSchedule.endTime}
-                    onChange={(e) => setNewSchedule({ ...newSchedule, endTime: e.target.value })}
-                    icon={<Clock size={20} />}
-                  />
-                  {formErrors.endTime && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.endTime}</p>
-                  )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <CustomInput
+                      type="time"
+                      label="Start Time"
+                      value={newSchedule.startTime}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, startTime: e.target.value })}
+                      icon={<Clock size={20} />}
+                    />
+                    {formErrors.startTime && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.startTime}</p>
+                    )}
+                  </div>
+                  <div>
+                    <CustomInput
+                      type="time"
+                      label="End Time"
+                      value={newSchedule.endTime}
+                      onChange={(e) => setNewSchedule({ ...newSchedule, endTime: e.target.value })}
+                      icon={<Clock size={20} />}
+                    />
+                    {formErrors.endTime && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.endTime}</p>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="mt-4">
                 <label className="block mb-2" style={{ color: currentTheme.text.primary }}>
-                  Available Days (Optional)
+                  Available Days (Required if no end date is selected, for a recurring schedule)
                 </label>
                 <div className="flex flex-wrap gap-3">
                   {Object.entries(newSchedule.days).map(([day, isSelected]) => (
@@ -1192,6 +1455,7 @@ const TimingSchedular = () => {
                 className="w-full sm:w-auto"
                 onChange={(e) => handleNewBlockChange("startDate", e.target.value)}
                 min={getTodayString()}
+                max={getMaxDateString()}
                 required
               />
               {newBlock.type !== "day" && (
@@ -1202,6 +1466,7 @@ const TimingSchedular = () => {
                   className="w-full sm:w-auto"
                   onChange={(e) => handleNewBlockChange("endDate", e.target.value)}
                   min={newBlock.startDate || getTodayString()}
+                  max={getMaxDateString()}
                 />
               )}
             </div>

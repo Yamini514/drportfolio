@@ -25,10 +25,14 @@ const AdminLogin = () => {
   useEffect(() => {
     // Check for saved credentials when component mounts
     const savedEmail = localStorage.getItem("adminEmail");
+    const savedPassword = localStorage.getItem("adminPassword"); // Add this line
     const savedRememberMe = localStorage.getItem("rememberMe") === "true";
 
-    if (savedEmail && savedRememberMe) {
-      setCredentials((prev) => ({ ...prev, email: savedEmail }));
+    if (savedEmail && savedPassword && savedRememberMe) {
+      setCredentials({
+        email: savedEmail,
+        password: savedPassword // Restore password too
+      });
       setRememberMe(true);
     }
   }, []);
@@ -49,9 +53,11 @@ const AdminLogin = () => {
         // Handle remember me functionality
         if (rememberMe) {
           localStorage.setItem("adminEmail", credentials.email);
+          localStorage.setItem("adminPassword", credentials.password); // Add this line
           localStorage.setItem("rememberMe", "true");
         } else {
           localStorage.removeItem("adminEmail");
+          localStorage.removeItem("adminPassword"); // Add this line
           localStorage.removeItem("rememberMe");
         }
 
