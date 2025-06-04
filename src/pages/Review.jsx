@@ -46,12 +46,21 @@ function Review() {
     e.preventDefault();
     const newErrors = {};
     
+    // Name validation
     if (!formData.username.trim()) {
       newErrors.username = 'Name is required';
+    } else if (formData.username.length > 25) {
+      newErrors.username = 'Name must be 25 characters or less';
     }
+
+    // Review text validation
     if (!formData.reviewText.trim()) {
       newErrors.reviewText = 'Review is required';
+    } else if (formData.reviewText.length > 200) {
+      newErrors.reviewText = 'Review must be 200 characters or less';
     }
+
+    // Rating validation
     if (formData.rating === 0) {
       newErrors.rating = 'Rating is required';
     }
@@ -155,7 +164,7 @@ function Review() {
             <div className="bg-white rounded-lg p-6 max-w-2xl w-full relative" 
                  style={{ backgroundColor: currentTheme.surface }}>
               <div className="text-center mb-6">
-                <h2 className="text-xl font-bold">Submit a review</h2>
+                <h2 className="text-xl font-bold">Submit  review</h2>
               </div>
               
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -228,24 +237,24 @@ function Review() {
                        style={{ backgroundColor: currentTheme.surface }}>
                     <h2 className="text-xl font-bold mb-4">Submit Review</h2>
                     <p className="mb-6">Are you sure you want to review?</p>
-                    <div className="flex justify-end gap-4">
+                    <div className="flex justify-end gap-2">
                       <button
                         onClick={handleCancelConfirmation}
-                        className="px-4 py-2 rounded-md border"
+                        className="px-3 py-1 rounded-md border text-sm"
                         style={{ borderColor: currentTheme.border }}
                       >
                         Cancel
                       </button>
                       <button
                         onClick={() => handleFinalSubmit(false)}
-                        className="px-4 py-2 rounded-md border"
+                        className="px-3 py-1 rounded-md border text-sm"
                         style={{ borderColor: currentTheme.border }}
                       >
                         Submit Here
                       </button>
                       <button
                         onClick={() => handleFinalSubmit(true)}
-                        className="px-4 py-2 rounded-md text-white"
+                        className="px-3 py-1 rounded-md text-white text-sm"
                         style={{ backgroundColor: currentTheme.primary }}
                       >
                         Submit & Send to Google
@@ -323,7 +332,7 @@ function Review() {
               <div className="mt-auto">
                 <button
                   onClick={() => setShowPreview(null)}
-                  className="px-6 py-2 rounded-md border bg-red-700 text-white"
+                  className="px-6 py-2 rounded-md border  text-black"
                   style={{ borderColor: currentTheme.border }}
                 >
                   Close
