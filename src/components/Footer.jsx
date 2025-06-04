@@ -86,7 +86,7 @@ function Footer() {
         <div className="border-t" style={{ borderColor: currentTheme.border }}>
           <div className="pt-6 flex flex-col md:flex-row justify-between items-center">
             <p className="text-sm mb-4 md:mb-0" style={{ color: currentTheme.text.secondary }}>
-              © 2025 Dr. Laxminadh Sivaraju Neurosurgery. All rights reserved.
+              © 2025 Dr. Laxminadh Sivaraju Neurosurger|All rights reserved.
             </p>
             <a 
               href="https://srinishtha.com/" 

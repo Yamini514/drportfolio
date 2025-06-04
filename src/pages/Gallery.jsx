@@ -12,22 +12,18 @@ import s5 from '../assets/s5.jpeg';
 function Gallery() {
   const { currentTheme } = useTheme();
 
-  // Define default albums and images first
   const defaultAlbums = {
     Achievements: {
       title: 'Achievements',
-      description: 'Our achievements and milestones'
     },
     Clients: {
       title: 'Clients',
-      description: 'Our satisfied clients and testimonials'
     }
   };
 
   const defaultImages = [
     { 
       id: 1, 
-      title: 'Achievements', 
       src: a1, 
       category: 'Achievements',
       date: '2025-03-15',
@@ -51,7 +47,7 @@ function Gallery() {
       title: 'Achievements', 
       src: s1, 
       category: 'Achievements',
-      date: '2025-02-20',
+      date: '2025-02nicamente,20',
     },
     { 
       id: 6, 
@@ -83,20 +79,18 @@ function Gallery() {
     }
   ];
 
-  // Use default values directly without localStorage
   const [activeAlbum, setActiveAlbum] = useState('Achievements');
   const [albums] = useState(defaultAlbums);
   const [images] = useState(defaultImages);
   const [loading, setLoading] = useState(false);
 
-  // Filter images based on active album
   const albumImages = images.filter(image => image.category === activeAlbum);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: currentTheme.background }}>
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mx-auto mb-4" style={{ borderColor: currentTheme.primary }}></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mx-auto mb-4 mt-4" style={{ borderColor: currentTheme.primary }}></div>
           <p style={{ color: currentTheme.text.primary }}>Loading gallery...</p>
         </div>
       </div>
@@ -112,14 +106,14 @@ function Gallery() {
         {/* Header Section */}
         <div className="text-center mb-12 pt-8">
           <h1 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: currentTheme.text.primary }}>
-            Our Gallery
+              Gallery
           </h1>
           <p className="text-lg" style={{ color: currentTheme.text.secondary }}>
             Explore our collection of images showcasing our facilities, team, and more.
           </p>
         </div>
 
-        {/* Album Tabs - Fixed styling and spacing issues */}
+        {/* Album Tabs */}
         <div className="flex justify-center mb-8">
           <div className="inline-flex space-x-4 p-1 rounded-lg bg-opacity-10" style={{ backgroundColor: currentTheme.surface }}>
             {Object.keys(albums).map((albumKey) => (
@@ -146,7 +140,7 @@ function Gallery() {
         {activeAlbum && albums[activeAlbum] && (
           <div className="text-center mb-8">
             <h2 className="text-2xl font-semibold mb-2" style={{ color: currentTheme.text.primary }}>
-              {albums[activeAlbum].title}
+              {/* {albums[activeAlbum].title} */}
             </h2>
             <p style={{ color: currentTheme.text.secondary }}>
               {albums[activeAlbum].description}
@@ -160,19 +154,23 @@ function Gallery() {
             {albumImages.map((image) => (
               <div
                 key={image.id}
-                className="rounded-lg overflow-hidden shadow-md transition-transform duration-300 hover:scale-105"
-                style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}
+                className="rounded-lg overflow-hidden shadow-md transition-transform duration-300 hover:scale-105 border"
+                style={{ 
+                  backgroundColor: currentTheme.surface, 
+                  borderColor: currentTheme.border,
+                  borderWidth: '3px',
+                }}
               >
-                <div className="relative h-64 w-full">
+                <div className="relative h-64 w-full flex items-center justify-center p-4">
                   <img
                     src={image.src}
-                    alt={image.title}
-                    className="w-full h-full object-contain p-2"
+                    alt={image.title || 'Gallery image'}
+                    className="max-h-full max-w-full object-contain"
                   />
                 </div>
                 <div className="p-4">
                   <p className="text-sm" style={{ color: currentTheme.text.secondary }}>
-                    Added on {new Date(image.date).toLocaleDateString()}
+                    {/* Added on {new Date(image.date).toLocaleDateString()} */}
                   </p>
                 </div>
               </div>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { FaPhone, FaWhatsapp, FaEnvelope } from 'react-icons/fa'; // Updated import
+import { FaPhone, FaWhatsapp, FaEnvelope } from 'react-icons/fa';
 import emailjs from '@emailjs/browser';
 
 function ContactMe() {
@@ -15,8 +15,12 @@ function ContactMe() {
     message: '',
     timestamp: null
   });
-  const [phoneError, setPhoneError] = useState('');
-  const [nameError, setNameError] = useState('');
+  const [errors, setErrors] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    message: ''
+  });
 
   const validatePhone = (phone) => {
     const phoneRegex = /^[6-9]\d{9}$/;
@@ -28,68 +32,111 @@ function ContactMe() {
     return nameRegex.test(name);
   };
 
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validateField = (name, value) => {
+    switch (name) {
+      case 'fullName':
+        if (value.length > 25) {
+          return 'Name cannot exceed 25 characters';
+        }
+        if (value && !validateName(value)) {
+          return 'Only letters, spaces, and basic punctuation are allowed';
+        }
+        if (!value) {
+          return 'Name is required';
+        }
+        return '';
+      case 'email':
+        if (!value) {
+          return 'Email is required';
+        }
+        if (!validateEmail(value)) {
+          return 'Please enter a valid email address';
+        }
+        return '';
+      case 'phone':
+        if (!value) {
+          return 'Phone number is required';
+        }
+        if (!validatePhone(value)) {
+          return 'Please enter a valid 10-digit mobile number starting with 6-9';
+        }
+        return '';
+      case 'message':
+        if (value.length > 200) {
+          return 'Message cannot exceed 200 characters';
+        }
+        if (!value) {
+          return 'Message is required';
+        }
+        return '';
+      default:
+        return '';
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+    let processedValue = value;
+
     if (name === 'fullName') {
-      // Only allow letters and spaces for name field
-      const lettersAndSpacesOnly = value.replace(/[^A-Za-z\s]/g, '');
-      
-      setFormData(prev => ({
-        ...prev,
-        [name]: lettersAndSpacesOnly
-      }));
-
-      if (value !== lettersAndSpacesOnly && value.length > 0) {
-        setNameError('Only letters and spaces are allowed in name');
-      } else {
-        setNameError('');
-      }
+      processedValue = value.replace(/[^A-Za-z\s'.\-]/g, '').slice(0, 25);
     } else if (name === 'phone') {
-      // Only allow numbers
-      const numbersOnly = value.replace(/[^0-9]/g, '');
-      
-      setFormData(prev => ({
-        ...prev,
-        [name]: numbersOnly
-      }));
-
-      // Validate phone number
-      if (numbersOnly.length > 0) {
-        if (!validatePhone(numbersOnly)) {
-          setPhoneError('Please enter a valid 10-digit mobile number starting with 6-9');
-        } else {
-          setPhoneError('');
-        }
-      } else {
-        setPhoneError('');
-      }
-    } else {
-      // For email and message fields, allow all characters
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
+      processedValue = value.replace(/[^0-9]/g, '').slice(0, 10);
+    } else if (name === 'message') {
+      processedValue = value.slice(0, 200);
     }
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: processedValue
+    }));
+
+    // Validate on change to provide immediate feedback
+    setErrors(prev => ({
+      ...prev,
+      [name]: validateField(name, processedValue)
+    }));
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setErrors(prev => ({
+      ...prev,
+      [name]: validateField(name, value)
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-  
-    if (!validatePhone(formData.phone)) {
-      setPhoneError('Please enter a valid 10-digit mobile number starting with 6-9');
+
+    // Validate all fields before submission
+    const newErrors = {
+      fullName: validateField('fullName', formData.fullName),
+      email: validateField('email', formData.email),
+      phone: validateField('phone', formData.phone),
+      message: validateField('message', formData.message)
+    };
+
+    setErrors(newErrors);
+
+    // Check if there are any errors
+    if (Object.values(newErrors).some(error => error)) {
       return;
     }
-  
+
     try {
       const dataToSubmit = {
         ...formData,
         timestamp: new Date()
       };
-  
+
       await addDoc(collection(db, 'contacts'), dataToSubmit);
-  
-      // Send confirmation email using EmailJS
+
       await emailjs.send(
         'service_l920egs',
         'template_iremp8a',
@@ -100,7 +147,7 @@ function ContactMe() {
         },
         '2pSuAO6tF3T-sejH-'
       );
-  
+
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
@@ -111,13 +158,19 @@ function ContactMe() {
           message: '',
           timestamp: null
         });
+        setErrors({
+          fullName: '',
+          email: '',
+          phone: '',
+          message: ''
+        });
       }, 3000);
     } catch (error) {
       console.error('Error submitting form or sending email:', error);
       alert('There was an error submitting your message. Please try again.');
     }
   };
-  
+
   return (
     <div id="contactme" className="px-5 pb-5 md:px-15 md:pb-5 lg:px-20" style={{ backgroundColor: currentTheme.background }}>
       <div className="container mx-auto">
@@ -126,21 +179,19 @@ function ContactMe() {
             Message sent successfully!
           </div>
         )}
-        {/* Header Section */}
         <div className="text-center mb-12">
-          <h1 className="text-3xl md:text-4xl font-bold mb-4">Get in Touch</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-4"> Reach Us</h1>
           <p className="text-lg" style={{ color: currentTheme.text.secondary }}>
             Have questions or want to schedule a consultation? Contact us today for personalized care.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Contact Form */}
           <div style={{ 
             backgroundColor: currentTheme.surface,
             borderColor: currentTheme.border 
           }} className="p-6 rounded-lg border">
-            <h2 className="text-2xl font-semibold mb-6">Send us a message</h2>
+            <h2 className="text-2xl font-semibold mb-6 text-center">Enquire</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium mb-2">Full Name</label>
@@ -149,14 +200,20 @@ function ContactMe() {
                   name="fullName"
                   value={formData.fullName}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   style={{ 
                     backgroundColor: currentTheme.background,
-                    borderColor: currentTheme.border,
+                    borderColor: errors.fullName ? 'red' : currentTheme.border,
                     color: currentTheme.text.primary 
                   }}
                   className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
                   required
+                  maxLength="25"
+                  placeholder="Enter your full name"
                 />
+                {errors.fullName && (
+                  <p className="text-sm text-red-500 mt-1">{errors.fullName}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Email</label>
@@ -165,14 +222,20 @@ function ContactMe() {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   style={{ 
                     backgroundColor: currentTheme.background,
-                    borderColor: currentTheme.border,
+                    borderColor: errors.email ? 'red' : currentTheme.border,
                     color: currentTheme.text.primary 
                   }}
                   className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
                   required
+                  placeholder="Enter your email"
+                  
                 />
+                {errors.email && (
+                  <p className="text-sm text-red-500 mt-1">{errors.email}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Phone</label>
@@ -181,9 +244,10 @@ function ContactMe() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   style={{ 
                     backgroundColor: currentTheme.background,
-                    borderColor: phoneError ? 'red' : currentTheme.border,
+                    borderColor: errors.phone ? 'red' : currentTheme.border,
                     color: currentTheme.text.primary 
                   }}
                   className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
@@ -191,8 +255,8 @@ function ContactMe() {
                   maxLength="10"
                   placeholder="Enter 10-digit mobile number"
                 />
-                {phoneError && (
-                  <p className="text-sm text-red-500 mt-1">{phoneError}</p>
+                {errors.phone && (
+                  <p className="text-sm text-red-500 mt-1">{errors.phone}</p>
                 )}
               </div>
               <div>
@@ -202,31 +266,40 @@ function ContactMe() {
                   name="message"
                   value={formData.message}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   style={{ 
                     backgroundColor: currentTheme.background,
-                    borderColor: currentTheme.border,
+                    borderColor: errors.message ? 'red' : currentTheme.border,
                     color: currentTheme.text.primary 
                   }}
                   className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
                   required
+                  maxLength="200"
+                  placeholder="Enter your message (max 200 characters)"
                 ></textarea>
+                <p className="text-sm text-gray-500 mt-1">
+                  {formData.message.length}/200 characters
+                </p>
+                {errors.message && (
+                  <p className="text-sm text-red-500 mt-1">{errors.message}</p>
+                )}
               </div>
               <button
                 type="submit"
                 style={{ backgroundColor: currentTheme.primary }}
-                className="w-full py-3 text-white rounded-md hover:opacity-90 transition-opacity"
+                className="w-32 py-3 text-white rounded-lg font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transform hover:scale-105 transition-all duration-300 mx-auto flex items-center justify-center shadow-md"
+                disabled={Object.values(errors).some(error => error)}
               >
-                Submit Message
+                Send
               </button>
             </form>
           </div>
 
-          {/* Contact Information */}
           <div style={{ 
             backgroundColor: currentTheme.surface,
             borderColor: currentTheme.border 
           }} className="p-6 rounded-lg border">
-            <h2 className="text-2xl font-semibold mb-6">Contact Information</h2>
+            <h2 className="text-2xl font-semibold mb-6 text-center">Contact Information</h2>
             <div className="space-y-6">
               <div>
                 <h3 className="font-medium mb-2">Call Us</h3>
@@ -237,6 +310,7 @@ function ContactMe() {
                     style={{ color: currentTheme.text.primary }}
                   >
                     <FaPhone className="text-lg" />
+                    <FaWhatsapp className="text-lg text-violet-500" />
                     <span>+91-86884 23659</span>
                   </a>
                   <a 
@@ -246,8 +320,8 @@ function ContactMe() {
                     className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                     style={{ color: currentTheme.primary }}
                   >
-                    <FaWhatsapp className="text-lg" />
-                    <span>WhatsApp</span>
+                    {/* <FaWhatsapp className="text-lg" /> */}
+                    {/* <span>WhatsApp</span> */}
                   </a>
                   <a 
                     href="tel:+919381453352" 
@@ -255,6 +329,7 @@ function ContactMe() {
                     style={{ color: currentTheme.text.primary }}
                   >
                     <FaPhone className="text-lg" />
+                    <FaWhatsapp className="text-lg text-violet-500" />
                     <span>+91-93814 53352</span>
                   </a>
                   <a 
@@ -264,8 +339,8 @@ function ContactMe() {
                     className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                     style={{ color: currentTheme.primary }}
                   >
-                    <FaWhatsapp className="text-lg" />
-                    <span>WhatsApp</span>
+                    
+                    {/* <span>WhatsApp</span> */}
                   </a>
                 </div>
               </div>

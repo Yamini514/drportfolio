@@ -13,10 +13,10 @@ function Header() {
   const isHomePage = location.pathname === '/' || location.pathname === '';
 
   const navLinks = [
-    { name: 'About', href: 'about' },
-    { name: 'Services', href: 'services' },
+    // { name: 'About', href: 'about' },
+    // { name: 'Services', href: 'services' },
     // { name: 'Testimonials', href: 'testimonials' },
-    { name: 'Gallery', href: 'gallery' },
+    //{ name: 'Gallery', href: 'gallery' },
     { name: 'Review', href: 'review' },
     // { name: 'Contact', href: 'contactme' },
     {

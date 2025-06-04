@@ -60,9 +60,9 @@ function Services() {
     <div className=" px-5 mt-2 pb-10 md:px-15 md:pb-20" style={{ backgroundColor: currentTheme.background }}>
         {/* Header Section */}
         <div className="text-center mb-12">
-          <h1 className="text-3xl md:text-4xl font-bold mb-4">Our Services</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-4">My Services</h1>
           <p className="text-lg" style={{ color: currentTheme.text.secondary }}>
-            We provide comprehensive neurosurgical care using the latest technologies and techniques to ensure optimal patient outcomes.
+            I provide comprehensive neurosurgical care using the latest technologies and techniques to ensure optimal patient outcomes.
           </p>
         </div>
 
@@ -72,20 +72,21 @@ function Services() {
             <div
               key={service.id}
               style={{
-                backgroundColor: currentTheme.surface,
+                backgroundColor: currentTheme.surface, 
                 borderColor: currentTheme.border,
+                borderWidth: '3px',  
               }}
-              className="rounded-lg border p-6 flex flex-col items-center text-center group hover:shadow-lg transition-all duration-300"
+              className="rounded-lg border-2 p-6 flex flex-col items-center text-center group hover:shadow-xl transition-all duration-300"
             >
               <div 
-                className="mb-4 transition-transform duration-300 group-hover:scale-110"
+                className="mb-4  mt-4 transition-transform duration-300 group-hover:scale-110"
                 style={{ color: currentTheme.primary }}
               >
                 {getIconComponent(service.icon)}
               </div>
               <h3 className="text-xl font-semibold mb-3">{service.title}</h3>
               <p 
-                className="mb-4 flex-grow"
+                className="mb-4 flex-grow text-left"
                 style={{ color: currentTheme.text.secondary }}
               >
                 {service.description}
