@@ -29,9 +29,23 @@ function Review() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+
+    // Enforce character limits
+    if (name === 'username' && value.length > 25) {
+      return; // Stop accepting input if username exceeds 25 characters
+    }
+    if (name === 'reviewText' && value.length > 200) {
+      return; // Stop accepting input if reviewText exceeds 200 characters
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }));
+    // Clear error for the field being edited
+    setErrors(prev => ({
+      ...prev,
+      [name]: ''
     }));
   };
 
@@ -39,6 +53,10 @@ function Review() {
     setFormData(prev => ({
       ...prev,
       rating
+    }));
+    setErrors(prev => ({
+      ...prev,
+      rating: ''
     }));
   };
 
@@ -49,15 +67,11 @@ function Review() {
     // Name validation
     if (!formData.username.trim()) {
       newErrors.username = 'Name is required';
-    } else if (formData.username.length > 25) {
-      newErrors.username = 'Name must be 25 characters or less';
     }
 
     // Review text validation
     if (!formData.reviewText.trim()) {
       newErrors.reviewText = 'Review is required';
-    } else if (formData.reviewText.length > 200) {
-      newErrors.reviewText = 'Review must be 200 characters or less';
     }
 
     // Rating validation
@@ -98,7 +112,7 @@ function Review() {
       }, 3000);
     } catch (error) {
       console.error('Error adding review:', error);
-      alert('Failed to submit review. Please try again.');
+      alert('Failed to submit Review. Please try again.');
     }
   };
 
@@ -164,7 +178,7 @@ function Review() {
             <div className="bg-white rounded-lg p-6 max-w-2xl w-full relative" 
                  style={{ backgroundColor: currentTheme.surface }}>
               <div className="text-center mb-6">
-                <h2 className="text-xl font-bold">Submit  review</h2>
+                <h2 className="text-xl font-bold">Submit Review</h2>
               </div>
               
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -178,7 +192,10 @@ function Review() {
                     className={`w-full p-3 rounded-md border ${errors.username ? 'border-red-500' : ''}`}
                     style={{ borderColor: errors.username ? '#ef4444' : currentTheme.border, backgroundColor: currentTheme.surface }}
                   />
-                  {errors.username && <p className="mt-1 text-sm text-red-500">{errors.username}</p>}
+                  <div className="flex justify-between mt-1">
+                    <span className="text-sm text-red-500">{errors.username || ''}</span>
+                    <span className="text-sm opacity-70">{`${formData.username.length}/25 characters`}</span>
+                  </div>
                 </div>
 
                 <div>
@@ -191,7 +208,10 @@ function Review() {
                     className={`w-full p-3 rounded-md border ${errors.reviewText ? 'border-red-500' : ''}`}
                     style={{ borderColor: errors.reviewText ? '#ef4444' : currentTheme.border, backgroundColor: currentTheme.surface }}
                   />
-                  {errors.reviewText && <p className="mt-1 text-sm text-red-500">{errors.reviewText}</p>}
+                  <div className="flex justify-between mt-1">
+                    <span className="text-sm text-red-500">{errors.reviewText || ''}</span>
+                    <span className="text-sm opacity-70">{`${formData.reviewText.length}/200 characters`}</span>
+                  </div>
                 </div>
 
                 <div>
@@ -281,7 +301,7 @@ function Review() {
                 </div>
                 <div className="flex gap-1">
                   {[...Array(review.rating)].map((_, i) => (
-                    <Star key={i} size={16} fill="#FFD700" color="#FFD700" />
+                    <Star key={i} size={16} fill="#FFDNOR700" color="#FFD700" />
                   ))}
                 </div>
               </div>
@@ -299,6 +319,7 @@ function Review() {
                 >
                   View more
                 </a>
+                <p className="mt-1 text-sm opacity-70">{`${review.reviewText.length}/200 characters`}</p>
               </div>
             </div>
           ))}
@@ -325,6 +346,7 @@ function Review() {
                       </div>
                     </div>
                     <p className="text-lg whitespace-pre-wrap">{review.reviewText}</p>
+                    <p className="mt-2 text-sm opacity-70">{`${review.reviewText.length}/200 characters`}</p>
                   </div>
                 ))}
               </div>

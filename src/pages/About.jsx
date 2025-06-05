@@ -103,18 +103,19 @@ function About() {
           <div
               key={index}
               style={{
-                  backgroundColor: currentTheme.surface,
-                  borderColor: currentTheme.border
+                backgroundColor: currentTheme.surface, 
+                borderColor: currentTheme.border,
+                borderWidth: '3px',
               }}
               className="p-4 rounded-lg border"
           >
               <div 
-                className="flex items-center gap-3 mb-2"
+                className="mb-4 mt-4 text-center transition-transform duration-300 group-hover:scale-110 flex justify-center items-center"
                 style={{ color: currentTheme.primary }}
               >
                 {renderIcon(item.icon)}
-                <h3 className="font-semibold">{item.title}</h3>
               </div>
+              <h3 className="text-xl font-semibold mb-3 text-center">{item.title}</h3>
               <p style={{ color: currentTheme.text.secondary }}>
                 {item.description}
               </p>

@@ -39,7 +39,7 @@ function Header() {
       const heroSection = document.getElementById('hero');
       if (heroSection) {
         const heroBottom = heroSection.offsetTop + heroSection.offsetHeight;
-        setIsScrolled(window.scrollY >= heroBottom - 80);
+        setIsScrolled(window.scrollY);
       }
     };
 
