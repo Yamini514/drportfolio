@@ -22,31 +22,31 @@ function SocialIconsResponsive() {
 
   const socialLinks = [
     { 
-      name: 'Facebook', 
+      // name: 'Facebook', 
       icon: <Facebook size={20} />, 
       url: 'https://www.facebook.com/profile.php?id=100071881127167&mibextid=ZbWKwL',
       bgColor: '#1877F2' 
     },
     { 
-      name: 'Twitter', 
+      // name: 'Twitter', 
       icon: <XIcon size={20} />, 
       url: 'https://x.com/DrLaxminadh?t=npuU8mu-OOyht0HuTdjA2w&s=09',
       bgColor: '#000000' 
     },
     { 
-      name: 'LinkedIn', 
+      // name: 'LinkedIn', 
       icon: <Linkedin size={20} />, 
       url: 'https://www.linkedin.com/in/dr-laxminadh-sivaraju-neurosurgeon-90022674',
       bgColor: '#0A66C2' 
     },
     { 
-      name: 'Instagram', 
+      // name: 'Instagram', 
       icon: <Instagram size={20} />, 
       url: 'https://www.instagram.com/dr_laxminadhneuro?igsh=dmkzZ3VieHZnOWQz',
       bgColor: '#E4405F' 
     },
     { 
-      name: 'YouTube', 
+      // name: 'YouTube', 
       icon: <Youtube size={20} />, 
       url: 'https://www.youtube.com/channel/UClNNzst7yNACujYrsBtdZAQ'
     }
@@ -60,12 +60,13 @@ function SocialIconsResponsive() {
     <>
       {/* Desktop version - visible on medium screens and up */}
       <div 
-        className="fixed right-0 top-1/2 transform -translate-y-1/2 z-50 hidden md:block"
+        // className="fixed right-0 top-1/2 transform -translate-y-1/2 z-50 hidden md:block"
+        
         onMouseEnter={() => setIsVisible(true)}
         onMouseLeave={() => setIsVisible(false)}
       >
-        <div className={`transition-transform duration-300 ${isVisible ? 'translate-x-0' : 'translate-x-full'}`}>
-          <div className="flex flex-col">
+        <div>
+          <div className="flex flex-row">
             {socialLinks.map((social, index) => (
               <a
                 key={index}
@@ -76,28 +77,17 @@ function SocialIconsResponsive() {
                 aria-label={`Visit Dr. Laxminadh Sivaraju's ${social.name} profile`}
               >
                 <div 
-                  className="p-3 hover:pr-4 transition-all duration-300 backdrop-blur-sm"
+                  className="p-1 hover:pr-4 transition-all duration-300 backdrop-blur-sm"
                   style={{ color: currentTheme.primary }}
                 >
                   {social.icon}
                 </div>
-                <div 
-                  className="py-3 px-4 text-white absolute right-full opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm"
-                  style={{ backgroundColor: `${currentTheme.primary}dd` }}
-                >
-                  {social.name}
-                </div>
+                
               </a>
             ))}
           </div>
         </div>
-        {/* Hover trigger area */}
-        <div 
-          className="absolute right-0 top-0 h-full w-4 bg-transparent"
-          style={{
-            display: isVisible ? 'none' : 'block'
-          }}
-        />
+  
       </div>
 
       {/* Mobile version - visible on small screens only */}

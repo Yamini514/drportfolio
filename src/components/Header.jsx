@@ -12,8 +12,8 @@ function Header() {
   const isHomePage = location.pathname === '/' || location.pathname === '';
 
   const navLinks = [
-    { name: 'About', href: 'about', sectionId: 'about' },
-    { name: 'Services', href: 'services', sectionId: 'services' },
+    { name: 'About', href: '', sectionId: 'about' },
+    { name: 'Services', href: '', sectionId: 'services' },
     { name: 'Testimonials', href: 'review' },
     {
       name: 'Research',
@@ -156,7 +156,7 @@ function Header() {
                         className="block px-4 py-2 hover:opacity-80 transition-opacity"
                         style={{ color: currentTheme.text.primary }}
                         onClick={() => {
-                          window.scrollTo(0, 0);
+                          window.scrollTo(80,80);
                           navigate(`/${item.href}`);
                         }}
                       >

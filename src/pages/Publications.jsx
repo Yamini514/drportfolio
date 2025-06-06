@@ -45,7 +45,7 @@ function Publications() {
   return (
     <div className="px-5 pt-5 pb-10 md:px-15 md:pt-5 lg:px-20" style={{ backgroundColor: currentTheme.background }}>
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-bold mb-8" style={{ color: currentTheme.primary }}>Publications</h1>
+        <h1 className="text-2xl md:text-3xl font-bold mb-8 text-center" style={{ color: currentTheme.primary }}>Publications</h1>
         
         <div className="space-y-4">
           {publications.map((publication) => (

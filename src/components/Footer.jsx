@@ -1,25 +1,33 @@
 import React from 'react';
 import { useTheme } from '../context/ThemeContext';
+import SocialIconsResponsive from '../pages/SocialIcons'; // Import the updated component
 
 function Footer() {
   const { currentTheme } = useTheme();
 
   return (
-    <footer style={{
-      backgroundColor: currentTheme.surface,
-      color: currentTheme.text.primary,
-      borderTop: `1px solid ${currentTheme.border}`
-    }} className="pt-12 pb-6">
+    <footer
+      style={{
+        backgroundColor: currentTheme.surface,
+        color: currentTheme.text.primary,
+        borderTop: `1px solid ${currentTheme.border}`
+      }}
+      className="pt-12 pb-6"
+    >
       <div className="container mx-auto px-4">
         {/* Main Footer Content */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
           {/* About Section */}
-          <div className="w-full md:max-w-[260px]">
+          <div className="w-full md:max-w-[300px]">
             <h3 className="text-xl font-bold mb-3 md:mb-4">Dr. Laxminadh Sivaraju</h3>
             <p className="text-sm text-justify md:text-left" style={{ color: currentTheme.text.secondary }}>
               Leading neurosurgical care in Hyderabad with a focus on innovation, 
               compassion, and patient-centered treatment.
             </p>
+            {/* Add Social Icons Here */}
+            
+            <h3 className='text-lg font-semibold mb-4'>Social Media</h3>
+            <SocialIconsResponsive />
           </div>
 
           {/* Quick Links */}
