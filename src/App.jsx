@@ -43,7 +43,7 @@ function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <SocialIconsWrapper />
+        {/* <SocialIconsWrapper /> */}
         <Routes>
           {/* Public routes with Layout */}
           <Route path="/" element={<Layout />}>
