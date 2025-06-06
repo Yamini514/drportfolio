@@ -57,15 +57,37 @@ function Header() {
 
   // Handle navigation or scrolling based on link
   const handleNavClick = (href, sectionId) => {
-    if (isHomePage && sectionId) {
+    if (sectionId) {
+      // If not on homepage, navigate to homepage first
+      if (!isHomePage) {
+        navigate('/');
+        // Use setTimeout to wait for navigation to complete before scrolling
+        setTimeout(() => {
+          const section = document.getElementById(sectionId);
+          if (section) {
+            section.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100); // Small delay to ensure navigation completes
+        return;
+      }
+      // If on homepage, scroll to section
       const section = document.getElementById(sectionId);
       if (section) {
         section.scrollIntoView({ behavior: 'smooth' });
         return;
       }
     }
+    // For links without sectionId (e.g., Testimonials, Research items)
     window.scrollTo(0, 0);
     navigate(`/${href}`);
+  };
+
+  // Handle click on the name
+  const handleNameClick = () => {
+    if (!isHomePage) {
+      navigate('/');
+    }
+    window.scrollTo(0, 0);
   };
 
   return (
@@ -80,7 +102,7 @@ function Header() {
           -webkit-backdrop-filter: none !important;
           z-index: 1 !important;
         }
-        .header-colored {
+        .header-colored  {
           background-color: ${currentTheme.surface};
           border-bottom: 1px solid ${currentTheme.border};
           backdrop-filter: blur(10px);
@@ -98,7 +120,11 @@ function Header() {
         }}
       >
         <div className="flex items-center justify-between">
-          <Link to="/" className="text-xl md:text-2xl font-bold">
+          <Link 
+            to="/" 
+            className="text-xl md:text-2xl font-bold"
+            onClick={handleNameClick}
+          >
             Dr. Laxminadh Sivaraju
           </Link>
 
