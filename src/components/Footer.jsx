@@ -25,8 +25,7 @@ function Footer() {
               compassion, and patient-centered treatment.
             </p>
             {/* Add Social Icons Here */}
-            
-            <h3 className='text-lg font-semibold mb-4'>Social Media</h3>
+            <h3 className='text-lg font-semibold mb-4 mt-8'>Social Media</h3>
             <SocialIconsResponsive />
           </div>
 
