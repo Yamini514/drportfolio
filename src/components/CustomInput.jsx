@@ -12,13 +12,14 @@ function CustomInput({
   className = "",
   rows = 4,
   min,
-  max
+  max,
+  error // Add the error prop here
 }) {
   const { currentTheme } = useTheme();
   
   const inputStyles = {
     backgroundColor: currentTheme.surface,
-    borderColor: currentTheme.primary,
+    borderColor: error ? 'rgb(239, 68, 68)' : currentTheme.primary, // Highlight border in red if there's an error
     color: currentTheme.text.primary,
     '--tw-ring-color': 'transparent'
   };
@@ -28,6 +29,7 @@ function CustomInput({
       {label && (
         <label className="block text-sm font-medium mb-1" style={{ color: currentTheme.text.primary }}>
           {label}
+          {required && <span className="text-red-500 ml-1">*</span>} {/* Add asterisk for required fields */}
         </label>
       )}
       {type === "textarea" ? (
@@ -54,6 +56,12 @@ function CustomInput({
           className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${className}`}
           style={inputStyles}
         />
+      )}
+      {/* Render the error message below the input/textarea if it exists */}
+      {error && (
+        <p className="text-red-500 text-xs mt-1" style={{ color: 'rgb(239, 68, 68)' }}>
+          {error}
+        </p>
       )}
     </div>
   );

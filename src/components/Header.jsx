@@ -13,12 +13,9 @@ function Header() {
   const isHomePage = location.pathname === '/' || location.pathname === '';
 
   const navLinks = [
-    // { name: 'About', href: 'about' },
-    // { name: 'Services', href: 'services' },
-    // { name: 'Testimonials', href: 'testimonials' },
-    //{ name: 'Gallery', href: 'gallery' },
-    { name: 'Review', href: 'review' },
-    // { name: 'Contact', href: 'contactme' },
+    { name: 'About', href: 'about', sectionId: 'about' },
+    { name: 'Services', href: 'services', sectionId: 'services' },
+    { name: 'Testimonials', href: 'review' },
     {
       name: 'Research',
       dropdownItems: [
@@ -57,6 +54,19 @@ function Header() {
 
   // Calculate whether to show transparent header or colored header
   const isTransparentHeader = isHomePage && !isScrolled;
+
+  // Handle navigation or scrolling based on link
+  const handleNavClick = (href, sectionId) => {
+    if (isHomePage && sectionId) {
+      const section = document.getElementById(sectionId);
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+    }
+    window.scrollTo(0, 0);
+    navigate(`/${href}`);
+  };
 
   return (
     <>
@@ -129,13 +139,10 @@ function Header() {
               ) : (
                 <Link
                   key={link.name}
-                  to={`/${link.href}`}
+                  to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
                   className="relative font-medium transition-colors duration-300 pb-1"
                   style={{ color: isTransparentHeader ? '#ffffff' : currentTheme.text.primary }}
-                  onClick={() => {
-                    window.scrollTo(0, 0);
-                    navigate(`/${link.href}`);
-                  }}
+                  onClick={() => handleNavClick(link.href, link.sectionId)}
                 >
                   {link.name}
                   <span
@@ -225,7 +232,11 @@ function Header() {
                       to={`/${item.href}`}
                       className="block py-2 px-8 transition-colors"
                       style={{ color: currentTheme.text.primary }}
-                      onClick={() => setIsMenuOpen(false)}
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        window.scrollTo(0, 0);
+                        navigate(`/${item.href}`);
+                      }}
                     >
                       {item.name}
                     </Link>
@@ -234,10 +245,13 @@ function Header() {
               ) : (
                 <Link
                   key={link.name}
-                  to={`/${link.href}`}
+                  to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
                   className="block py-2 px-4 transition-colors"
                   style={{ color: currentTheme.text.primary }}
-                  onClick={() => setIsMenuOpen(false)}
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    handleNavClick(link.href, link.sectionId);
+                  }}
                 >
                   {link.name}
                 </Link>

@@ -14,7 +14,7 @@ import {
 import { db } from '../firebase/config';
 import { collection, getDocs } from 'firebase/firestore';
 
-function Services() {
+function Services({id}) {
   const { currentTheme } = useTheme();
   const [services, setServices] = useState([]);
 
@@ -57,6 +57,7 @@ function Services() {
   }, []);
 
   return (
+    <section id="services">
     <div className=" px-5 mt-2 pb-10 md:px-15 md:pb-20" style={{ backgroundColor: currentTheme.background }}>
         {/* Header Section */}
         <div className="text-center mb-12">
@@ -95,6 +96,7 @@ function Services() {
           ))}
         </div>
       </div>
+    </section>
   );
 }
 

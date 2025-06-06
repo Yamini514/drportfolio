@@ -1,10 +1,11 @@
+
 import React, { useEffect, useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { FaGraduationCap, FaAward, FaBrain, FaBook } from 'react-icons/fa';
 import HeaderComponent from '../components/HeaderComponent';
 import drImage from '../assets/drimg.png'; // Add this import
 
-function About() {
+function About( {id}) {
   const { currentTheme } = useTheme();
   const [aboutData, setAboutData] = useState({
     title: "About Dr. Laxminadh Sivaraju",
@@ -65,6 +66,7 @@ function About() {
   };
 
   return (
+    <section id="about">
     <div className="px-5 md:px-15 pb-12 mt-5 md:pb-10 lg:px-20" style={{ backgroundColor: currentTheme.background }}>
       {/* Image and Content Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12 items-start mb-8">
@@ -123,6 +125,7 @@ function About() {
       ))}
       </div>
     </div>
+    </section>
   );
 }
 
