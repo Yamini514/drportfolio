@@ -9,7 +9,6 @@ function Header() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Directly determine if we're on the home page without state
   const isHomePage = location.pathname === '/' || location.pathname === '';
 
   const navLinks = [
@@ -25,7 +24,6 @@ function Header() {
     },
   ];
 
-  // Simple scroll handler with no initial checks
   useEffect(() => {
     const handleScroll = () => {
       if (!isHomePage) {
@@ -40,11 +38,9 @@ function Header() {
       }
     };
 
-    // Set initial state depending on page
     if (!isHomePage) {
       setIsScrolled(true);
     } else {
-      // Force transparent on homepage
       setIsScrolled(false);
     }
 
@@ -52,38 +48,47 @@ function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isHomePage]);
 
-  // Calculate whether to show transparent header or colored header
   const isTransparentHeader = isHomePage && !isScrolled;
 
-  // Handle navigation or scrolling based on link
   const handleNavClick = (href, sectionId) => {
+    setIsMenuOpen(false); // Close mobile menu on click
+
     if (sectionId) {
-      // If not on homepage, navigate to homepage first
+      const header = document.querySelector('header');
+      const headerHeight = header ? header.offsetHeight : 0;
+
       if (!isHomePage) {
         navigate('/');
-        // Use setTimeout to wait for navigation to complete before scrolling
         setTimeout(() => {
           const section = document.getElementById(sectionId);
           if (section) {
-            section.scrollIntoView({ behavior: 'smooth' });
+            const sectionTop = section.getBoundingClientRect().top + window.scrollY;
+            window.scrollTo({
+              top: sectionTop - headerHeight,
+              behavior: 'smooth'
+            });
           }
-        }, 100); // Small delay to ensure navigation completes
+        }, 100);
         return;
       }
-      // If on homepage, scroll to section
+
       const section = document.getElementById(sectionId);
       if (section) {
-        section.scrollIntoView({ behavior: 'smooth' });
+        const sectionTop = section.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo({
+          top: sectionTop - headerHeight,
+          behavior: 'smooth'
+        });
         return;
       }
     }
-    // For links without sectionId (e.g., Testimonials, Research items)
+
     window.scrollTo(0, 0);
     navigate(`/${href}`);
   };
 
-  // Handle click on the name
   const handleNameClick = () => {
+    setIsMenuOpen(false);
     if (!isHomePage) {
       navigate('/');
     }
@@ -92,7 +97,6 @@ function Header() {
 
   return (
     <>
-      {/* Add CSS for header styles */}
       <style jsx="true">{`
         .home-header-transparent {
           background-color: transparent !important;
@@ -128,7 +132,6 @@ function Header() {
             Dr. Laxminadh Sivaraju
           </Link>
 
-          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
               link.dropdownItems ? (
@@ -206,7 +209,6 @@ function Header() {
             </button>
           </nav>
 
-          {/* Mobile Menu Button */}
           <div className="flex items-center gap-4 md:hidden">
             <button 
               onClick={toggleTheme}
@@ -243,7 +245,6 @@ function Header() {
           </div>
         </div>
 
-        {/* Mobile Navigation */}
         {isMenuOpen && (
           <nav className="md:hidden pt-4 pb-2" style={{ backgroundColor: currentTheme.surface }}>
             {navLinks.map((link) => (
