@@ -451,8 +451,13 @@ function BookAppointment() {
       setIsDateBlocked(false);
       setBlockReason("");
 
+      // Query all documents for the selected date and location
       const scheduleRef = collection(db, "appointments/data/schedule");
-      const q = query(scheduleRef, where("date", "==", date));
+      const q = query(
+        scheduleRef,
+        where("date", "==", date),
+        where("location", "==", selectedLocation)
+      );
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
@@ -466,48 +471,39 @@ function BookAppointment() {
         return;
       }
 
-      const docData = querySnapshot.docs[0].data();
-      if (docData.location.toLowerCase() !== selectedLocation.toLowerCase()) {
-        setTimeSlots([]);
-        setDaySchedule({ isOpen: false });
-        setLocationMismatch(true);
-        setBookingMessage(
-          `No schedule available for ${selectedLocation} on ${date}.`
-        );
-        setIsLoading(false);
-        return;
-      }
+      // Aggregate time slots from all matching documents
+      let allSlots = [];
+      querySnapshot.forEach((doc) => {
+        const docData = doc.data();
+        if (Array.isArray(docData.timeSlots)) {
+          allSlots = [...allSlots, ...docData.timeSlots.map(formatTimeSlot)];
+        }
+      });
 
-      setLocationMismatch(false);
-      const storedSlots = Array.isArray(docData.timeSlots)
-        ? docData.timeSlots.map(formatTimeSlot)
-        : [];
-
+      // Remove duplicates and sort slots
+      const uniqueSlots = [...new Set(allSlots)];
       const currentTime = getCurrentTimeInIST();
       const selectedDateObj = new Date(date);
       const now = new Date();
       const isToday = isSameDay(selectedDateObj, now);
 
-      const availableSlots = storedSlots.filter((slot) => {
+      const availableSlots = uniqueSlots.filter((slot) => {
         if (bookedSlots[date]?.includes(slot)) {
           return false;
         }
 
         const [time, period] = slot.split(" ");
         const [slotHour, slotMinute] = time.split(":").map(Number);
-        let slotHour24 =
-          period === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
+        let slotHour24 = period === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
         if (period === "AM" && slotHour === 12) slotHour24 = 0;
         const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
 
-        const endHour24 = 17;
+        const endHour24 = 17; // Adjust based on your max end time (e.g., 17:30)
         const endMinute = 30;
         const endTimeInMinutes = endHour24 * 60 + endMinute;
 
         if (isToday) {
-          const [currentHour, currentMinute] = currentTime
-            .split(":")
-            .map(Number);
+          const [currentHour, currentMinute] = currentTime.split(":").map(Number);
           const currentTimeInMinutes = currentHour * 60 + currentMinute;
           return (
             slotTimeInMinutes >= currentTimeInMinutes &&
@@ -528,6 +524,9 @@ function BookAppointment() {
       setDaySchedule({ isOpen: sortedSlots.length > 0 });
       if (sortedSlots.length === 0 && !isDateBlocked && !isSunday && !locationMismatch) {
         setBookingMessage("All slots are booked. Please select another day.");
+      } else if (sortedSlots.length > 0) {
+        setBookingMessage("");
+        setLocationMismatch(false);
       }
     } catch (error) {
       console.error("Error fetching time slots:", error.code, error.message);
@@ -1147,7 +1146,7 @@ function BookAppointment() {
                 className="block text-sm sm:text-base font-medium mb-2"
                 style={{ color: currentTheme.text.primary }}
               >
-                Medical History Summary (Optional, Max 200 characters)
+                Medical History Summary
               </label>
               <textarea
                 name="medicalHistoryMessage"
