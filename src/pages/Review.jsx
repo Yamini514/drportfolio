@@ -6,7 +6,9 @@ import { db } from '../firebase/config';
 
 function Review() {
   const { currentTheme } = useTheme();
-  
+  const [currentPage, setCurrentPage] = useState(1);
+  const reviewsPerPage = 10;
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -30,19 +32,17 @@ function Review() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    // Enforce character limits
     if (name === 'username' && value.length > 25) {
-      return; // Stop accepting input if username exceeds 25 characters
+      return;
     }
-    if (name === 'reviewText' && value.length > 1500) {
-      return; // Stop accepting input if reviewText exceeds 200 characters
+    if (name === 'reviewText' && value.length > 500) {
+      return;
     }
 
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-    // Clear error for the field being edited
     setErrors(prev => ({
       ...prev,
       [name]: ''
@@ -64,17 +64,14 @@ function Review() {
     e.preventDefault();
     const newErrors = {};
     
-    // Name validation
     if (!formData.username.trim()) {
       newErrors.username = 'Name is required';
     }
 
-    // Review text validation
     if (!formData.reviewText.trim()) {
       newErrors.reviewText = 'Review is required';
     }
 
-    // Rating validation
     if (formData.rating === 0) {
       newErrors.rating = 'Rating is required';
     }
@@ -127,6 +124,17 @@ function Review() {
   };
 
   useEffect(() => {
+    const handleEsc = (event) => {
+      if (event.key === 'Escape' && showPreview) {
+        setShowPreview(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [showPreview]);
+
+  useEffect(() => {
     const fetchReviews = async () => {
       try {
         const reviewsRef = collection(db, 'reviews');
@@ -147,25 +155,35 @@ function Review() {
     fetchReviews();
   }, [showThankYou]);
 
+  const indexOfLastReview = currentPage * reviewsPerPage;
+  const indexOfFirstReview = indexOfLastReview - reviewsPerPage;
+  const currentReviews = reviews.slice(indexOfFirstReview, indexOfLastReview);
+  const totalPages = Math.ceil(reviews.length / reviewsPerPage);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo(0, 0);
+  };
+
   return (
-    <div className="min-h-screen pt-5 px-5 pb-10 md:px-15 md:pt-5 lg:px-20 lg:pt-5" style={{ backgroundColor: currentTheme.background }}>
+    <div className="min-h-screen pt-5 px-4 pb-10 md:px-15 md:pt-5 lg:px-20 lg:pt-5" style={{ backgroundColor: currentTheme.background }}>
       <div className="max-w-2xl mx-auto">
         {showThankYou && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full text-center" 
+            <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-sm sm:max-w-md text-center" 
                  style={{ backgroundColor: currentTheme.surface }}>
-              <h2 className="text-3xl font-bold mb-4">Thank You for Your Review!</h2>
-              <p className="text-lg">Your feedback is valuable to us.</p>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-4">Thank You for Your Review!</h2>
+              <p className="text-base sm:text-lg">Your feedback is valuable to us.</p>
             </div>
           </div>
         )}
 
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold">Reviews</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Reviews</h1>
           {!showForm && (
             <button
               onClick={() => setShowForm(true)}
-              className="px-6 py-2 rounded-md text-white"
+              className="px-4 py-2 sm:px-6 sm:py-2 rounded-md text-white w-full sm:w-auto"
               style={{ backgroundColor: currentTheme.primary }}
             >
               Write a Review
@@ -175,106 +193,111 @@ function Review() {
 
         {showForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 max-w-2xl w-full relative" 
+            <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md sm:max-w-2xl relative" 
                  style={{ backgroundColor: currentTheme.surface }}>
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-bold">Submit Review</h2>
-              </div>
-              
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label className="block mb-2 font-medium">Name</label>
-                  <input
-                    type="text"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleInputChange}
-                    className={`w-full p-3 rounded-md border ${errors.username ? 'border-red-500' : ''}`}
-                    style={{ borderColor: errors.username ? '#ef4444' : currentTheme.border, backgroundColor: currentTheme.surface }}
-                  />
-                  <div className="flex justify-between mt-1">
-                    <span className="text-sm text-red-500">{errors.username || ''}</span>
-                    <span className="text-sm opacity-70">{`${formData.username.length}/25 characters`}</span>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="text-center mb-6">
+                  <h2 className="text-lg sm:text-xl font-bold">Share your experience</h2>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+                    <label className="font-medium w-full sm:w-24">Name:</label>
+                    <div className="flex-1 w-full">
+                      <input
+                        type="text"
+                        name="username"
+                        value={formData.username}
+                        onChange={handleInputChange}
+                        className={`w-full p-2 sm:p-3 rounded-md border ${errors.username ? 'border-red-500' : ''}`}
+                        style={{ borderColor: errors.username ? '#ef4444' : currentTheme.border, backgroundColor: currentTheme.surface }}
+                      />
+                      <div className="flex justify-between mt-1">
+                        <span className="text-xs sm:text-sm text-red-500">{errors.username || ''}</span>
+                        <span className="text-xs sm:text-sm opacity-70">{`${formData.username.length}/25 characters`}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-4">
+                    <label className="font-medium w-full sm:w-24 mt-3 sm:mt-0">Your Review:</label>
+                    <div className="flex-1 w-full">
+                      <textarea
+                        name="reviewText"
+                        value={formData.reviewText}
+                        onChange={handleInputChange}
+                        rows="4"
+                        className={`w-full p-2 sm:p-3 rounded-md border ${errors.reviewText ? 'border-red-500' : ''}`}
+                        style={{ borderColor: errors.reviewText ? '#ef4444' : currentTheme.border, backgroundColor: currentTheme.surface }}
+                      />
+                      <div className="flex justify-between mt-1">
+                        <span className="text-xs sm:text-sm text-red-500">{errors.reviewText || ''}</span>
+                        <span className="text-xs sm:text-sm opacity-70">{`${formData.reviewText.length}/500 characters`}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+                    <label className="font-medium w-full sm:w-24">Rating:</label>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => handleRatingClick(star)}
+                          className="text-xl sm:text-2xl transition-colors"
+                          style={{ color: star <= formData.rating ? '#FFD700' : currentTheme.border }}
+                        >
+                          <Star fill={star <= formData.rating ? '#FFD700' : 'none'} />
+                        </button>
+                      ))}
+                      {errors.rating && <span className="text-xs sm:text-sm text-red-500 ml-2">{errors.rating}</span>}
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block mb-2 font-medium">Your Review</label>
-                  <textarea
-                    name="reviewText"
-                    value={formData.reviewText}
-                    onChange={handleInputChange}
-                    rows="4"
-                    className={`w-full p-3 rounded-md border ${errors.reviewText ? 'border-red-500' : ''}`}
-                    style={{ borderColor: errors.reviewText ? '#ef4444' : currentTheme.border, backgroundColor: currentTheme.surface }}
-                  />
-                  <div className="flex justify-between mt-1">
-                    <span className="text-sm text-red-500">{errors.reviewText || ''}</span>
-                    <span className="text-sm opacity-70">{`${formData.reviewText.length}/1500 characters`}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block mb-2 font-medium">Rating</label>
-                  <div className="flex gap-2 justify-center">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => handleRatingClick(star)}
-                        className="text-2xl transition-colors"
-                        style={{ color: star <= formData.rating ? '#FFD700' : currentTheme.border }}
-                      >
-                        <Star fill={star <= formData.rating ? '#FFD700' : 'none'} />
-                      </button>
-                    ))}
-                  </div>
-                  {errors.rating && <p className="mt-1 text-sm text-red-500">{errors.rating}</p>}
-                </div>
-
-                <div className="flex gap-4 justify-center">
+                <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
                   <button
                     type="button"
                     onClick={handleCancel}
-                    className="px-6 py-2 rounded-md border"
+                    className="px-4 py-2 sm:px-6 sm:py-2 rounded-md border w-full sm:w-auto"
                     style={{ borderColor: currentTheme.border }}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 rounded-md text-white"
+                    className="px-4 py-2 sm:px-6 sm:py-2 rounded-md text-white w-full sm:w-auto"
                     style={{ backgroundColor: currentTheme.primary }}
                   >
-                    Submit Review
+                    Submit
                   </button>
                 </div>
               </form>
 
               {showConfirmation && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
-                  <div className="bg-white rounded-lg p-6 max-w-md w-full" 
+                  <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-sm sm:max-w-md" 
                        style={{ backgroundColor: currentTheme.surface }}>
-                    {/* <h2 className="text-xl font-bold mb-4 text-center">Submit Review</h2> */}
-                    <p className="mb-6 text-center">Are you sure you want to review?</p>
-                    <div className="flex justify-end gap-2">
+                    <p className="mb-6 text-center text-sm sm:text-base">Are you sure you want to review?</p>
+                    <div className="flex flex-col sm:flex-row justify-center gap-3">
                       <button
                         onClick={handleCancelConfirmation}
-                        className="px-3 py-1 rounded-md border text-sm"
+                        className="px-4 py-2 sm:px-6 sm:py-2 rounded-md border text-sm w-full sm:w-auto"
                         style={{ borderColor: currentTheme.border }}
                       >
                         Cancel
                       </button>
                       <button
                         onClick={() => handleFinalSubmit(false)}
-                        className="px-3 py-1 rounded-md border text-sm"
+                        className="px-4 py-2 sm:px-6 sm:py-2 rounded-md border text-sm w-full sm:w-auto"
                         style={{ borderColor: currentTheme.border }}
                       >
-                        Submit Here
+                        Submit
                       </button>
                       <button
                         onClick={() => handleFinalSubmit(true)}
-                        className="px-3 py-1 rounded-md text-white text-sm"
+                        className="px-4 py-2 sm:px-6 sm:py-2 rounded-md text-white text-sm w-full sm:w-auto"
                         style={{ backgroundColor: currentTheme.primary }}
                       >
                         Submit & Send to Google
@@ -288,7 +311,7 @@ function Review() {
         )}
 
         <div className="space-y-4">
-          {reviews.map((review) => (
+          {currentReviews.map((review) => (
             <div
               key={review.id}
               className="p-4 rounded-lg border"
@@ -296,25 +319,25 @@ function Review() {
             >
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <h3 className="font-medium">{review.username}</h3>
-                  <p className="text-sm opacity-70">{formatDate(review.date)}</p>
+                  <h3 className="font-medium text-base sm:text-lg">{review.username}</h3>
+                  <p className="text-xs sm:text-sm opacity-70">{formatDate(review.date)}</p>
                 </div>
                 <div className="flex gap-1">
                   {[...Array(review.rating)].map((_, i) => (
-                    <Star key={i} size={16} fill="#FFD700" color="#FFD700" />
+                    <Star key={i} size={14} sm:size-16 fill="#FFD700" color="#FFD700" />
                   ))}
                 </div>
               </div>
               
               <div>
-                <p className="line-clamp-2">{review.reviewText}</p>
+                <p className="line-clamp-2 text-sm sm:text-base">{review.reviewText}</p>
                 <a
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
                     setShowPreview(review.id);
                   }}
-                  className="mt-2 text-sm hover:underline"
+                  className="mt-2 text-xs sm:text-sm hover:underline"
                   style={{ color: currentTheme.primary }}
                 >
                   View more
@@ -324,10 +347,48 @@ function Review() {
           ))}
         </div>
 
+        {totalPages > 1 && (
+          <div className="flex flex-wrap justify-center items-center gap-2 mt-6">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1 sm:px-4 sm:py-2 rounded-md border disabled:opacity-50"
+              style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.surface }}
+            >
+              Previous
+            </button>
+            <div className="flex flex-wrap gap-1">
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  onClick={() => handlePageChange(pageNumber)}
+                  className={`px-3 py-1 sm:px-4 sm:py-2 rounded-md border text-xs sm:text-sm ${
+                    currentPage === pageNumber ? 'text-white' : ''
+                  }`}
+                  style={{
+                    borderColor: currentTheme.border,
+                    backgroundColor: currentPage === pageNumber ? currentTheme.primary : currentTheme.surface,
+                  }}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 sm:px-4 sm:py-2 rounded-md border disabled:opacity-50"
+              style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.surface }}
+            >
+              Next
+            </button>
+          </div>
+        )}
+
         {showPreview && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center text-justify p-4 z-50">
             <div 
-              className="bg-white rounded-lg p-6 max-w-3xl w-full relative max-h-[80vh] flex flex-col"
+              className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md sm:max-w-3xl relative max-h-[80vh] flex flex-col"
               style={{ backgroundColor: currentTheme.surface }}
             >
               <div className="overflow-y-auto pr-2 mb-4">
@@ -335,28 +396,30 @@ function Review() {
                   <div key={review.id}>
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        <h3 className="text-xl font-bold">{review.username}</h3>
-                        <p className="text-sm opacity-70">{formatDate(review.date)}</p>
+                        <h3 className="text-lg sm:text-xl font-bold">{review.username}</h3>
+                        <p className="text-xs sm:text-sm opacity-70">{formatDate(review.date)}</p>
                       </div>
                       <div className="flex gap-1">
                         {[...Array(review.rating)].map((_, i) => (
-                          <Star key={i} size={20} fill="#FFD700" color="#FFD700" />
+                          <Star key={i} size={16} sm:size-20 fill="#FFD700" color="#FFD700" />
                         ))}
                       </div>
                     </div>
-                    <p className="text-lg whitespace-pre-wrap">{review.reviewText}</p>
-                    <p className="mt-2 text-sm opacity-70">{`${review.reviewText.length}/1500 characters`}</p>
+                    <p className="text-sm sm:text-lg whitespace-pre-wrap pl-4">{review.reviewText}</p>
                   </div>
                 ))}
               </div>
               
-              <div className="mt-auto">
+              <div className="mt-auto flex justify-center">
                 <button
                   onClick={() => setShowPreview(null)}
-                  className="px-6 py-2 rounded-md border  text-black"
-                  style={{ borderColor: currentTheme.border }}
+                  className="px-4 py-2 sm:px-6 sm:py-2 rounded-md border"
+                  style={{ 
+                    borderColor: currentTheme.border,
+                    color: currentTheme.background === '#1a1a1a' ? '#ffffff' : '#000000'
+                  }}
                 >
-                  Close
+                  Cancel
                 </button>
               </div>
             </div>
