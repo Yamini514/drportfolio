@@ -66,8 +66,8 @@ function About({id}) {
   };
 
   return (
-    <section id="about">
-    <div className="px-5 md:px-15 pb-12 mt-5 md:pb-10 lg:px-20 p-8" style={{ backgroundColor: currentTheme.background }}>
+    <section id="about"> {/* Add padding-top */}
+      <div className="px-5 md:px-15 pb-12 mt-5 md:pb-10 lg:px-20 p-8" style={{ backgroundColor: currentTheme.background }}>
       {/* Image and Content Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12 items-start mb-8">
         {/* Image Section */}

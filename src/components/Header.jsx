@@ -76,7 +76,7 @@ function Header() {
       if (section) {
         const sectionTop = section.getBoundingClientRect().top + window.scrollY;
         window.scrollTo({
-          top: sectionTop - headerHeight + 300,
+          top: sectionTop -50,
           behavior: 'smooth'
         });
         return;
