@@ -56,15 +56,15 @@ function Header() {
     if (sectionId) {
       const header = document.querySelector('header');
       const headerHeight = header ? header.offsetHeight : 0;
-
+// services 
       if (!isHomePage) {
-        navigate('/');
+        // navigate('/');
         setTimeout(() => {
           const section = document.getElementById(sectionId);
           if (section) {
             const sectionTop = section.getBoundingClientRect().top + window.scrollY;
             window.scrollTo({
-              top: sectionTop - headerHeight,
+              top: sectionTop -75,
               behavior: 'smooth'
             });
           }
@@ -76,7 +76,7 @@ function Header() {
       if (section) {
         const sectionTop = section.getBoundingClientRect().top + window.scrollY;
         window.scrollTo({
-          top: sectionTop -50,
+          top: sectionTop -75,
           behavior: 'smooth'
         });
         return;
@@ -90,7 +90,7 @@ function Header() {
   const handleNameClick = () => {
     setIsMenuOpen(false);
     if (!isHomePage) {
-      navigate('/');
+      // navigate('/');
     }
     window.scrollTo(0, 0);
   };
