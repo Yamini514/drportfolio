@@ -6,6 +6,7 @@ function Header() {
   const { theme, currentTheme, toggleTheme } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [scrollToSection, setScrollToSection] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -48,27 +49,40 @@ function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isHomePage]);
 
+  useEffect(() => {
+    if (isHomePage && scrollToSection) {
+      // Add a slight delay to ensure the DOM is updated after navigation
+      const timer = setTimeout(() => {
+        const section = document.getElementById(scrollToSection);
+        if (section) {
+          const sectionTop = section.getBoundingClientRect().top + window.scrollY;
+          window.scrollTo({
+            top: sectionTop - 75,
+            behavior: 'smooth'
+          });
+        }
+        setScrollToSection(null); // Reset after scrolling
+      }, 100); // Adjust delay as needed
+
+      return () => clearTimeout(timer);
+    }
+  }, [location.pathname, scrollToSection, isHomePage]);
+
   const isTransparentHeader = isHomePage && !isScrolled;
 
-  const handleNavClick = (href, sectionId) => {
-    setIsMenuOpen(false); // Close mobile menu on click
+  const handleNavClick = (href, sectionId, e) => {
+    if (sectionId) {
+      e.preventDefault(); // Prevent the Link's default navigation behavior
+    }
+    setIsMenuOpen(false);
 
     if (sectionId) {
       const header = document.querySelector('header');
       const headerHeight = header ? header.offsetHeight : 0;
-// services 
+
       if (!isHomePage) {
-        // navigate('/');
-        setTimeout(() => {
-          const section = document.getElementById(sectionId);
-          if (section) {
-            const sectionTop = section.getBoundingClientRect().top + window.scrollY;
-            window.scrollTo({
-              top: sectionTop -75,
-              behavior: 'smooth'
-            });
-          }
-        }, 100);
+        navigate('/');
+        setScrollToSection(sectionId);
         return;
       }
 
@@ -76,7 +90,7 @@ function Header() {
       if (section) {
         const sectionTop = section.getBoundingClientRect().top + window.scrollY;
         window.scrollTo({
-          top: sectionTop -75,
+          top: sectionTop - 75,
           behavior: 'smooth'
         });
         return;
@@ -90,7 +104,7 @@ function Header() {
   const handleNameClick = () => {
     setIsMenuOpen(false);
     if (!isHomePage) {
-      // navigate('/');
+      navigate('/');
     }
     window.scrollTo(0, 0);
   };
@@ -156,7 +170,7 @@ function Header() {
                         className="block px-4 py-2 hover:opacity-80 transition-opacity"
                         style={{ color: currentTheme.text.primary }}
                         onClick={() => {
-                          window.scrollTo(80,80);
+                          window.scrollTo(0,0);
                           navigate(`/${item.href}`);
                         }}
                       >
@@ -171,7 +185,7 @@ function Header() {
                   to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
                   className="relative font-medium transition-colors duration-300 pb-1"
                   style={{ color: isTransparentHeader ? '#ffffff' : currentTheme.text.primary }}
-                  onClick={() => handleNavClick(link.href, link.sectionId)}
+                  onClick={(e) => handleNavClick(link.href, link.sectionId, e)}
                 >
                   {link.name}
                   <span
@@ -275,10 +289,7 @@ function Header() {
                   to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
                   className="block py-2 px-4 transition-colors"
                   style={{ color: currentTheme.text.primary }}
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    handleNavClick(link.href, link.sectionId);
-                  }}
+                  onClick={(e) => handleNavClick(link.href, link.sectionId, e)}
                 >
                   {link.name}
                 </Link>
