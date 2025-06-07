@@ -451,7 +451,6 @@ function BookAppointment() {
       setIsDateBlocked(false);
       setBlockReason("");
 
-      // Query all documents for the selected date and location
       const scheduleRef = collection(db, "appointments/data/schedule");
       const q = query(
         scheduleRef,
@@ -471,39 +470,37 @@ function BookAppointment() {
         return;
       }
 
-      // Aggregate time slots from all matching documents
-      let allSlots = [];
-      querySnapshot.forEach((doc) => {
-        const docData = doc.data();
-        if (Array.isArray(docData.timeSlots)) {
-          allSlots = [...allSlots, ...docData.timeSlots.map(formatTimeSlot)];
-        }
-      });
+      const docData = querySnapshot.docs[0].data();
+      setLocationMismatch(false);
+      const storedSlots = Array.isArray(docData.timeSlots)
+        ? docData.timeSlots.map(formatTimeSlot)
+        : [];
 
-      // Remove duplicates and sort slots
-      const uniqueSlots = [...new Set(allSlots)];
       const currentTime = getCurrentTimeInIST();
       const selectedDateObj = new Date(date);
       const now = new Date();
       const isToday = isSameDay(selectedDateObj, now);
 
-      const availableSlots = uniqueSlots.filter((slot) => {
+      const availableSlots = storedSlots.filter((slot) => {
         if (bookedSlots[date]?.includes(slot)) {
           return false;
         }
 
         const [time, period] = slot.split(" ");
         const [slotHour, slotMinute] = time.split(":").map(Number);
-        let slotHour24 = period === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
+        let slotHour24 =
+          period === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
         if (period === "AM" && slotHour === 12) slotHour24 = 0;
         const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
 
-        const endHour24 = 17; // Adjust based on your max end time (e.g., 17:30)
+        const endHour24 = 17;
         const endMinute = 30;
         const endTimeInMinutes = endHour24 * 60 + endMinute;
 
         if (isToday) {
-          const [currentHour, currentMinute] = currentTime.split(":").map(Number);
+          const [currentHour, currentMinute] = currentTime
+            .split(":")
+            .map(Number);
           const currentTimeInMinutes = currentHour * 60 + currentMinute;
           return (
             slotTimeInMinutes >= currentTimeInMinutes &&
@@ -524,9 +521,6 @@ function BookAppointment() {
       setDaySchedule({ isOpen: sortedSlots.length > 0 });
       if (sortedSlots.length === 0 && !isDateBlocked && !isSunday && !locationMismatch) {
         setBookingMessage("All slots are booked. Please select another day.");
-      } else if (sortedSlots.length > 0) {
-        setBookingMessage("");
-        setLocationMismatch(false);
       }
     } catch (error) {
       console.error("Error fetching time slots:", error.code, error.message);
@@ -543,12 +537,13 @@ function BookAppointment() {
         const snapshot = await getDocs(collection(db, "appointments/data/bookings"));
         const counts = {};
         snapshot.forEach((doc) => {
-          const date = doc.data().date;
-          counts[date] = (counts[date] || 0) + 1;
+          const { date, location } = doc.data();
+          const key = `${date}|${location}`;
+          counts[key] = (counts[key] || 0) + 1;
         });
         const fullyBooked = Object.entries(counts)
-          .filter(([_, count]) => count >= MAX_SLOTS_PER_DAY)
-          .map(([date]) => date);
+          .filter(([key, count]) => count >= MAX_SLOTS_PER_DAY)
+          .map(([key]) => key.split("|")[0]);
         setBookedDates(fullyBooked);
         console.log("Fully booked dates:", fullyBooked);
       } catch (error) {
@@ -567,10 +562,11 @@ function BookAppointment() {
         const slots = {};
         querySnapshot.forEach((doc) => {
           const appointment = doc.data();
-          if (!slots[appointment.date]) {
-            slots[appointment.date] = [];
+          const key = `${appointment.date}|${appointment.location}`;
+          if (!slots[key]) {
+            slots[key] = [];
           }
-          slots[appointment.date].push(appointment.time);
+          slots[key].push(appointment.time);
         });
         setBookedSlots(slots);
         console.log("Booked slots:", slots);
@@ -643,10 +639,11 @@ function BookAppointment() {
       const q = query(
         bookingsRef,
         where("date", "==", date),
-        where("time", "==", slot)
+        where("time", "==", slot),
+        where("location", "==", selectedLocation)
       );
       const snapshot = await getDocs(q);
-      console.log("Slot availability for", date, slot, ":", snapshot.empty);
+      console.log("Slot availability for", date, slot, selectedLocation, ":", snapshot.empty);
       return snapshot.empty;
     } catch (error) {
       console.error("Error checking slot availability:", error.code, error.message);
@@ -666,7 +663,10 @@ function BookAppointment() {
       setSelectedSlot("");
       setBookedSlots((prev) => ({
         ...prev,
-        [selectedDate]: [...(prev[selectedDate] || []), slot],
+        [`${selectedDate}|${selectedLocation}`]: [
+          ...(prev[`${selectedDate}|${selectedLocation}`] || []),
+          slot,
+        ],
       }));
       fetchTimeSlots(selectedDate, selectedDayName);
     } else {
@@ -796,7 +796,8 @@ function BookAppointment() {
         appointment_type: formData.appointmentType,
       };
 
-      await emailjs.send("service_dkv3rib", "template_iremp8a", emailParams)
+      await emailjs
+        .send("service_dkv3rib", "template_iremp8a", emailParams)
         .then((response) => {
           console.log("Email sent successfully:", response.status, response.text);
         })
@@ -831,6 +832,7 @@ function BookAppointment() {
     } finally {
       setIsLoading(false);
     }
+    setIsLoading(false);
   };
 
   return (
@@ -875,7 +877,7 @@ function BookAppointment() {
                 id="location-select"
                 value={selectedLocation}
                 onChange={handleLocationChange}
-                options={locations.map((loc) => ({ value: loc.name, label: loc.name }))}
+                options={locations.map((loc) => ({ value: loc.name, label:	loc.name }))}
                 required
                 className="w-32 sm:w-40 p-2 rounded-md border text-sm sm:text-base"
                 style={{
@@ -954,7 +956,7 @@ function BookAppointment() {
             <div className="flex justify-center">
               <div className="flex flex-wrap justify-center gap-2 sm:gap-3 max-w-3xl">
                 {timeSlots.map((slot) => {
-                  const isBooked = bookedSlots[selectedDate]?.includes(slot);
+                  const isBooked = bookedSlots[`${selectedDate}|${selectedLocation}`]?.includes(slot);
                   const Icon = Clock;
                   const [time, period] = slot.split(" ");
                   return (
