@@ -61,12 +61,10 @@ function BookAppointment() {
   const [isLoading, setIsLoading] = useState(false);
   const [locationMismatch, setLocationMismatch] = useState(false);
 
-  // Initialize EmailJS with public key
   useEffect(() => {
     emailjs.init("2pSuAO6tF3T-sejH-");
   }, []);
 
-  // Log errors state changes for debugging
   useEffect(() => {
     console.log("Current errors state:", errors);
   }, [errors]);
@@ -90,8 +88,6 @@ function BookAppointment() {
         seenNames.add(nameLower);
         return true;
       });
-
-      console.log("Unique locations:", uniqueLocations);
 
       if (uniqueLocations.length > 0) {
         setLocations(uniqueLocations);
@@ -157,12 +153,12 @@ function BookAppointment() {
     } else if (!/^\+?[0-9]{0,10}$/.test(value)) {
       setErrors((prev) => ({
         ...prev,
-        phone: "Phone number must contain only digits (up to 10)",
+        phone: "Please enter valid phone number",
       }));
     } else if (value.startsWith("+") && value.length !== 11) {
       setErrors((prev) => ({
         ...prev,
-        phone: "Phone number must be exactly 10 digits (with +)",
+        phone: "Please enter valid phone number",
       }));
     } else if (!value.startsWith("+") && value.length !== 10) {
       setErrors((prev) => ({
@@ -176,17 +172,13 @@ function BookAppointment() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    if (name === "name" && value.length > 25) {
-      return;
-    }
-    if (name === "reasonForVisit" && value.length > 25) {
-      return;
-    }
+    if (name === "name" && value.length > 25) return;
+    if (name === "reasonForVisit" && value.length > 100) return;
 
     if (name !== "phone") {
       setFormData((prev) => ({
         ...prev,
-        [name]: name === "reasonForVisit" ? value.trim() : value,
+        [name]: name === "reasonForVisit" ? value.trimStart() : value,
       }));
     }
 
@@ -231,10 +223,10 @@ function BookAppointment() {
           ...prev,
           reasonForVisit: "Reason for visit is required",
         }));
-      } else if (value.trim().length < 3 || value.trim().length > 25) {
+      } else if (value.trim().length < 3 || value.trim().length > 100) {
         setErrors((prev) => ({
           ...prev,
-          reasonForVisit: "Reason must be between 5 and 25 characters",
+          reasonForVisit: "Reason must be between 3 and 100 characters",
         }));
       } else {
         setErrors((prev) => ({ ...prev, reasonForVisit: "" }));
@@ -678,77 +670,44 @@ function BookAppointment() {
   };
 
   const validateForm = () => {
-    const newErrors = {};
+    const hasErrors = Object.values(errors).some((error) => error !== "");
+    if (hasErrors) {
+      // setBookingMessage("Please correct the errors in the form.");
+      return false;
+    }
 
     if (!formData.name) {
-      newErrors.name = "Name is required";
-    } else if (formData.name.length < 5 || formData.name.length > 25) {
-      newErrors.name = "Name must be between 5 and 25 characters";
+      setErrors((prev) => ({ ...prev, name: "Name is required" }));
+      // setBookingMessage("Please correct the errors in the form.");
+      return false;
     }
-
     if (!formData.email) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      newErrors.email = "Please enter a valid email address";
+      setErrors((prev) => ({ ...prev, email: "Email is required" }));
+      // setBookingMessage("Please correct the errors in the form.");
+      return false;
     }
-
     if (!formData.phone) {
-      newErrors.phone = "Phone is required";
-    } else if (!/^\+?[0-9]{0,10}$/.test(formData.phone)) {
-      newErrors.phone = "Phone number must contain only digits (up to 10)";
-    } else if (formData.phone.startsWith("+") && formData.phone.length !== 11) {
-      newErrors.phone = "Phone number must be exactly 10 digits (with +)";
-    } else if (!formData.phone.startsWith("+") && formData.phone.length !== 10) {
-      newErrors.phone = "Phone number must be exactly 10 digits";
+      setErrors((prev) => ({ ...prev, phone: "Phone is required" }));
+      // setBookingMessage("Please correct the errors in the form.");
+      return false;
     }
-
     if (!formData.dob) {
-      newErrors.dob = "Date of Birth is required";
-    } else {
-      const dobDate = new Date(formData.dob);
-      const today = new Date();
-      if (isNaN(dobDate.getTime())) {
-        newErrors.dob = "Please enter a valid date";
-      } else if (dobDate >= today) {
-        newErrors.dob = "Date of Birth cannot be in the future";
-      }
+      setErrors((prev) => ({ ...prev, dob: "Date of Birth is required" }));
+      // setBookingMessage("Please correct the errors in the form.");
+      return false;
     }
-
     if (!formData.reasonForVisit) {
-      newErrors.reasonForVisit = "Reason for visit is required";
-    } else {
-      const length = formData.reasonForVisit.trim().length;
-      if (length < 5 || length > 25) {
-        newErrors.reasonForVisit = "Reason for visit must be between 5 and 25 characters";
-      }
+      setErrors((prev) => ({ ...prev, reasonForVisit: "Reason for visit is required" }));
+      // setBookingMessage("Please correct the errors in the form.");
+      return false;
     }
 
-    if (formData.medicalHistoryMessage.length > 200) {
-      newErrors.medicalHistoryMessage = "Summary must be 200 characters or less";
-    }
-
-    if (formData.medicalHistory) {
-      const validTypes = [
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      ];
-      if (!validTypes.includes(formData.medicalHistory.type)) {
-        newErrors.medicalHistory = "Please upload a PDF or DOC/DOCX file";
-      } else if (formData.medicalHistory.size > 5 * 1024 * 1024) {
-        newErrors.medicalHistory = "File size must be less than 5MB";
-      }
-    }
-
-    setErrors(newErrors);
-    console.log("Validation errors on form submission:", newErrors);
-    return Object.keys(newErrors).length === 0;
+    return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) {
-      setBookingMessage("Please correct the errors in the form.");
       return;
     }
     try {
@@ -786,7 +745,6 @@ function BookAppointment() {
       });
       console.log("Appointment booked with ID:", docRef.id);
 
-      // Send confirmation email using EmailJS
       const emailParams = {
         name: formData.name,
         email: formData.email,
@@ -823,6 +781,7 @@ function BookAppointment() {
           medicalHistory: null,
           medicalHistoryMessage: "",
         });
+        setErrors({});
         setTimeSlots([]);
         setDaySchedule(null);
       }, 3000);
@@ -832,13 +791,12 @@ function BookAppointment() {
     } finally {
       setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
     <div
-      className="p-4 sm:p-6 rounded-lg w-full max-w-4xl mx-auto overflow-hidden min-h-[calc(100vh-200px)]"
-      style={{ backgroundColor: currentTheme.surface }}
+      className="p-4 sm:p-6 rounded-lg w-full max-w-5xl mx-auto overflow-hidden min-h-[calc(100vh-200px)]"
+      style={{ backgroundColor: currentTheme.background }}
     >
       <div className="flex justify-center items-center mb-4 sm:mb-6">
         <h2
@@ -877,7 +835,7 @@ function BookAppointment() {
                 id="location-select"
                 value={selectedLocation}
                 onChange={handleLocationChange}
-                options={locations.map((loc) => ({ value: loc.name, label:	loc.name }))}
+                options={locations.map((loc) => ({ value: loc.name, label: loc.name }))}
                 required
                 className="w-32 sm:w-40 p-2 rounded-md border text-sm sm:text-base"
                 style={{
@@ -988,187 +946,271 @@ function BookAppointment() {
         )}
 
         {showForm && (
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-6 sm:space-y-8 mt-6 sm:mt-8 bg-white p-6 rounded-lg shadow-sm"
-            style={{ backgroundColor: currentTheme.surface }}
-          >
-            <div className="grid sm:grid-cols-2 gap-6">
-              <CustomInput
-                label="Client Name"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                required
-                maxLength={25}
-                error={errors.name}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.name ? "rgb(239, 68, 68)" : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              <CustomInput
-                type="email"
-                label="Email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-                error={errors.email}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.email ? "rgb(239, 68, 68)" : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-6">
-              <CustomInput
-                type="tel"
-                label="Phone"
-                name="phone"
-                value={formData.phone}
-                onChange={handlePhoneInput}
-                required
-                error={errors.phone}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.phone ? "rgb(239, 68, 68)" : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              <div>
-                <label
-                  className="block text-sm sm:text-base font-medium mb-2"
-                  style={{ color: currentTheme.text.primary }}
-                >
-                  Date of Birth
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <DatePicker
-                  selected={formData.dob ? new Date(formData.dob) : null}
-                  onChange={handleDobChange}
-                  maxDate={new Date()}
-                  showYearDropdown
-                  showMonthDropdown
-                  dropdownMode="select"
-                  placeholderText="Select Date of Birth"
-                  className="w-full p-2 rounded-md border"
-                  style={{
-                    borderColor: errors.dob ? "rgb(239, 68, 68)" : currentTheme.border,
-                    backgroundColor: currentTheme.inputBackground,
-                    color: currentTheme.text.primary,
-                  }}
-                  required
-                  dateFormat="dd-MM-yyyy"
-                  onKeyDown={(e) => e.preventDefault()}
-                />
-                {errors.dob && (
-                  <p className="text-red-500 text-xs mt-1">{errors.dob}</p>
-                )}
+          <div className="space-y-4 sm:space-y-6 mt-6 sm:mt-8">
+            <div
+              className="p-6 rounded-lg shadow-md border w-full"
+              style={{ 
+                backgroundColor: currentTheme.surface, 
+                borderColor: currentTheme.border 
+              }}
+            >
+              <h3
+                className="text-lg sm:text-xl font-semibold mb-4"
+                style={{ color: currentTheme.text.primary }}
+              >
+                Personal Information
+              </h3>
+              <div className="grid sm:grid-cols-2 gap-6">
+                <div className="flex flex-row items-center gap-2">
+                  <label
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Name
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <div className="flex-1">
+                    <CustomInput
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      required
+                      maxLength={25}
+                      className="w-full p-2 rounded-md border"
+                      style={{
+                        borderColor: errors.name ? "rgb(239, 68, 68)" : currentTheme.border,
+                        backgroundColor: currentTheme.inputBackground,
+                        color: currentTheme.text.primary,
+                      }}
+                    />
+                    {errors.name && (
+                      <p className="text-red-500 text-xs mt-1">{errors.name}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-row items-center gap-2">
+                  <label
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Email
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <div className="flex-1">
+                    <CustomInput
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full p-2 rounded-md border"
+                      style={{
+                        borderColor: errors.email ? "rgb(239, 68, 68)" : currentTheme.border,
+                        backgroundColor: currentTheme.inputBackground,
+                        color: currentTheme.text.primary,
+                      }}
+                    />
+                    {errors.email && (
+                      <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-6 mt-6">
+                <div className="flex flex-row items-center gap-2">
+                  <label
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Phone
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <div className="flex-1">
+                    <CustomInput
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handlePhoneInput}
+                      required
+                      className="w-full p-2 rounded-md border"
+                      style={{
+                        borderColor: errors.phone ? "rgb(239, 68, 68)" : currentTheme.border,
+                        backgroundColor: currentTheme.inputBackground,
+                        color: currentTheme.text.primary,
+                      }}
+                    />
+                    {errors.phone && (
+                      <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-row items-center gap-2">
+                  <label
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Date of Birth
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <div className="flex-1">
+                    <DatePicker
+                      selected={formData.dob ? new Date(formData.dob) : null}
+                      onChange={handleDobChange}
+                      maxDate={new Date()}
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      placeholderText="Select Date of Birth"
+                      className="w-full p-2 rounded-md border"
+                      style={{
+                        borderColor: errors.dob ? "rgb(239, 68, 68)" : currentTheme.border,
+                        backgroundColor: currentTheme.inputBackground,
+                        color: currentTheme.text.primary,
+                      }}
+                      required
+                      dateFormat="dd-MM-yyyy"
+                      onKeyDown={(e) => e.preventDefault()}
+                    />
+                    {errors.dob && (
+                      <p className="text-red-500 text-xs mt-1">{errors.dob}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-row items-center gap-2">
+                  <label
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Appointment Type
+                  </label>
+                  <div className="flex-1">
+                    <CustomSelect
+                      name="appointmentType"
+                      value={formData.appointmentType}
+                      onChange={handleInputChange}
+                      options={[
+                        { value: "Consultation", label: "Consultation" },
+                        { value: "Follow-up", label: "Follow-up" },
+                        { value: "Second Opinion", label: "Second Opinion" },
+                      ]}
+                      className="w-full p-2 rounded-md border"
+                      style={{
+                        borderColor: currentTheme.border,
+                        backgroundColor: currentTheme.inputBackground,
+                        color: currentTheme.text.primary,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-1 gap-6 mt-6">
+                <div className="flex flex-row items-center gap-2">
+                  <label
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Purpose of Visit
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <div className="flex-1">
+                    <CustomInput
+                      name="reasonForVisit"
+                      value={formData.reasonForVisit}
+                      onChange={handleInputChange}
+                      required
+                      maxLength={100}
+                      className="w-full p-2 rounded-md border"
+                      style={{
+                        borderColor: errors.reasonForVisit ? "rgb(239, 68, 68)" : currentTheme.border,
+                        backgroundColor: currentTheme.inputBackground,
+                        color: currentTheme.text.primary,
+                      }}
+                    />
+                    {errors.reasonForVisit && (
+                      <p className="text-red-500 text-xs mt-1">{errors.reasonForVisit}</p>
+                    )}
+                    <p className="text-sm text-gray-500 mt-1">
+                      Characters: {formData.reasonForVisit.trim().length}/100
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <CustomSelect
-              label="Appointment Type"
-              name="appointmentType"
-              value={formData.appointmentType}
-              onChange={handleInputChange}
-              options={[
-                { value: "Consultation", label: "Consultation" },
-                { value: "Follow-up", label: "Follow-up" },
-                { value: "Second Opinion", label: "Second Opinion" },
-              ]}
-              error={errors.appointmentType}
-              className="w-full p-2 rounded-md border"
-              style={{
-                borderColor: errors.appointmentType ? "rgb(239, 68, 68)" : currentTheme.border,
-                backgroundColor: currentTheme.inputBackground,
-                color: currentTheme.text.primary,
+            <div
+              className="p-6 rounded-lg shadow-md border w-full"
+              style={{ 
+                backgroundColor: currentTheme.surface, 
+                borderColor: currentTheme.border 
               }}
-            />
-
-            <div>
-              <CustomInput
-                label="Reason for Visit"
-                name="reasonForVisit"
-                value={formData.reasonForVisit}
-                onChange={handleInputChange}
-                required
-                maxLength={25}
-                error={errors.reasonForVisit}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.reasonForVisit ? "rgb(239, 68, 68)" : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Characters: {formData.reasonForVisit.length}/25
-              </p>
-            </div>
-
-            <div>
-              <label
-                className="block text-sm sm:text-base font-medium mb-2"
+            >
+              <h3
+                className="text-lg sm:text-xl font-semibold mb-4"
                 style={{ color: currentTheme.text.primary }}
               >
-                Medical History (Optional)
-              </label>
-              <input
-                type="file"
-                name="medicalHistory"
-                onChange={handleFileChange}
-                accept=".pdf,.doc,.docx"
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.medicalHistory ? "rgb(239, 68, 68)" : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              {errors.medicalHistory && (
-                <p className="text-red-500 text-xs mt-1">{errors.medicalHistory}</p>
-              )}
-              {formData.medicalHistory && (
-                <p className="text-sm text-gray-500 mt-1">
-                  Selected file: {formData.medicalHistory.name}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                className="block text-sm sm:text-base font-medium mb-2"
-                style={{ color: currentTheme.text.primary }}
-              >
-                Medical History Summary
-              </label>
-              <textarea
-                name="medicalHistoryMessage"
-                value={formData.medicalHistoryMessage}
-                onChange={handleInputChange}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.medicalHistoryMessage ? "rgb(239, 68, 68)" : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-                rows="3"
-                maxLength="200"
-              />
-              {errors.medicalHistoryMessage && (
-                <p className="text-red-500 text-xs mt-1">{errors.medicalHistoryMessage}</p>
-              )}
-              <p className="text-sm text-gray-500 mt-1">
-                Characters: {formData.medicalHistoryMessage.length}/200
-              </p>
+                Medical History
+              </h3>
+              <div className="grid sm:grid-cols-1 gap-6">
+                <div className="flex flex-row items-center gap-2">
+                  <label
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Medical History Summary
+                  </label>
+                  <div className="flex-1">
+                    <textarea
+                      name="medicalHistoryMessage"
+                      value={formData.medicalHistoryMessage}
+                      onChange={handleInputChange}
+                      className="w-full p-2 rounded-md border"
+                      style={{
+                        borderColor: errors.medicalHistoryMessage ? "rgb(239, 68, 68)" : currentTheme.border,
+                        backgroundColor: currentTheme.inputBackground,
+                        color: currentTheme.text.primary,
+                      }}
+                      rows="3"
+                      maxLength="200"
+                    />
+                    {errors.medicalHistoryMessage && (
+                      <p className="text-red-500 text-xs mt-1">{errors.medicalHistoryMessage}</p>
+                    )}
+                    <p className="text-sm text-gray-500 mt-1">
+                      Characters: {formData.medicalHistoryMessage.length}/200
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-row items-center gap-2">
+                  <label
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Medical History (Optional)
+                  </label>
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      name="medicalHistory"
+                      onChange={handleFileChange}
+                      accept=".pdf,.doc,.docx"
+                      className="w-full p-2 rounded-md border"
+                      style={{
+                        borderColor: errors.medicalHistory ? "rgb(239, 68, 68)" : currentTheme.border,
+                        backgroundColor: currentTheme.inputBackground,
+                        color: currentTheme.text.primary,
+                      }}
+                    />
+                    {errors.medicalHistory && (
+                      <p className="text-red-500 text-xs mt-1">{errors.medicalHistory}</p>
+                    )}
+                    {formData.medicalHistory && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        Selected file: {formData.medicalHistory.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-center">
@@ -1177,11 +1219,12 @@ function BookAppointment() {
                 variant="primary"
                 className="w-max py-2 px-4"
                 disabled={isLoading}
+                onClick={handleSubmit}
               >
                 {isLoading ? "Processing..." : "Book Appointment"}
               </CustomButton>
             </div>
-          </form>
+          </div>
         )}
       </div>
     </div>
