@@ -6,7 +6,7 @@ import CustomTable from '../../../components/CustomTable';
 import CustomSelect from '../../../components/CustomSelect';
 import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmation';
 import CustomInput from '../../../components/CustomInput';
-import { collection, getDocs, updateDoc, doc, deleteDoc, onSnapshot, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, deleteDoc, onSnapshot, query, orderBy, where, setDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -20,16 +20,28 @@ function AppointmentsContent() {
     appointmentId: null
   });
   const { currentTheme } = useTheme();
-  
-  // State for selected appointment details (replacing modal)
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const [notificationSound] = useState(new Audio('/notifications.wav'));
+
+  // Function to check if an appointment is in the future
+  const isFutureAppointment = (appointment) => {
+    try {
+      const appointmentDateTime = new Date(`${appointment.date} ${appointment.time}`);
+      const currentDateTime = new Date();
+      return appointmentDateTime > currentDateTime;
+    } catch (error) {
+      console.error('Error parsing appointment date/time:', error);
+      return false; // Default to false if date parsing fails
+    }
+  };
 
   // Fetch appointments from Firebase
   useEffect(() => {
     const fetchAppointments = async () => {
       try {
-        const appointmentsRef = collection(db, 'appointments');
-        const q = query(appointmentsRef, where('type', '==', 'booking')); // Add type filter
+        const appointmentsRef = collection(db, 'appointments/data/bookings');
+        const q = query(appointmentsRef);
         const snapshot = await getDocs(q);
         const appointmentsList = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -48,6 +60,57 @@ function AppointmentsContent() {
     fetchAppointments();
   }, []);
 
+  // Real-time listener for appointments
+  useEffect(() => {
+    const appointmentsRef = collection(db, 'appointments/data/bookings');
+    const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
+    let hasInitialized = false;
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const appointmentsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        clientName: doc.data().name,
+        status: doc.data().status || 'pending'
+      }));
+
+      if (!hasInitialized) {
+        hasInitialized = true;
+        setAppointments(appointmentsList);
+        return;
+      }
+
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const newAppointment = change.doc.data();
+          try {
+            notificationSound.currentTime = 0;
+            notificationSound.play().catch(error => {
+              if (error.name !== "NotAllowedError") {
+                console.error('Notification sound error:', error);
+              }
+            });
+          } catch (error) {
+            console.error('Error playing notification:', error);
+          }
+
+          setNotification({
+            message: `New appointment booked by ${newAppointment.name} for ${newAppointment.date} at ${newAppointment.time}`,
+            type: 'success'
+          });
+
+          setTimeout(() => {
+            setNotification(null);
+          }, 5000);
+        }
+      });
+
+      setAppointments(appointmentsList);
+    });
+
+    return () => unsubscribe();
+  }, [notificationSound]);
+
   // Handle status update
   const handleStatusUpdate = async (appointmentId, newStatus) => {
     try {
@@ -55,17 +118,15 @@ function AppointmentsContent() {
       await updateDoc(appointmentRef, {
         status: newStatus
       });
-      
-      // Update local state
-      setAppointments(prev => 
-        prev.map(appointment => 
-          appointment.id === appointmentId 
+
+      setAppointments(prev =>
+        prev.map(appointment =>
+          appointment.id === appointmentId
             ? { ...appointment, status: newStatus }
             : appointment
         )
       );
 
-      // If we're viewing the details of the appointment that was updated, update the selected appointment too
       if (selectedAppointment && selectedAppointment.id === appointmentId) {
         setSelectedAppointment(prev => ({
           ...prev,
@@ -80,28 +141,106 @@ function AppointmentsContent() {
   // Handle delete
   const handleDelete = async (appointmentId) => {
     try {
+      const appointment = appointments.find(app => app.id === appointmentId);
+      if (!isFutureAppointment(appointment)) {
+        setNotification({
+          message: 'Cannot delete past appointments.',
+          type: 'error'
+        });
+        setTimeout(() => {
+          setNotification(null);
+        }, 5000);
+        return;
+      }
+
+      const adminDeletedRef = doc(db, 'appointments/admin/deletedAppointments', appointmentId);
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
-      await deleteDoc(appointmentRef);
-      
-      // Update local state
+      const appointmentData = (await getDocs(appointmentRef)).data();
+
+      await setDoc(adminDeletedRef, {
+        ...appointmentData,
+        deletedAt: new Date(),
+        deletedBy: 'admin'
+      });
+
+      await updateDoc(appointmentRef, {
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        cancelledBy: 'admin'
+      });
+
       setAppointments(prev => prev.filter(appointment => appointment.id !== appointmentId));
       setDeleteConfirmation({ isOpen: false, appointmentId: null });
-      
-      // If we're viewing the details of the appointment that was deleted, go back to the list
+
       if (selectedAppointment && selectedAppointment.id === appointmentId) {
         setSelectedAppointment(null);
       }
     } catch (error) {
-      console.error('Error deleting appointment:', error);
+      console.error('Error handling appointment deletion:', error);
     }
   };
 
   // Handle delete click
   const handleDeleteClick = (appointmentId) => {
+    const appointment = appointments.find(app => app.id === appointmentId);
+    if (!isFutureAppointment(appointment)) {
+      setNotification({
+        message: 'Cannot delete past appointments.',
+        type: 'error'
+      });
+      setTimeout(() => {
+        setNotification(null);
+      }, 5000);
+      return;
+    }
     setDeleteConfirmation({
       isOpen: true,
       appointmentId
     });
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = async (ids) => {
+    try {
+      const futureAppointmentIds = ids.filter(id => {
+        const appointment = appointments.find(app => app.id === id);
+        return isFutureAppointment(appointment);
+      });
+
+      if (futureAppointmentIds.length === 0) {
+        setNotification({
+          message: 'Cannot delete past appointments.',
+          type: 'error'
+        });
+        setTimeout(() => {
+          setNotification(null);
+        }, 5000);
+        return;
+      }
+
+      for (const id of futureAppointmentIds) {
+        const appointmentRef = doc(db, 'appointments/data/bookings', id);
+        const adminDeletedRef = doc(db, 'appointments/admin/deletedAppointments', id);
+        const appointmentData = (await getDocs(appointmentRef)).data();
+
+        await setDoc(adminDeletedRef, {
+          ...appointmentData,
+          deletedAt: new Date(),
+          deletedBy: 'admin'
+        });
+
+        await updateDoc(appointmentRef, {
+          status: 'cancelled',
+          cancelledAt: new Date(),
+          cancelledBy: 'admin'
+        });
+      }
+
+      setAppointments(prev => prev.filter(appointment => !futureAppointmentIds.includes(appointment.id)));
+      setDeleteConfirmation({ isOpen: false, appointmentId: null });
+    } catch (error) {
+      console.error('Error deleting appointments:', error);
+    }
   };
 
   // View appointment details
@@ -129,79 +268,19 @@ function AppointmentsContent() {
     }
   };
 
-  // Add state for notifications
-  const [notification, setNotification] = useState(null);
-  const [notificationSound] = useState(new Audio('/notifications.wav'));
-
-  // Modify the useEffect with real-time listener
-  useEffect(() => {
-    const appointmentsRef = collection(db, 'appointments/data/bookings');
-    const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
-    let hasInitialized = false;
-  
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const appointmentsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        clientName: doc.data().name,
-        status: doc.data().status || 'pending'
-      }));
-  
-      // Skip notification on initial snapshot
-      if (!hasInitialized) {
-        hasInitialized = true;
-        setAppointments(appointmentsList);
-        return;
-      }
-  
-      // Process only new additions
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          const newAppointment = change.doc.data();
-  
-          try {
-            notificationSound.currentTime = 0;
-            notificationSound.play().catch(error => {
-              if (error.name !== "NotAllowedError") {
-                console.error('Notification sound error:', error);
-              }
-            });
-          } catch (error) {
-            console.error('Error playing notification:', error);
-          }
-  
-          setNotification({
-            message: `New appointment booked by ${newAppointment.name} for ${newAppointment.date} at ${newAppointment.time}`,
-            type: 'success'
-          });
-  
-          setTimeout(() => {
-            setNotification(null);
-          }, 5000);
-        }
-      });
-  
-      setAppointments(appointmentsList);
-    });
-  
-    return () => unsubscribe();
-  }, [notificationSound]);
-  
-
   // Individual Appointment Detail View Component
   const AppointmentDetailView = ({ appointment }) => {
     if (!appointment) return null;
-    
+
     return (
-      <div 
+      <div
         className="rounded-lg shadow-sm overflow-hidden"
         style={{
           backgroundColor: currentTheme.surface,
           border: `1px solid ${currentTheme.border}`
         }}
       >
-        {/* Detail view header */}
-        <div 
+        <div
           className="px-4 py-3 border-b"
           style={{
             backgroundColor: currentTheme.secondary,
@@ -210,13 +289,13 @@ function AppointmentsContent() {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <CustomButton 
+              <CustomButton
                 onClick={handleBackToList}
                 variant="secondary"
                 className="p-1"
                 icon={() => <ArrowLeft size={20} />}
               />
-              <h3 
+              <h3
                 className="text-lg font-medium"
                 style={{ color: currentTheme.text.primary }}
               >
@@ -236,43 +315,40 @@ function AppointmentsContent() {
             </div>
           </div>
         </div>
-        
-        {/* Detail view content */}
+
         <div className="p-4 sm:p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <h4 
+                <h4
                   className="text-sm font-medium mb-2"
                   style={{ color: currentTheme.text.secondary }}
                 >
                   Client Information
                 </h4>
-                <div 
+                <div
                   className="p-3 rounded-md"
                   style={{ backgroundColor: currentTheme.secondary }}
                 >
                   <div className="flex items-center space-x-2 mb-2">
                     <User size={18} style={{ color: currentTheme.text.secondary }} />
-                    <span 
+                    <span
                       className="font-medium"
                       style={{ color: currentTheme.text.primary }}
                     >
                       {appointment.name}
                     </span>
                   </div>
-                  
                   {appointment.email && (
-                    <p 
+                    <p
                       className="text-sm mb-1 ml-7"
                       style={{ color: currentTheme.text.secondary }}
                     >
                       Email: {appointment.email}
                     </p>
                   )}
-                  
                   {appointment.phone && (
-                    <p 
+                    <p
                       className="text-sm ml-7"
                       style={{ color: currentTheme.text.secondary }}
                     >
@@ -281,15 +357,14 @@ function AppointmentsContent() {
                   )}
                 </div>
               </div>
-              
               <div>
-                <h4 
+                <h4
                   className="text-sm font-medium mb-2"
                   style={{ color: currentTheme.text.secondary }}
                 >
                   Appointment Details
                 </h4>
-                <div 
+                <div
                   className="p-3 rounded-md"
                   style={{ backgroundColor: currentTheme.secondary }}
                 >
@@ -299,14 +374,12 @@ function AppointmentsContent() {
                       Date: {appointment.date}
                     </span>
                   </div>
-                  
                   <div className="flex items-center space-x-2 mb-2">
                     <Clock size={18} style={{ color: currentTheme.text.secondary }} />
                     <span style={{ color: currentTheme.text.primary }}>
                       Time: {appointment.time}
                     </span>
                   </div>
-                  
                   <div className="flex items-center space-x-2">
                     <MapPin size={18} style={{ color: currentTheme.text.secondary }} />
                     <span style={{ color: currentTheme.text.primary }}>
@@ -316,19 +389,18 @@ function AppointmentsContent() {
                 </div>
               </div>
             </div>
-            
             <div className="space-y-4">
               {appointment.message && (
                 <div>
-                  <h4 
+                  <h4
                     className="text-sm font-medium mb-2"
                     style={{ color: currentTheme.text.secondary }}
                   >
                     Client Message
                   </h4>
-                  <p 
+                  <p
                     className="p-3 rounded-md whitespace-pre-wrap"
-                    style={{ 
+                    style={{
                       backgroundColor: currentTheme.secondary,
                       color: currentTheme.text.primary
                     }}
@@ -337,18 +409,17 @@ function AppointmentsContent() {
                   </p>
                 </div>
               )}
-              
               {appointment.notes && (
                 <div>
-                  <h4 
+                  <h4
                     className="text-sm font-medium mb-2"
                     style={{ color: currentTheme.text.secondary }}
                   >
                     Notes
                   </h4>
-                  <p 
+                  <p
                     className="p-3 rounded-md whitespace-pre-wrap"
-                    style={{ 
+                    style={{
                       backgroundColor: currentTheme.secondary,
                       color: currentTheme.text.primary
                     }}
@@ -357,9 +428,8 @@ function AppointmentsContent() {
                   </p>
                 </div>
               )}
-              
               <div>
-                <h4 
+                <h4
                   className="text-sm font-medium mb-2"
                   style={{ color: currentTheme.text.secondary }}
                 >
@@ -374,25 +444,16 @@ function AppointmentsContent() {
                   >
                     Approve
                   </CustomButton>
-                  
-                  <CustomButton
-                    onClick={() => handleStatusUpdate(appointment.id, 'pending')}
-                    variant="secondary"
-                    icon={() => <Clock size={16} />}
-                    className="text-sm font-medium w-full sm:w-auto"
-                    style={{ backgroundColor: '#f59e0b', color: 'white' }}
-                  >
-                    Set Pending
-                  </CustomButton>
-                  
-                  <CustomButton
-                    onClick={() => handleStatusUpdate(appointment.id, 'cancelled')}
-                    variant="danger"
-                    icon={() => <Trash2 size={16} />}
-                    className="text-sm font-medium w-full sm:w-auto"
-                  >
-                    Cancel
-                  </CustomButton>
+                  {isFutureAppointment(appointment) && (
+                    <CustomButton
+                      onClick={() => handleStatusUpdate(appointment.id, 'cancelled')}
+                      variant="danger"
+                      icon={() => <Trash2 size={16} />}
+                      className="text-sm font-medium w-full sm:w-auto"
+                    >
+                      Cancel
+                    </CustomButton>
+                  )}
                 </div>
               </div>
             </div>
@@ -402,29 +463,11 @@ function AppointmentsContent() {
     );
   };
 
-  // Add handler for bulk deletion
-  const handleBulkDelete = async (ids) => {
-    try {
-      for (const id of ids) {
-        const appointmentRef = doc(db, 'appointments/data/bookings', id);
-        await deleteDoc(appointmentRef);
-      }
-      
-      // Update local state
-      setAppointments(prev => prev.filter(appointment => !ids.includes(appointment.id)));
-      // Close any open delete confirmation
-      setDeleteConfirmation({ isOpen: false, appointmentId: null });
-    } catch (error) {
-      console.error('Error deleting appointments:', error);
-    }
-  };
-
   return (
-    <div 
+    <div
       className="p-0 sm:p-0 w-full max-w-[1400px] mx-auto"
       style={{ color: currentTheme.text.primary }}
     >
-      {/* Delete Confirmation */}
       <CustomDeleteConfirmation
         isOpen={deleteConfirmation.isOpen}
         onClose={() => setDeleteConfirmation({ isOpen: false, appointmentId: null })}
@@ -432,22 +475,21 @@ function AppointmentsContent() {
         title="Delete Appointment"
         message="Are you sure you want to delete this appointment? This action cannot be undone."
       />
-      
-      {/* Notification banner */}
+
       {notification && (
-        <div 
+        <div
           className={`fixed top-2 right-2 sm:top-4 sm:right-4 p-3 sm:p-4 rounded-lg shadow-lg z-50`}
           style={{
             minWidth: '280px',
             maxWidth: '90vw',
             animation: 'slideIn 0.5s ease-out',
-            backgroundColor: notification.type === 'success' 
+            backgroundColor: notification.type === 'success'
               ? currentTheme.success.light
               : currentTheme.error.light,
             color: notification.type === 'success'
               ? currentTheme.success.dark
               : currentTheme.error.dark,
-            border: `2px solid ${notification.type === 'success' 
+            border: `2px solid ${notification.type === 'success'
               ? currentTheme.success.dark
               : currentTheme.error.dark}`
           }}
@@ -462,7 +504,7 @@ function AppointmentsContent() {
       )}
 
       {loading ? (
-        <div 
+        <div
           className="text-center py-8 sm:py-10"
           style={{ color: currentTheme.text.secondary }}
         >
@@ -471,12 +513,9 @@ function AppointmentsContent() {
       ) : (
         <>
           {selectedAppointment ? (
-            // Show individual appointment details view when an appointment is selected
             <AppointmentDetailView appointment={selectedAppointment} />
           ) : (
-            // Show appointments list when no appointment is selected
             <>
-              {/* Filtering controls */}
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
                 <div className="w-full sm:w-auto flex-grow">
                   <CustomSearch
@@ -501,7 +540,6 @@ function AppointmentsContent() {
                 </div>
               </div>
 
-              {/* Table container */}
               <div className="overflow-hidden rounded-lg shadow">
                 <CustomTable
                   headers={[
@@ -536,14 +574,13 @@ function AppointmentsContent() {
                       </td>
                       <td className="py-3 text-center">
                         <div className="flex justify-center space-x-1 sm:space-x-2">
-                          <button
-                            onClick={() => handleViewDetails(appointment)}
-                            className="p-1 hover:opacity-80 transition-opacity"
-                            title="View Details"
-                            style={{ color: currentTheme.primary }}
-                          >
-                            <Eye size={20} />
-                          </button>
+                        <button
+                              onClick={() => handleViewClick(service)}
+                              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+                              title="View"
+                            >
+                              <Eye size={20} />
+                            </button>
                           <button
                             onClick={() => handleStatusUpdate(appointment.id, 'confirmed')}
                             className="p-1 text-green-600 hover:opacity-80 transition-opacity"
@@ -551,14 +588,16 @@ function AppointmentsContent() {
                           >
                             <ThumbsUp size={20} />
                           </button>
-                          <button
-                            onClick={() => handleDeleteClick(appointment.id)}
-                            className="p-1 hover:opacity-80 transition-opacity"
-                            title="Delete Appointment"
-                            style={{ color: currentTheme.destructive }}
-                          >
-                            <Trash2 size={20} />
-                          </button>
+                          {isFutureAppointment(appointment) && (
+                            <button
+                              onClick={() => handleDeleteClick(appointment.id)}
+                              className="p-1 hover:opacity-80 transition-opacity"
+                              title="Delete Appointment"
+                              style={{ color: currentTheme.destructive }}
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -567,7 +606,7 @@ function AppointmentsContent() {
               </div>
 
               {filteredAppointments?.length === 0 && (
-                <div 
+                <div
                   className="text-center py-4 sm:py-6"
                   style={{ color: currentTheme.text.secondary }}
                 >
