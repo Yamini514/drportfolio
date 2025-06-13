@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// Update imports at the top
 import { PlusCircle, Edit, Trash2, Eye } from 'lucide-react';
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -25,8 +24,6 @@ function PublicationsContent() {
     publicationId: null
   });
 
-  // Load publications from Firebase
-  // Update the useEffect hook to include publicationId
   useEffect(() => {
     const fetchPublications = async () => {
       try {
@@ -34,7 +31,7 @@ function PublicationsContent() {
         const publicationsSnapshot = await getDocs(publicationsCollection);
         const publicationsList = publicationsSnapshot.docs.map((doc, index) => ({
           id: doc.id,
-          publicationId: `${String(index + 1).padStart(3, '')}`,  // Add serial number
+          publicationId: `${String(index + 1).padStart(3, '')}`,
           ...doc.data()
         }));
         setPublications(publicationsList);
@@ -52,7 +49,7 @@ function PublicationsContent() {
       publicationId: id
     });
   };
-  // Update the handleSubmit function to include publicationId for new publications
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -71,7 +68,7 @@ function PublicationsContent() {
         const docRef = await addDoc(publicationsCollection, formData);
         const newPublication = {
           id: docRef.id,
-          publicationId: `${String(publications.length + 1).padStart(3, '')}`,  // Add serial number
+          publicationId: `${String(publications.length + 1).padStart(3, '')}`,
           ...formData
         };
         setPublications(prev => [...prev, newPublication]);
@@ -108,7 +105,6 @@ function PublicationsContent() {
     setShowForm(true);
   };
 
-  // Update the columns definition
   const columns = [
     {
       header: 'Title',
@@ -125,8 +121,11 @@ function PublicationsContent() {
           href={row.url} 
           target="_blank" 
           rel="noopener noreferrer"
+          
           style={{ color: currentTheme.primary }}
           className="hover:opacity-80"
+          title='View'
+          
         >
           View
         </a>
@@ -168,21 +167,27 @@ function PublicationsContent() {
     }));
   };
 
-  // Add search handler
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
 
-  // Add filtered publications
   const filteredPublications = publications.filter(publication => 
     publication.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="space-y-6 p-6" style={{ color: currentTheme.text.primary }}>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
-        <h1 className="text-xl sm:text-2xl font-bold" style={{ color: currentTheme.text.primary }}>Publications Management</h1>
-        {!showForm && (
+      <h1 className="text-xl sm:text-2xl font-bold" style={{ color: currentTheme.text.primary }}>Publications Management</h1>
+      
+      {!showForm && (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0 gap-4">
+          <div className="w-full sm:w-1/2">
+            <CustomSearch
+              placeholder="Search publications with text..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+            />
+          </div>
           <CustomButton 
             variant="primary"
             icon={PlusCircle}
@@ -197,22 +202,12 @@ function PublicationsContent() {
           >
             Add New Publication
           </CustomButton>
-        )}
-      </div>
-
-      {!showForm && (
-        <div className="w-full max-w-md">
-          <CustomSearch
-            placeholder="Search publications with text..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-          />
         </div>
       )}
 
       {!showForm ? (
         <CustomTable
-          headers={['ID', 'Title', 'Actions']}  // Add ID to headers
+          headers={['ID', 'Title', 'Actions']}
           data={filteredPublications}
         >
           {filteredPublications.map((publication) => (
@@ -250,7 +245,7 @@ function PublicationsContent() {
         </CustomTable>
       ) : (
         <div 
-          className="rounded-lg shadow p-6" 
+          className="rounded-lg shadow p-6 max-w-2xl mx-auto" 
           style={{ 
             backgroundColor: currentTheme.surface,
             color: currentTheme.text.primary,
@@ -258,7 +253,6 @@ function PublicationsContent() {
             border: '1px solid'
           }}
         >
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <CustomInput
               label="Publication Title"
@@ -274,11 +268,8 @@ function PublicationsContent() {
               onChange={handleFormChange}
               required
             />
-            <div className="flex gap-2">
-              <CustomButton type="submit" variant="primary">
-                {editingPublication ? 'Update' : 'Save'}
-              </CustomButton>
-              <CustomButton
+            <div className="flex gap-2 justify-center">
+            <CustomButton
                 variant="secondary"
                 type="button"
                 onClick={() => {
@@ -289,22 +280,23 @@ function PublicationsContent() {
               >
                 Cancel
               </CustomButton>
+              <CustomButton type="submit" variant="primary">
+                {editingPublication ? 'Update' : 'Save'}
+              </CustomButton>
+             
             </div>
           </form>
         </div>
       )}
-    <CustomDeleteConfirmation 
-    isOpen={deleteConfirmation.isOpen} 
-    onClose={() => setDeleteConfirmation({ isOpen: false, publicationId: null })} 
-    onConfirm={() => handleDelete(deleteConfirmation.publicationId)} 
-    title="Delete Publication" 
-    message="Are you sure you want to delete this publication? This action cannot be undone." 
-  />
-</div>
+      <CustomDeleteConfirmation 
+        isOpen={deleteConfirmation.isOpen} 
+        onClose={() => setDeleteConfirmation({ isOpen: false, publicationId: null })} 
+        onConfirm={() => handleDelete(deleteConfirmation.publicationId)} 
+        title="Delete Publication" 
+        message="Are you sure you want to delete this publication? This action cannot be undone." 
+      />
+    </div>
   );
 }
 
 export default PublicationsContent;
-
-  
-      

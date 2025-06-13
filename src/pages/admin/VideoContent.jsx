@@ -3,8 +3,8 @@ import { Play, Trash2, Edit, Plus, X, Check } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import CustomButton from '../../components/CustomButton';
-import  CustomInput  from '../../components/CustomInput';
-import  CustomSearch  from '../../components/CustomSearch';
+import CustomInput from '../../components/CustomInput';
+import CustomSearch from '../../components/CustomSearch';
 import CustomDeleteConfirmation from '../../components/CustomDeleteConfirmation';
 
 function VideoContent() {
@@ -17,11 +17,9 @@ function VideoContent() {
     isOpen: false,
     videoId: null
   });
-  // Add this function at the top of your component
-  // Update the getYouTubeThumbnail function for better ID extraction
+
   const getYouTubeThumbnail = (url) => {
     try {
-      // Handle different YouTube URL formats
       const regExp = /^.*((youtu.be\/)|(v\/)|(\/v\/)|(\/embed\/)|(\/watch\?v=)|\&v=)([^#\&\?]*).*/;
       const match = url.match(regExp);
       const videoId = match && match[7].length === 11 ? match[7] : null;
@@ -32,7 +30,6 @@ function VideoContent() {
     }
   };
 
-  // Modify handleInputChange to automatically set thumbnail
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -42,7 +39,6 @@ function VideoContent() {
     }));
   };
 
-  // Update formData initial state
   const [formData, setFormData] = useState({
     title: '',
     duration: '',
@@ -50,7 +46,6 @@ function VideoContent() {
     thumbnail: ''
   });
 
-  // Update resetForm
   const resetForm = () => {
     setShowForm(false);
     setEditingVideo(null);
@@ -62,7 +57,6 @@ function VideoContent() {
     });
   };
 
-  // Update openAddForm
   const openAddForm = () => {
     setEditingVideo(null);
     setFormData({
@@ -81,73 +75,6 @@ function VideoContent() {
     }, 100);
   };
 
-  // Update the image src in the video card to use a fallback
-  // First, remove this standalone code (around line 77)
-  // <img 
-  //   src={video.thumbnail || getYouTubeThumbnail(video.youtubeLink)} 
-  //   alt={video.title} 
-  //   className="w-full h-36 sm:h-48 object-cover"
-  //   onError={(e) => {
-  //     e.target.src = getYouTubeThumbnail(video.youtubeLink);
-  //   }}
-  // />
-
-  // Then, update the image in the video card section (where videos are being mapped)
-  {videos.map(video => (
-    <div key={video.id} className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-      style={{ 
-        backgroundColor: currentTheme.surface,
-        border: `1px solid ${currentTheme.border}`
-      }}
-    >
-      <div className="relative">
-        <img 
-          src={video.thumbnail || getYouTubeThumbnail(video.youtubeLink)} 
-          alt={video.title} 
-          className="w-full h-36 sm:h-48 object-cover"
-          onError={(e) => {
-            e.target.src = getYouTubeThumbnail(video.youtubeLink);
-          }}
-        />
-        <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-          <a href={video.youtubeLink} target="_blank" rel="noopener noreferrer" className="p-2 sm:p-3 bg-white rounded-full shadow-md">
-            <Play fill="currentColor" size={20} />
-          </a>
-        </div>
-        <span className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
-          {video.duration}
-        </span>
-      </div>
-      
-      <div className="p-3 sm:p-4">
-        <h3 className="font-medium text-base sm:text-lg mb-1 line-clamp-2">{video.title}</h3>
-        <div className="flex justify-between text-xs sm:text-sm text-gray-500">
-          <span>Uploaded: {video.date}</span>
-          <span>{video.views} views</span>
-        </div>
-        <p className="text-xs sm:text-sm text-gray-500 truncate mt-1">
-          {video.youtubeLink}
-        </p>
-        
-        <div className="flex mt-3 sm:mt-4 space-x-2">
-          <button 
-            className="flex-1 py-1 border border-gray-300 rounded-md flex items-center justify-center hover:bg-gray-50 text-sm"
-            onClick={() => handleEdit(video)}
-          >
-            <Edit size={14} className="mr-1" />
-            Edit
-          </button>
-          <button 
-            className="flex-1 py-1 border border-gray-300 rounded-md flex items-center justify-center hover:bg-gray-50 text-red-600 text-sm"
-            onClick={() => handleDeleteClick(video.id)}
-          >
-            <Trash2 size={14} className="mr-1" />
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  ))}
   useEffect(() => {
     fetchVideos();
   }, []);
@@ -204,7 +131,6 @@ function VideoContent() {
     e.preventDefault();
     const currentDate = new Date().toISOString().split('T')[0];
     
-    // Generate thumbnail if not already set
     const thumbnailUrl = formData.thumbnail || getYouTubeThumbnail(formData.youtubeLink);
     
     try {
@@ -232,7 +158,7 @@ function VideoContent() {
           ...videoData,
           views: 0
         };
-        setVideos([newVideo, ...videos]); // Add new video at the beginning
+        setVideos([newVideo, ...videos]);
       }
       resetForm();
     } catch (error) {
@@ -240,62 +166,24 @@ function VideoContent() {
     }
   };
 
-  // const resetForm = () => {
-  //   setShowForm(false);
-  //   setEditingVideo(null);
-  //   setFormData({
-  //     title: '',
-  //     duration: '',
-  //     youtubeLink: ''
-  //   });
-  // };
-
-  // const openAddForm = () => {
-  //   setEditingVideo(null);
-  //   setFormData({
-  //     title: '',
-  //     duration: '',
-  //     youtubeLink: ''
-  //   });
-  //   setShowForm(true);
-    
-  //   // Add a check before scrolling
-  //   setTimeout(() => {
-  //     const formElement = document.getElementById('video-form');
-  //     if (formElement) {
-  //       formElement.scrollIntoView({ behavior: 'smooth' });
-  //     }
-  //   }, 100);
-  // };
-
-  // const handleInputChange = (e) => {
-  //   const { name, value } = e.target;
-  //   setFormData(prev => ({
-  //     ...prev,
-  //     [name]: value
-  //   }));
-  // };
-
   return (
     <div className="p-6 sm:p-6">
-      {/* Header Section - Only show when form is not visible */}
+      {/* Combined Header and Search Section */}
       {!showForm && (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
           <h2 className="text-xl sm:text-2xl font-semibold" style={{ color: currentTheme.text.primary }}>Video Library Management</h2>
-          <CustomButton onClick={openAddForm} icon={Plus}>
-            Add New Video
-          </CustomButton>
-        </div>
-      )}
-
-      {/* Search Section - Only show when form is not visible */}
-      {!showForm && (
-        <div className="mb-6">
-          <CustomSearch
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search videos..."
-          />
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex-1 sm:flex-none sm:w-64">
+              <CustomSearch
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search videos..."
+              />
+            </div>
+            <CustomButton onClick={openAddForm} icon={Plus} className="w-full sm:w-auto">
+              Add New Video
+            </CustomButton>
+          </div>
         </div>
       )}
 
@@ -354,7 +242,7 @@ function VideoContent() {
         </div>
       )}
 
-      {/* Content Section - Show either empty state or videos list */}
+      {/* Content Section */}
       {!showForm && (
         <>
           {videos.length === 0 ? (
@@ -383,9 +271,12 @@ function VideoContent() {
                 >
                   <div className="relative">
                     <img 
-                      src={video.thumbnail} 
+                      src={video.thumbnail || getYouTubeThumbnail(video.youtubeLink)} 
                       alt={video.title} 
                       className="w-full h-36 sm:h-48 object-cover"
+                      onError={(e) => {
+                        e.target.src = getYouTubeThumbnail(video.youtubeLink);
+                      }}
                     />
                     <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                       <a href={video.youtubeLink} target="_blank" rel="noopener noreferrer" className="p-2 sm:p-3 bg-white rounded-full shadow-md">
@@ -398,7 +289,15 @@ function VideoContent() {
                   </div>
                   
                   <div className="p-3 sm:p-4">
-                                       
+                    <h3 className="font-medium text-base sm:text-lg mb-1 line-clamp-2">{video.title}</h3>
+                    <div className="flex justify-between text-xs sm:text-sm text-gray-500">
+                      <span>Uploaded: {video.date}</span>
+                      <span>{video.views} views</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-gray-500 truncate mt-1">
+                      {video.youtubeLink}
+                    </p>
+                    
                     <div className="flex mt-3 sm:mt-4 space-x-2">
                       <button 
                         className="flex-1 py-1 border border-gray-300 rounded-md flex items-center justify-center hover:bg-gray-50 text-sm"
@@ -414,14 +313,10 @@ function VideoContent() {
                         <Trash2 size={14} className="mr-1" />
                         Delete
                       </button>
-                      
                     </div>
-                    
                   </div>
-                  
                 </div>
               ))}
-              
             </div>
           )}
         </>

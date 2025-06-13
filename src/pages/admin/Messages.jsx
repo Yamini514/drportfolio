@@ -3,7 +3,6 @@ import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase
 import { db } from '../../firebase/config';
 import { useTheme } from '../../context/ThemeContext';
 import CustomButton from '../../components/CustomButton';
-import { FaEye } from 'react-icons/fa';
 import CustomDeleteConfirmation from '../../components/CustomDeleteConfirmation';
 
 function Messages() {
@@ -55,11 +54,11 @@ function Messages() {
       querySnapshot.forEach((doc) => {
         messagesData.push({ id: doc.id, ...doc.data() });
       });
-      
+
       if (messagesData.length > previousLength && previousLength > 0) {
         await playNotification();
       }
-      
+
       setPreviousLength(messagesData.length);
       setMessages(messagesData);
     });
@@ -68,39 +67,53 @@ function Messages() {
   }, [previousLength]);
 
   const MessageView = ({ message }) => (
-    <div 
+    <div
       className="rounded-lg p-6 shadow mx-auto"
-      style={{ 
-        backgroundColor: '#1A1F36',
-        color: '#FFFFFF',
-        border: '1px solid #6B46C1',
+      style={{
+        backgroundColor: currentTheme.background.card,
+        color: currentTheme.text.primary,
+        border: `1px solid ${currentTheme.border}`,
         width: '50%',
-        maxWidth: '600px'
+        maxWidth: '600px',
       }}
     >
-      <h3 className="text-xl font-bold mb-4" style={{ color: '#FFFFFF' }}>
+      <h3 className="text-xl font-bold mb-4" style={{ color: currentTheme.text.primary }}>
         Message Details
       </h3>
       <div className="space-y-4">
         <div>
-          <span className="font-semibold" style={{ color: '#A0AEC0' }}>Name: </span>
-          <span style={{ color: '#FFFFFF' }}>{message.fullName}</span>
+          <span className="font-semibold" style={{ color: currentTheme.text.secondary }}>
+            Name:{' '}
+          </span>
+          <span style={{ color: currentTheme.text.primary }}>{message.fullName}</span>
         </div>
         <div>
-          <span className="font-semibold" style={{ color: '#A0AEC0' }}>Email: </span>
-          <span style={{ color: '#FFFFFF' }}>{message.email}</span>
+          <span className="font-semibold" style={{ color: currentTheme.text.secondary }}>
+            Email:{' '}
+          </span>
+          <span style={{ color: currentTheme.text.primary }}>{message.email}</span>
         </div>
         <div>
-          <span className="font-semibold" style={{ color: '#A0AEC0' }}>Phone: </span>
-          <span style={{ color: '#FFFFFF' }}>{message.phone}</span>
+          <span className="font-semibold" style={{ color: currentTheme.text.secondary }}>
+            Phone:{' '}
+          </span>
+          <span style={{ color: currentTheme.text.primary }}>{message.phone}</span>
         </div>
         <div>
-          <span className="font-semibold" style={{ color: '#A0AEC0' }}>Date: </span>
-          <span style={{ color: '#FFFFFF' }}>{formatTimestamp(message.timestamp)}</span>
+          <span className="font-semibold" style={{ color: currentTheme.text.secondary }}>
+            Date:{' '}
+          </span>
+          <span style={{ color: currentTheme.text.primary }}>
+            {formatTimestamp(message.timestamp)}
+          </span>
         </div>
         <div>
-          <span className="font-semibold" style={{ color: '#A0AEC0' }}>Message: </span>
-          <p className="whitespace-pre-wrap mt-2" style={{ color: '#FFFFFF' }}>{message.message}</p>
+          <span className="font-semibold" style={{ color: currentTheme.text.secondary }}>
+            Message:{' '}
+          </span>
+          <p className="whitespace-pre-wrap mt-2" style={{ color: currentTheme.text.primary }}>
+            {message.message}
+          </p>
         </div>
       </div>
       <div className="flex justify-end space-x-3 mt-6">
@@ -108,12 +121,6 @@ function Messages() {
           variant="secondary"
           onClick={() => setSelectedMessage(null)}
           className="px-4 py-2"
-          style={{
-            backgroundColor: 'transparent',
-            color: '#A0AEC0',
-            border: '1px solid #A0AEC0',
-            borderRadius: '0.375rem'
-          }}
         >
           Back to List
         </CustomButton>
@@ -122,9 +129,14 @@ function Messages() {
   );
 
   return (
-    <div className="p-4" style={{ backgroundColor: currentTheme.background.primary, color: currentTheme.text.primary }}>
+    <div
+      className="p-4"
+      style={{ backgroundColor: currentTheme.background.primary, color: currentTheme.text.primary }}
+    >
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold" style={{ color: currentTheme.text.primary }}>Contact Messages Management</h2>
+        <h2 className="text-2xl font-bold" style={{ color: currentTheme.text.primary }}>
+          Contact Messages Management
+        </h2>
       </div>
 
       {selectedMessage ? (
@@ -132,28 +144,39 @@ function Messages() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {messages.map((message) => (
-            <div 
-              key={message.id} 
+            <div
+              key={message.id}
               className="p-4 rounded-lg border"
-              style={{ 
-                backgroundColor: '#1A1F36',
-                borderColor: '#6B46C1'
+              style={{
+                backgroundColor: currentTheme.background.card,
+                borderColor: currentTheme.border,
               }}
             >
               <div className="flex justify-between items-start mb-2">
-                <h3 className="font-semibold" style={{ color: '#FFFFFF' }}>{message.fullName}</h3>
-                <span style={{ color: '#A0AEC0' }}>
+                <h3 className="font-semibold" style={{ color: currentTheme.text.primary }}>
+                  {message.fullName}
+                </h3>
+                <span style={{ color: currentTheme.text.secondary }}>
                   {formatTimestamp(message.timestamp)}
                 </span>
               </div>
               <div className="space-y-2">
-                <p style={{ color: '#A0AEC0' }}>
-                  <span className="font-medium" style={{ color: '#FFFFFF' }}>Email:</span> {message.email}
+                <p style={{ color: currentTheme.text.secondary }}>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>
+                    Email:
+                  </span>{' '}
+                  {message.email}
                 </p>
-                <p style={{ color: '#A0AEC0' }}>
-                  <span className="font-medium" style={{ color: '#FFFFFF' }}>Phone:</span> {message.phone}
+                <p style={{ color: currentTheme.text.secondary }}>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>
+                    Phone:
+                  </span>{' '}
+                  {message.phone}
                 </p>
-                <p className="mt-3 pt-3 border-t" style={{ borderColor: '#6B46C1', color: '#FFFFFF' }}>
+                <p
+                  className="mt-3 pt-3 border-t"
+                  style={{ borderColor: currentTheme.border, color: currentTheme.text.primary }}
+                >
                   {truncateMessage(message.message)}
                 </p>
                 <div className="flex justify-end space-x-2 mt-2">
@@ -161,12 +184,12 @@ function Messages() {
                     onClick={() => setSelectedMessage(message)}
                     className="p-1 transition-colors"
                     aria-label="View message"
-                    style={{ 
-                      color: '#A0AEC0',
+                    style={{
+                      color: currentTheme.text.secondary,
                       backgroundColor: 'transparent',
-                      border: '1px solid #A0AEC0',
+                      border: `1px solid ${currentTheme.border}`,
                       borderRadius: '0.375rem',
-                      padding: '4px 12px'
+                      padding: '4px 12px',
                     }}
                     title="View Message"
                   >
@@ -179,8 +202,8 @@ function Messages() {
                     }}
                     className="px-3 py-1 rounded text-sm"
                     style={{
-                      backgroundColor: '#ef4444',
-                      color: 'white'
+                      backgroundColor: currentTheme.button?.danger || '#ef4444', // Use theme if available
+                      color: currentTheme.text.primary,
                     }}
                     title="Delete Message"
                   >
@@ -194,12 +217,12 @@ function Messages() {
       )}
 
       {messages.length === 0 && !selectedMessage && (
-        <div 
+        <div
           className="p-4 rounded-lg border text-center"
-          style={{ 
-            backgroundColor: '#1A1F36',
-            borderColor: '#6B46C1',
-            color: '#A0AEC0'
+          style={{
+            backgroundColor: currentTheme.background.card,
+            borderColor: currentTheme.border,
+            color: currentTheme.text.secondary,
           }}
         >
           No messages yet
