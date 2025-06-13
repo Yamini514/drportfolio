@@ -1,4 +1,3 @@
-// src/components/Services.jsx
 import React, { useEffect, useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -44,7 +43,8 @@ function Services({id}) {
             id: doc.id,
             ...doc.data()
           }))
-          .filter(service => service.status === 'Active'); // Only show active services
+          .filter(service => service.status === 'Active')
+          .sort((a, b) => a.title.localeCompare(b.title)); // Sort services alphabetically by title
         setServices(servicesList);
       } catch (error) {
         console.error("Error fetching services:", error);
