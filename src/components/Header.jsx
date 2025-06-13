@@ -1,14 +1,21 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from '../context/ThemeContext';
+import { auth, db } from '../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
+import { User, LogOut, Calendar } from 'lucide-react';
 
 function Header() {
   const { theme, currentTheme, toggleTheme } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [scrollToSection, setScrollToSection] = useState(null);
+  const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const userMenuRef = useRef(null);
 
   const isHomePage = location.pathname === '/' || location.pathname === '';
 
@@ -25,17 +32,87 @@ function Header() {
     },
   ];
 
+  // Close user menu on outside click or scroll
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    const handleScroll = () => {
+      setIsUserMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // Handle auth state changes
+  useEffect(() => {
+    let currentUid = null;
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+      console.log('Auth state changed, user:', currentUser?.uid, 'email:', currentUser?.email);
+      
+      if (currentUser && currentUid && currentUser.uid !== currentUid) {
+        console.log('UID mismatch, ignoring auth state change. Expected:', currentUid, 'Received:', currentUser.uid);
+        return;
+      }
+
+      setUser(currentUser);
+      if (currentUser) {
+        currentUid = currentUser.uid;
+        const cachedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
+        if (cachedRole) {
+          console.log('Using cached role for uid:', currentUser.uid, 'role:', cachedRole);
+          setUserRole(cachedRole);
+          return;
+        }
+
+        try {
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const role = userData.role || 'user';
+            console.log('Fetched role for uid:', currentUser.uid, 'role:', role);
+            setUserRole(role);
+            localStorage.setItem(`userRole_${currentUser.uid}`, role);
+          } else {
+            console.log('No user document for uid:', currentUser.uid);
+            setUserRole('user');
+            localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
+          }
+        } catch (error) {
+          console.error('Error fetching user role for uid:', currentUser.uid, error);
+          setUserRole('user');
+          localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
+        }
+      } else {
+        console.log('No user logged in');
+        setUserRole(null);
+        localStorage.removeItem(`userRole_${currentUid}`);
+        currentUid = null;
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     const handleScroll = () => {
       if (!isHomePage) {
         setIsScrolled(true);
         return;
       }
-
       const heroSection = document.getElementById('hero');
       if (heroSection) {
         const heroBottom = heroSection.offsetTop + heroSection.offsetHeight;
-        setIsScrolled(window.scrollY);
+        setIsScrolled(window.scrollY > heroBottom);
       }
     };
 
@@ -51,7 +128,6 @@ function Header() {
 
   useEffect(() => {
     if (isHomePage && scrollToSection) {
-      // Add a slight delay to ensure the DOM is updated after navigation
       const timer = setTimeout(() => {
         const section = document.getElementById(scrollToSection);
         if (section) {
@@ -61,9 +137,8 @@ function Header() {
             behavior: 'smooth'
           });
         }
-        setScrollToSection(null); // Reset after scrolling
-      }, 100); // Adjust delay as needed
-
+        setScrollToSection(null);
+      }, 100);
       return () => clearTimeout(timer);
     }
   }, [location.pathname, scrollToSection, isHomePage]);
@@ -72,7 +147,7 @@ function Header() {
 
   const handleNavClick = (href, sectionId, e) => {
     if (sectionId) {
-      e.preventDefault(); // Prevent the Link's default navigation behavior
+      e.preventDefault();
     }
     setIsMenuOpen(false);
 
@@ -109,6 +184,106 @@ function Header() {
     window.scrollTo(0, 0);
   };
 
+  const handleLogout = async () => {
+    try {
+      console.log('Attempting logout...');
+      await auth.signOut();
+      setUser(null);
+      setUserRole(null);
+      setIsUserMenuOpen(false);
+      console.log('Logout successful');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  const handleBookAppointmentClick = () => {
+    if (!user) {
+      navigate('/login', { state: { redirectTo: '/bookappointment' } });
+    } else {
+      navigate('/bookappointment');
+    }
+    window.scrollTo(0, 0);
+    setIsMenuOpen(false);
+  };
+
+  const userMenu = (
+    <>
+      {user ? (
+        <div className="relative" ref={userMenuRef}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsUserMenuOpen(!isUserMenuOpen);
+            }}
+            className="flex items-center justify-center gap-2 p-2 rounded-full hover:opacity-80 w-8 h-8"
+            style={{ 
+              backgroundColor: currentTheme.primary,
+              color: '#ffffff'
+            }}
+          >
+            {user.email ? user.email[0].toUpperCase() : <User className="w-5 h-5" />}
+          </button>
+          
+          {isUserMenuOpen && (
+            <div
+              className="absolute right-0 mt-2 w-48 rounded-md shadow-lg z-50"
+              style={{ 
+                backgroundColor: currentTheme.surface,
+                border: `1px solid ${currentTheme.border}` 
+              }}
+            >
+              <div className="py-1">
+                <div className="px-4 py-2 border-b" style={{ borderColor: currentTheme.border }}>
+                  <p className="text-sm truncate" style={{ color: currentTheme.text.primary }}>
+                    {user.email}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: currentTheme.text.secondary }}>
+                    {userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : 'User'}
+                  </p>
+                </div>
+                {userRole !== 'admin' && (
+                  <Link
+                    to="/my-appointments"
+                    className="flex items-center gap-2 px-4 py-2 hover:opacity-80"
+                    style={{ color: currentTheme.text.primary }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsUserMenuOpen(false);
+                    }}
+                  >
+                    <Calendar className="w-4 h-4" />
+                    My Appointments
+                  </Link>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleLogout();
+                    setIsUserMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 w-full px-4 py-2 hover:opacity-80"
+                  style={{ color: currentTheme.text.primary }}
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <Link
+          to="/login"
+          className="flex items-center gap-2 font-medium"
+          style={{ color: isTransparentHeader ? '#ffffff' : currentTheme.text.primary }}
+        >
+          Login
+        </Link>
+      )}
+    </>
+  );
+
   return (
     <>
       <style jsx="true">{`
@@ -118,9 +293,10 @@ function Header() {
           box-shadow: none !important;
           backdrop-filter: none !important;
           -webkit-backdrop-filter: none !important;
-          z-index: 1 !important;
+          z-index: 50 !important;
+          pointer-events: auto !important;
         }
-        .header-colored  {
+        .header-colored {
           background-color: ${currentTheme.surface};
           border-bottom: 1px solid ${currentTheme.border};
           backdrop-filter: blur(10px);
@@ -160,7 +336,7 @@ function Header() {
                     </svg>
                   </button>
                   <div 
-                    className="absolute left-0 mt-2 w-48 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300"
+                    className="absolute left-0 mt-2 w-48 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50"
                     style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}
                   >
                     {link.dropdownItems.map((item) => (
@@ -198,17 +374,14 @@ function Header() {
                 </Link>
               )
             ))}
-            <Link
-              to="/bookappointment"
+            <button
+              onClick={handleBookAppointmentClick}
               style={{ backgroundColor: currentTheme.primary }}
               className="px-4 py-2 rounded-md text-white hover:opacity-90 transition-opacity"
-              onClick={() => {
-                window.scrollTo(0, 0);
-                navigate('/bookappointment');
-              }}
             >
               Book Appointment
-            </Link>
+            </button>
+            {userMenu}
             <button 
               style={{
                 backgroundColor: currentTheme.surface,
@@ -224,6 +397,7 @@ function Header() {
           </nav>
 
           <div className="flex items-center gap-4 md:hidden">
+            {userMenu}
             <button 
               onClick={toggleTheme}
               className="p-2 rounded-full"
@@ -295,18 +469,40 @@ function Header() {
                 </Link>
               )
             ))}
-            <Link
-              to="/bookappointment"
+            {user && (
+              <div className="px-4 py-2">
+                <p className="text-sm truncate" style={{ color: currentTheme.text.primary }}>
+                  {user.email}
+                </p>
+                <p className="text-xs truncate" style={{ color: currentTheme.text.secondary }}>
+                  {userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : 'User'}
+                </p>
+                {userRole !== 'admin' && (
+                  <Link
+                    to="/my-appointments"
+                    className="block py-2 px-4 transition-colors"
+                    style={{ color: currentTheme.text.primary }}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    My Appointments
+                  </Link>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="block py-2 px-4 transition-colors"
+                  style={{ color: currentTheme.text.primary }}
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+            <button
+              onClick={handleBookAppointmentClick}
               style={{ backgroundColor: currentTheme.primary }}
               className="block w-full mt-2 px-4 py-2 rounded-md text-white hover:opacity-90 transition-opacity text-center"
-              onClick={() => {
-                setIsMenuOpen(false);
-                window.scrollTo(0, 0);
-                navigate('/bookappointment');
-              }}
             >
               Book Appointment
-            </Link>
+            </button>
           </nav>
         )}
       </header>
