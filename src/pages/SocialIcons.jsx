@@ -1,95 +1,61 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { Facebook, Linkedin, Instagram, Share2, X, Youtube, Users, Network, Globe, Globe2, Globe2Icon, GlobeIcon, Rss, UserPlus, UserPlus2 } from 'lucide-react';
-
-// Custom X (Twitter) icon component
-const XIcon = ({ size = 20 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-  </svg>
-);
+import { Facebook, Linkedin, Instagram, Twitter, Youtube } from 'lucide-react';
 
 function SocialIconsResponsive() {
   const { currentTheme } = useTheme();
-  const [isOpen, setIsOpen] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
 
   const socialLinks = [
     { 
-      // name: 'Facebook', 
       icon: <Facebook size={20} />, 
       url: 'https://www.facebook.com/profile.php?id=100071881127167&mibextid=ZbWKwL',
-      bgColor: '#1877F2' 
+      bgColor: '#1877F2', // Facebook blue
     },
     { 
-      // name: 'Twitter', 
-      icon: <XIcon size={20} />, 
+      icon: <Twitter size={20} />, 
       url: 'https://x.com/DrLaxminadh?t=npuU8mu-OOyht0HuTdjA2w&s=09',
-      bgColor: '#000000' 
+      bgColor: '#000000', // X black
     },
     { 
-      // name: 'LinkedIn', 
       icon: <Linkedin size={20} />, 
       url: 'https://www.linkedin.com/in/dr-laxminadh-sivaraju-neurosurgeon-90022674',
-      bgColor: '#0A66C2' 
+      bgColor: '#0A66C2', // LinkedIn blue
     },
     { 
-      // name: 'Instagram', 
       icon: <Instagram size={20} />, 
       url: 'https://www.instagram.com/dr_laxminadhneuro?igsh=dmkzZ3VieHZnOWQz',
-      bgColor: '#E4405F' 
+      bgColor: '#E4405F', // Instagram pink (simplified from gradient)
     },
     { 
-      // name: 'YouTube', 
       icon: <Youtube size={20} />, 
-      url: 'https://www.youtube.com/channel/UClNNzst7yNACujYrsBtdZAQ'
+      url: 'https://www.youtube.com/channel/UClNNzst7yNACujYrsBtdZAQ',
+      bgColor: '#FF0000', // YouTube red
     }
   ];
 
-  const toggleSocialBar = () => {
-    setIsOpen(!isOpen);
-  };
-
   return (
-    <>
-      {/* Desktop version - visible on medium screens and up */}
-      <div 
-        // className="fixed right-0 top-1/2 transform -translate-y-1/2 z-50 hidden md:block"
-        
-        onMouseEnter={() => setIsVisible(true)}
-        onMouseLeave={() => setIsVisible(false)}
-      >
-        <div>
-          <div className="flex flex-row">
-            {socialLinks.map((social, index) => (
-              <a
-                key={index}
-                href={social.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center group relative"
-                aria-label={`Visit Dr. Laxminadh Sivaraju's ${social.name} profile`}
-              >
-                <div 
-                  className="p-1 hover:pr-4 transition-all duration-300 backdrop-blur-sm"
-                  style={{ color: currentTheme.primary }}
-                >
-                  {social.icon}
-                </div>
-                
-              </a>
-            ))}
+    <div className="flex flex-row space-x-4">
+      {socialLinks.map((social, index) => (
+        <a
+          key={index}
+          href={social.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center transition-transform duration-300 hover:scale-110"
+          aria-label={`Visit Dr. Laxminadh Sivaraju's profile on ${social.url.split('.')[1]}`}
+        >
+          <div 
+            className="p-2 rounded-full"
+            style={{ 
+              backgroundColor: social.bgColor,
+              color: '#FFFFFF', // White icons to contrast with colored backgrounds
+            }}
+          >
+            {social.icon}
           </div>
-        </div>
-  
-      </div>
-    </>
+        </a>
+      ))}
+    </div>
   );
 }
 
