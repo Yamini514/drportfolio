@@ -1,9 +1,16 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
-import SocialIconsResponsive from '../pages/SocialIcons'; // Import the updated component
+import SocialIconsResponsive from '../pages/SocialIcons';
 
 function Footer() {
   const { currentTheme } = useTheme();
+  const navigate = useNavigate();
+
+  const handleServicesClick = (e) => {
+    e.preventDefault();
+    navigate('/', { state: { scrollTo: 'services' } });
+  };
 
   return (
     <footer
@@ -16,7 +23,7 @@ function Footer() {
     >
       <div className="container mx-auto px-4">
         {/* Main Footer Content */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
           {/* About Section */}
           <div className="w-full md:max-w-[300px]">
             <h3 className="text-xl font-bold mb-3 md:mb-4">Dr. Laxminadh Sivaraju</h3>
@@ -24,21 +31,22 @@ function Footer() {
               Leading neurosurgical care in Hyderabad with a focus on innovation, 
               compassion, and patient-centered treatment.
             </p>
-            {/* Add Social Icons Here */}
-            <h3 className='text-lg font-semibold mb-4 mt-8'>Social Media</h3>
-            <SocialIconsResponsive />
           </div>
 
           {/* Quick Links */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+            <h3 className="text-lg font-semibold mb-3">Quick Links</h3>
             <ul className="space-y-2">
-              {['Reviews', 'ContactMe'].map((link) => (
+              {['Reviews', 'ContactMe', 'Services', 'Terms and Conditions'].map((link) => (
                 <li key={link}>
                   <a 
-                    href={`/${link.toLowerCase() === 'reviews' ? 'review' : link.toLowerCase().replace(' ', '-')}`}
-                    className="text-sm hover:text-primary transition-colors"
-                    style={{ color: currentTheme.text.secondary }}
+                    href={link === 'Services' ? '#' : `/${link.toLowerCase() === 'reviews' ? 'review' : link.toLowerCase().replace(' ', '-')}`}
+                    onClick={link === 'Services' ? handleServicesClick : undefined}
+                    className="text-sm hover:underline transition-colors"
+                    style={{ 
+                      color: currentTheme.text.secondary,
+                      '--hover-color': currentTheme.primary || '#9333ea'
+                    }}
                   >
                     {link === 'ContactMe' ? 'Contact' : link}
                   </a>
@@ -47,32 +55,15 @@ function Footer() {
             </ul>
           </div>
 
-          {/* Services */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Services</h3>
-            <ul className="space-y-2">
-              {[
-                'Brain Tumor Surgery',
-                'Spine Surgery',
-                'Neurological Disorders',
-                'Microsurgery'
-              ].map((service) => (
-                <li key={service}>
-                  <a 
-                    href="services"
-                    className="text-sm hover:text-primary transition-colors"
-                    style={{ color: currentTheme.text.secondary }}
-                  >
-                    {service}
-                  </a>
-                </li>
-              ))}
-            </ul>
+          {/* Social Media */}
+          <div className="flex flex-col ">
+            <h3 className="text-lg font-semibold mb-3">Social Media</h3>
+            <SocialIconsResponsive size={18} />
           </div>
 
           {/* Clinic Hours */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Consulting Hours</h3>
+            <h3 className="text-lg font-semibold mb-3">Clinic Hours</h3>
             <ul className="space-y-2">
               <li className="text-sm" style={{ color: currentTheme.text.secondary }}>
                 <span className="font-medium" style={{ color: currentTheme.text.primary }}>CARE Hospitals</span><br />
@@ -93,7 +84,7 @@ function Footer() {
         <div className="border-t" style={{ borderColor: currentTheme.border }}>
           <div className="pt-6 flex flex-col md:flex-row justify-between items-center">
             <p className="text-sm mb-4 md:mb-0" style={{ color: currentTheme.text.secondary }}>
-              © 2025 Dr. Laxminadh Sivaraju Neurosurgen | All Rights Reserved.
+              © 2025 Dr. Laxminadh Sivaraju Neurosurgeon | All Rights Reserved.
             </p>
             <a 
               href="https://srinishtha.com/" 
