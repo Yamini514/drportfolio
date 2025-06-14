@@ -103,23 +103,17 @@ function Header() {
     return () => unsubscribe();
   }, []);
 
+  // Handle scroll detection
   useEffect(() => {
     const handleScroll = () => {
-      if (!isHomePage) {
-        setIsScrolled(true);
-        return;
-      }
-      const heroSection = document.getElementById('hero');
-      if (heroSection) {
-        const heroBottom = heroSection.offsetTop + heroSection.offsetHeight;
-        setIsScrolled(window.scrollY > heroBottom);
-      }
+      // Set isScrolled to true if there's any scroll (even a little bit)
+      setIsScrolled(window.scrollY > 0);
     };
 
     if (!isHomePage) {
       setIsScrolled(true);
     } else {
-      setIsScrolled(false);
+      setIsScrolled(window.scrollY > 0);
     }
 
     window.addEventListener('scroll', handleScroll);
@@ -133,7 +127,7 @@ function Header() {
         if (section) {
           const sectionTop = section.getBoundingClientRect().top + window.scrollY;
           window.scrollTo({
-            top: sectionTop - 75,
+            top: sectionTop + 10,
             behavior: 'smooth'
           });
         }
@@ -297,7 +291,7 @@ function Header() {
           pointer-events: auto !important;
         }
         .header-colored {
-          background-color: ${currentTheme.surface};
+          background-color: #ffffff !important;
           border-bottom: 1px solid ${currentTheme.border};
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
@@ -309,7 +303,7 @@ function Header() {
         className={`px-4 md:px-8 py-4 fixed w-full top-0 ${isTransparentHeader && !isMenuOpen ? 'home-header-transparent' : 'header-colored'}`}
         style={{
           color: isTransparentHeader && !isMenuOpen ? '#ffffff' : currentTheme.text.primary,
-          backgroundColor: isTransparentHeader && !isMenuOpen ? 'transparent' : currentTheme.surface, 
+          backgroundColor: isTransparentHeader && !isMenuOpen ? 'transparent' : '#ffffff', 
           transition: 'all 0.3s ease'
         }}
       >
@@ -337,7 +331,7 @@ function Header() {
                   </button>
                   <div 
                     className="absolute left-0 mt-2 w-48 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50"
-                    style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}
+                    style={{ backgroundColor: '#ffffff', borderColor: currentTheme.border }}
                   >
                     {link.dropdownItems.map((item) => (
                       <Link
@@ -384,7 +378,7 @@ function Header() {
             {userMenu}
             <button 
               style={{
-                backgroundColor: currentTheme.surface,
+                backgroundColor: '#ffffff',
                 color: currentTheme.text.primary,
                 border: `1px solid ${currentTheme.border}`,
               }}
@@ -402,7 +396,7 @@ function Header() {
               onClick={toggleTheme}
               className="p-2 rounded-full"
               style={{
-                backgroundColor: currentTheme.surface,
+                backgroundColor: '#ffffff',
                 color: currentTheme.text.primary,
                 border: `1px solid ${currentTheme.border}`,
               }}
@@ -434,7 +428,7 @@ function Header() {
         </div>
 
         {isMenuOpen && (
-          <nav className="md:hidden pt-4 pb-2" style={{ backgroundColor: currentTheme.surface }}>
+          <nav className="md:hidden pt-4 pb-2" style={{ backgroundColor: '#ffffff' }}>
             {navLinks.map((link) => (
               link.dropdownItems ? (
                 <div key={link.name}>
