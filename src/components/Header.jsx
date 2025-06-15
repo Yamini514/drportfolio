@@ -106,7 +106,6 @@ function Header() {
   // Handle scroll detection
   useEffect(() => {
     const handleScroll = () => {
-      // Set isScrolled to true if there's any scroll (even a little bit)
       setIsScrolled(window.scrollY > 0);
     };
 
@@ -391,7 +390,6 @@ function Header() {
           </nav>
 
           <div className="flex items-center gap-4 md:hidden">
-            {userMenu}
             <button 
               onClick={toggleTheme}
               className="p-2 rounded-full"
@@ -463,7 +461,7 @@ function Header() {
                 </Link>
               )
             ))}
-            {user && (
+            {user ? (
               <div className="px-4 py-2">
                 <p className="text-sm truncate" style={{ color: currentTheme.text.primary }}>
                   {user.email}
@@ -489,6 +487,15 @@ function Header() {
                   Logout
                 </button>
               </div>
+            ) : (
+              <Link
+                to="/login"
+                className="block py-2 px-4 transition-colors"
+                style={{ color: currentTheme.text.primary }}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Login
+              </Link>
             )}
             <button
               onClick={handleBookAppointmentClick}
