@@ -19,6 +19,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { Clock } from "lucide-react";
 import emailjs from "@emailjs/browser";
+import { Helmet } from "react-helmet-async";
 
 function BookAppointment() {
   const { currentTheme } = useTheme();
@@ -201,12 +202,7 @@ function BookAppointment() {
 
     if (name === "email") {
       console.log(`Validating email: ${value}`);
-      if (!value.trim()) {
-        setErrors((prev) => ({
-          ...prev,
-          email: "Email is required",
-        }));
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+      if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
         setErrors((prev) => ({
           ...prev,
           email: "Please enter a valid email address",
@@ -218,12 +214,7 @@ function BookAppointment() {
 
     if (name === "reasonForVisit") {
       console.log(`Validating reasonForVisit: ${value}`);
-      if (!value.trim()) {
-        setErrors((prev) => ({
-          ...prev,
-          reasonForVisit: "Reason for visit is required",
-        }));
-      } else if (value.trim().length < 3 || value.trim().length > 100) {
+      if (value && (value.trim().length < 3 || value.trim().length > 100)) {
         setErrors((prev) => ({
           ...prev,
           reasonForVisit: "Reason must be between 3 and 100 characters",
@@ -468,16 +459,25 @@ function BookAppointment() {
         ? docData.timeSlots.map(formatTimeSlot)
         : [];
 
+      // Fetch booked slots for this date and location
+      const bookingsRef = collection(db, "appointments/data/bookings");
+      const bookingQuery = query(
+        bookingsRef,
+        where("date", "==", date),
+        where("location", "==", selectedLocation)
+      );
+      const bookingSnapshot = await getDocs(bookingQuery);
+      const bookedSlotsForDay = bookingSnapshot.docs.map(doc => doc.data().time);
+
+      // Filter out booked slots
+      const availableSlots = storedSlots.filter(slot => !bookedSlotsForDay.includes(slot));
+
       const currentTime = getCurrentTimeInIST();
       const selectedDateObj = new Date(date);
       const now = new Date();
       const isToday = isSameDay(selectedDateObj, now);
 
-      const availableSlots = storedSlots.filter((slot) => {
-        if (bookedSlots[date]?.includes(slot)) {
-          return false;
-        }
-
+      const filteredSlots = availableSlots.filter((slot) => {
         const [time, period] = slot.split(" ");
         const [slotHour, slotMinute] = time.split(":").map(Number);
         let slotHour24 =
@@ -503,7 +503,7 @@ function BookAppointment() {
         return slotTimeInMinutes <= endTimeInMinutes;
       });
 
-      const sortedSlots = availableSlots.sort((a, b) => {
+      const sortedSlots = filteredSlots.sort((a, b) => {
         const timeA = parse(a, "h:mm a", new Date());
         const timeB = parse(b, "h:mm a", new Date());
         return timeA - timeB;
@@ -512,7 +512,7 @@ function BookAppointment() {
       setTimeSlots(sortedSlots);
       setDaySchedule({ isOpen: sortedSlots.length > 0 });
       if (sortedSlots.length === 0 && !isDateBlocked && !isSunday && !locationMismatch) {
-        setBookingMessage("All slots are booked. Please select another day.");
+        setBookingMessage("No available slots for this day. Please select another day.");
       }
     } catch (error) {
       console.error("Error fetching time slots:", error.code, error.message);
@@ -653,13 +653,6 @@ function BookAppointment() {
       );
       setShowForm(false);
       setSelectedSlot("");
-      setBookedSlots((prev) => ({
-        ...prev,
-        [`${selectedDate}|${selectedLocation}`]: [
-          ...(prev[`${selectedDate}|${selectedLocation}`] || []),
-          slot,
-        ],
-      }));
       fetchTimeSlots(selectedDate, selectedDayName);
     } else {
       setSelectedSlot(slot);
@@ -669,36 +662,46 @@ function BookAppointment() {
     setIsLoading(false);
   };
 
+  const handleCancel = () => {
+    setSelectedDate("");
+    setSelectedDayName("");
+    setSelectedSlot("");
+    setShowForm(false);
+    setBookingMessage("");
+    setTimeSlots([]);
+    setDaySchedule(null);
+    setIsDateBlocked(false);
+    setBlockReason("");
+    setLocationMismatch(false);
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+      dob: "",
+      reasonForVisit: "",
+      appointmentType: "Consultation",
+      medicalHistory: null,
+      medicalHistoryMessage: "",
+    });
+    setErrors({});
+  };
+
   const validateForm = () => {
     const hasErrors = Object.values(errors).some((error) => error !== "");
     if (hasErrors) {
-      // setBookingMessage("Please correct the errors in the form.");
       return false;
     }
 
     if (!formData.name) {
       setErrors((prev) => ({ ...prev, name: "Name is required" }));
-      // setBookingMessage("Please correct the errors in the form.");
-      return false;
-    }
-    if (!formData.email) {
-      setErrors((prev) => ({ ...prev, email: "Email is required" }));
-      // setBookingMessage("Please correct the errors in the form.");
       return false;
     }
     if (!formData.phone) {
       setErrors((prev) => ({ ...prev, phone: "Phone is required" }));
-      // setBookingMessage("Please correct the errors in the form.");
       return false;
     }
     if (!formData.dob) {
       setErrors((prev) => ({ ...prev, dob: "Date of Birth is required" }));
-      // setBookingMessage("Please correct the errors in the form.");
-      return false;
-    }
-    if (!formData.reasonForVisit) {
-      setErrors((prev) => ({ ...prev, reasonForVisit: "Reason for visit is required" }));
-      // setBookingMessage("Please correct the errors in the form.");
       return false;
     }
 
@@ -745,24 +748,36 @@ function BookAppointment() {
       });
       console.log("Appointment booked with ID:", docRef.id);
 
-      const emailParams = {
-        name: formData.name,
-        email: formData.email,
-        date: format(new Date(selectedDate), "MMMM d, yyyy"),
-        time: selectedSlot,
-        location: selectedLocation,
-        appointment_type: formData.appointmentType,
-      };
+      if (formData.phone) {
+        const phoneNumber = formData.phone.startsWith("+") ? formData.phone : `+91${formData.phone}`;
+        const message = `Dear ${formData.name}, your appointment is confirmed for ${format(
+          new Date(selectedDate),
+          "MMMM d, yyyy"
+        )} at ${selectedSlot} at ${selectedLocation}. Appointment Type: ${formData.appointmentType}.`;
+        const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, "_blank");
+      }
 
-      await emailjs
-        .send("service_dkv3rib", "template_iremp8a", emailParams)
-        .then((response) => {
-          console.log("Email sent successfully:", response.status, response.text);
-        })
-        .catch((error) => {
-          console.error("Failed to send email:", error);
-          setBookingMessage("Appointment booked, but failed to send confirmation email.");
-        });
+      if (formData.email) {
+        const emailParams = {
+          name: formData.name,
+          email: formData.email,
+          date: format(new Date(selectedDate), "MMMM d, yyyy"),
+          time: selectedSlot,
+          location: selectedLocation,
+          appointment_type: formData.appointmentType,
+        };
+
+        await emailjs
+          .send("service_dkv3rib", "template_iremp8a", emailParams)
+          .then((response) => {
+            console.log("Email sent successfully:", response.status, response.text);
+          })
+          .catch((error) => {
+            console.error("Failed to send email:", error);
+            setBookingMessage("Appointment booked, but failed to send confirmation email.");
+          });
+      }
 
       setShowSuccess(true);
       setShowForm(false);
@@ -794,440 +809,506 @@ function BookAppointment() {
   };
 
   return (
-    <div
-      className="p-4 sm:p-6 rounded-lg w-full max-w-5xl mx-auto overflow-hidden min-h-[calc(100vh-200px)]"
-      style={{ backgroundColor: currentTheme.background }}
-    >
-      <div className="flex justify-center items-center mb-4 sm:mb-6">
-        <h2
-          className="text-xl sm:text-2xl font-semibold text-center whitespace-nowrap"
-          style={{ color: currentTheme.text.primary }}
+    <>
+      <Helmet>
+        <title>Book Your Doctor Appointment Online | Easy Scheduling</title>
+        <meta
+          name="description"
+          content="Schedule your doctor appointment online with ease. Choose your location, date, and time slot, and provide your details to confirm your booking instantly."
+        />
+        <meta
+          name="keywords"
+          content="book doctor appointment, online doctor scheduling, medical appointment booking, doctor consultation booking"
+        />
+        <meta name="robots" content="index, follow" />
+        <meta property="og:title" content="Book Your Doctor Appointment Online" />
+        <meta
+          property="og:description"
+          content="Schedule your doctor appointment online with ease. Choose your location, date, and time slot, and provide your details to confirm your booking instantly."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={window.location.href} />
+        <meta property="og:image" content="https://yourwebsite.com/og-image.jpg" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Book Your Doctor Appointment Online" />
+        <meta
+          name="twitter:description"
+          content="Schedule your doctor appointment online with ease. Choose your location, date, and time slot, and provide your details to confirm your booking instantly."
+        />
+        <meta name="twitter:image" content="https://yourwebsite.com/og-image.jpg" />
+      </Helmet>
+
+      <main className="min-h-[calc(100vh-200px)] flex items-center justify-center p-4 sm:p-6">
+        <section
+          className="p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-5xl"
+          style={{
+            backgroundColor: currentTheme.background,
+            borderColor: currentTheme.border,
+            borderWidth: "1px",
+          }}
+          aria-label="Book Appointment Section"
         >
-          Book Your Appointment
-        </h2>
-      </div>
-
-      {showSuccess && (
-        <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg bg-green-100 text-green-800 text-sm sm:text-base">
-          Appointment booked successfully! A confirmation email has been sent.
-        </div>
-      )}
-
-      {bookingMessage && (
-        <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg bg-red-100 text-red-800 text-sm sm:text-base">
-          {bookingMessage}
-        </div>
-      )}
-
-      <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-col items-center gap-4 sm:gap-6">
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-6">
-            <div className="flex flex-row items-center gap-2 w-auto">
-              <label
-                htmlFor="location-select"
-                className="text-sm sm:text-base font-medium whitespace-nowrap"
-                style={{ color: currentTheme.text.primary }}
-              >
-                Select Location
-                <span className="text-red-500 ml-1">*</span>
-              </label>
-              <CustomSelect
-                id="location-select"
-                value={selectedLocation}
-                onChange={handleLocationChange}
-                options={locations.map((loc) => ({ value: loc.name, label: loc.name }))}
-                required
-                className="w-32 sm:w-40 p-2 rounded-md border text-sm sm:text-base"
-                style={{
-                  borderColor: currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-            </div>
-            <div className="flex flex-row items-center gap-2 w-auto">
-              <label
-                htmlFor="date-input"
-                className="text-sm sm:text-base font-medium whitespace-nowrap"
-                style={{ color: currentTheme.text.primary }}
-              >
-                Select Date
-                <span className="text-red-500 ml-1">*</span>
-              </label>
-              <DatePicker
-                selected={selectedDate ? new Date(selectedDate) : null}
-                onChange={handleDateChange}
-                minDate={new Date(allowedDateRange.startDate)}
-                maxDate={new Date(allowedDateRange.endDate)}
-                dayClassName={(date) =>
-                  isDateAvailable(date) && isValid(date)
-                    ? "bg-green-100 text-green-800 font-semibold"
-                    : isDateUnavailable(format(date, "yyyy-MM-dd"))
-                    ? "cursor-not-allowed text-gray-400"
-                    : ""
-                }
-                filterDate={filterUnavailableDates}
-                required
-                className="w-32 sm:w-40 p-2 rounded-md border text-sm sm:text-base"
-                style={{
-                  borderColor: currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-                disabled={!selectedLocation}
-                placeholderText="Select Date"
-                showPopperArrow={false}
-                dateFormat="dd-MM-yyyy"
-                onKeyDown={(e) => e.preventDefault()}
-              />
-            </div>
-          </div>
-          {selectedDate && selectedDayName && !isLoading && (
-            <div className="text-center">
-              <p
-                className="text-sm sm:text-base font-medium"
-                style={{ color: currentTheme.text.primary }}
-              >
-                Selected Date: {format(new Date(selectedDate), "MMMM d, yyyy")} at {selectedLocation} | Day: {selectedDayName}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {isLoading && (
-          <div className="flex justify-center py-4">
-            <div
-              className="animate-spin rounded-full h-8 w-8 border-b-2"
-              style={{ borderColor: currentTheme.primary }}
-            ></div>
-          </div>
-        )}
-
-        {selectedDate && timeSlots.length > 0 && !isLoading && !locationMismatch && (
-          <div className="mt-4 sm:mt-6">
-            <label
-              className="block text-sm sm:text-base font-medium mb-2 sm:mb-3 text-center"
+          <header className="flex justify-center items-center mb-4 sm:mb-6">
+            <h1
+              className="text-xl sm:text-2xl font-semibold text-center whitespace-nowrap"
               style={{ color: currentTheme.text.primary }}
             >
-              Available Time Slots
-            </label>
-            <div className="flex justify-center">
-              <div className="flex flex-wrap justify-center gap-2 sm:gap-3 max-w-3xl">
-                {timeSlots.map((slot) => {
-                  const isBooked = bookedSlots[`${selectedDate}|${selectedLocation}`]?.includes(slot);
-                  const Icon = Clock;
-                  const [time, period] = slot.split(" ");
-                  return (
-                    <CustomButton
-                      key={slot}
-                      variant={
-                        selectedSlot === slot
-                          ? "primary"
-                          : isBooked
-                          ? "danger"
-                          : "secondary"
-                      }
-                      onClick={() => !isBooked && handleSlotSelect(slot)}
-                      className={`w-28 sm:w-32 h-10 text-xs sm:text-sm py-2 px-3 flex items-center justify-center ${
-                        isBooked ? "opacity-50 cursor-not-allowed" : ""
-                      }`}
-                    >
-                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                        <Icon className="w-4 h-4" />
-                        <span>{time}</span>
-                        <span>{period}</span>
+              Book Your Appointment
+            </h1>
+          </header>
+
+          {showSuccess && (
+            <div
+              className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg bg-green-100 text-green-800 text-sm sm:text-base"
+              role="alert"
+            >
+              Appointment booked successfully! A confirmation has been sent.
+            </div>
+          )}
+
+          {bookingMessage && (
+            <div
+              className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg bg-red-100 text-red-800 text-sm sm:text-base"
+              role="alert"
+            >
+              {bookingMessage}
+            </div>
+          )}
+
+          <div className="space-y-4 sm:space-y-6">
+            <section className="flex flex-col items-center gap-4 sm:gap-6">
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-6">
+                <div className="flex flex-row items-center gap-2 w-auto">
+                  <label
+                    htmlFor="location-select"
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Select Location
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <CustomSelect
+                    id="location-select"
+                    value={selectedLocation}
+                    onChange={handleLocationChange}
+                    options={locations.map((loc) => ({ value: loc.name, label: loc.name }))}
+                    required
+                    className="w-32 sm:w-40 p-2 rounded-md border text-sm sm:text-base"
+                    style={{
+                      borderColor: currentTheme.border,
+                      backgroundColor: currentTheme.inputBackground,
+                      color: currentTheme.text.primary,
+                    }}
+                    aria-label="Select appointment location"
+                  />
+                </div>
+                <div className="flex flex-row items-center gap-2 w-auto">
+                  <label
+                    htmlFor="date-input"
+                    className="text-sm sm:text-base font-medium whitespace-nowrap"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Select Date
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <DatePicker
+                    selected={selectedDate ? new Date(selectedDate) : null}
+                    onChange={handleDateChange}
+                    minDate={new Date(allowedDateRange.startDate)}
+                    maxDate={new Date(allowedDateRange.endDate)}
+                    dayClassName={(date) =>
+                      isDateAvailable(date) && isValid(date)
+                        ? "bg-green-100 text-green-800 font-semibold"
+                        : isDateUnavailable(format(date, "yyyy-MM-dd"))
+                        ? "cursor-not-allowed text-gray-400"
+                        : ""
+                    }
+                    filterDate={filterUnavailableDates}
+                    required
+                    id="date-input"
+                    className="w-32 sm:w-40 p-2 rounded-md border text-sm sm:text-base"
+                    style={{
+                      borderColor: currentTheme.border,
+                      backgroundColor: currentTheme.inputBackground,
+                      color: currentTheme.text.primary,
+                    }}
+                    disabled={!selectedLocation}
+                    placeholderText="Select Date"
+                    showPopperArrow={false}
+                    dateFormat="dd-MM-yyyy"
+                    onKeyDown={(e) => e.preventDefault()}
+                    aria-label="Select appointment date"
+                  />
+                </div>
+              </div>
+              {selectedDate && selectedDayName && !isLoading && (
+                <p
+                  className="text-sm sm:text-base font-medium text-center"
+                  style={{ color: currentTheme.text.primary }}
+                >
+                  Selected Date: {format(new Date(selectedDate), "MMMM d, yyyy")} at {selectedLocation} | Day: {selectedDayName}
+                </p>
+              )}
+            </section>
+
+            {isLoading && (
+              <div className="flex justify-center py-4">
+                <div
+                  className="animate-spin rounded-full h-8 w-8 border-b-2"
+                  style={{ borderColor: currentTheme.primary }}
+                  aria-label="Loading available time slots"
+                ></div>
+              </div>
+            )}
+
+            {selectedDate && timeSlots.length > 0 && !isLoading && !locationMismatch && (
+              <section className="mt-4 sm:mt-6">
+                <h2
+                  className="block text-sm sm:text-base font-medium mb-2 sm:mb-3 text-center"
+                  style={{ color: currentTheme.text.primary }}
+                >
+                  Available Time Slots
+                </h2>
+                <div className="flex justify-center">
+                  <div className="flex flex-wrap justify-center gap-2 sm:gap-3 max-w-3xl">
+                    {timeSlots.map((slot) => {
+                      const Icon = Clock;
+                      const [time, period] = slot.split(" ");
+                      return (
+                        <CustomButton
+                          key={slot}
+                          variant={selectedSlot === slot ? "primary" : "secondary"}
+                          onClick={() => handleSlotSelect(slot)}
+                          className="w-28 sm:w-32 h-10 text-xs sm:text-sm py-2 px-3 flex items-center justify-center"
+                          aria-label={`Select time slot ${time} ${period}`}
+                        >
+                          <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                            <Icon className="w-4 h-4" aria-hidden="true" />
+                            <span>{time}</span>
+                            <span>{period}</span>
+                          </div>
+                        </CustomButton>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {showForm && (
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 mt-6 sm:mt-8">
+                <section
+                  className="p-6 rounded-lg shadow-md border w-full"
+                  style={{
+                    backgroundColor: currentTheme.surface,
+                    borderColor: currentTheme.border,
+                  }}
+                >
+                  <h2
+                    className="text-lg sm:text-xl font-semibold mb-4"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Personal Information
+                  </h2>
+                  <div className="grid sm:grid-cols-2 gap-6">
+                    <div className="flex flex-row items-center gap-2">
+                      <label
+                        htmlFor="name-input"
+                        className="text-sm sm:text-base font-medium whitespace-nowrap"
+                        style={{ color: currentTheme.text.primary }}
+                      >
+                        Name
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
+                      <div className="flex-1">
+                        <CustomInput
+                          id="name-input"
+                          name="name"
+                          value={formData.name}
+                          onChange={handleInputChange}
+                          required
+                          maxLength={25}
+                          className="w-full p-2 rounded-md border"
+                          style={{
+                            borderColor: errors.name ? "rgb(239, 68, 68)" : currentTheme.border,
+                            backgroundColor: currentTheme.inputBackground,
+                            color: currentTheme.text.primary,
+                          }}
+                          aria-label="Enter your name"
+                        />
+                        {errors.name && (
+                          <p className="text-red-500 text-xs mt-1">{errors.name}</p>
+                        )}
                       </div>
-                    </CustomButton>
-                  );
-                })}
-              </div>
-            </div>
+                    </div>
+                    <div className="flex flex-row items-center gap-2">
+                      <label
+                        htmlFor="email-input"
+                        className="text-sm sm:text-base font-medium whitespace-nowrap"
+                        style={{ color: currentTheme.text.primary }}
+                      >
+                        Email
+                      </label>
+                      <div className="flex-1">
+                        <CustomInput
+                          id="email-input"
+                          type="email"
+                          name="email"
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          className="w-full p-2 rounded-md border"
+                          style={{
+                            borderColor: errors.email ? "rgb(239, 68, 68)" : currentTheme.border,
+                            backgroundColor: currentTheme.inputBackground,
+                            color: currentTheme.text.primary,
+                          }}
+                          aria-label="Enter your email (optional)"
+                        />
+                        {errors.email && (
+                          <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-3 gap-6 mt-6">
+                    <div className="flex flex-row items-center gap-2">
+                      <label
+                        htmlFor="phone-input"
+                        className="text-sm sm:text-base font-medium whitespace-nowrap"
+                        style={{ color: currentTheme.text.primary }}
+                      >
+                        Phone
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
+                      <div className="flex-1">
+                        <CustomInput
+                          id="phone-input"
+                          type="tel"
+                          name="phone"
+                          value={formData.phone}
+                          onChange={handlePhoneInput}
+                          required
+                          className="w-full p-2 rounded-md border"
+                          style={{
+                            borderColor: errors.phone ? "rgb(239, 68, 68)" : currentTheme.border,
+                            backgroundColor: currentTheme.inputBackground,
+                            color: currentTheme.text.primary,
+                          }}
+                          aria-label="Enter your phone number"
+                        />
+                        {errors.phone && (
+                          <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-row items-center gap-2">
+                      <label
+                        htmlFor="dob-input"
+                        className="text-sm sm:text-base font-medium whitespace-nowrap"
+                        style={{ color: currentTheme.text.primary }}
+                      >
+                        Date of Birth
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
+                      <div className="flex-1">
+                        <DatePicker
+                          id="dob-input"
+                          selected={formData.dob ? new Date(formData.dob) : null}
+                          onChange={handleDobChange}
+                          maxDate={new Date()}
+                          showYearDropdown
+                          showMonthDropdown
+                          dropdownMode="select"
+                          placeholderText="Select Date of Birth"
+                          className="w-full p-2 rounded-md border"
+                          style={{
+                            borderColor: errors.dob ? "rgb(239, 68, 68)" : currentTheme.border,
+                            backgroundColor: currentTheme.inputBackground,
+                            color: currentTheme.text.primary,
+                          }}
+                          required
+                          dateFormat="dd-MM-yyyy"
+                          onKeyDown={(e) => e.preventDefault()}
+                          aria-label="Select your date of birth"
+                        />
+                        {errors.dob && (
+                          <p className="text-red-500 text-xs mt-1">{errors.dob}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-row items-center gap-2">
+                      <label
+                        htmlFor="appointment-type"
+                        className="text-sm sm:text-base font-medium whitespace-nowrap"
+                        style={{ color: currentTheme.text.primary }}
+                      >
+                        Appointment Type
+                      </label>
+                      <div className="flex-1">
+                        <CustomSelect
+                          id="appointment-type"
+                          name="appointmentType"
+                          value={formData.appointmentType}
+                          onChange={handleInputChange}
+                          options={[
+                            { value: "Consultation", label: "Consultation" },
+                            { value: "Follow-up", label: "Follow-up" },
+                            { value: "Second Opinion", label: "Second Opinion" },
+                          ]}
+                          className="w-full p-2 rounded-md border"
+                          style={{
+                            borderColor: currentTheme.border,
+                            backgroundColor: currentTheme.inputBackground,
+                            color: currentTheme.text.primary,
+                          }}
+                          aria-label="Select appointment type"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-1 gap-6 mt-6">
+                    <div className="flex flex-row items-center gap-2">
+                      <label
+                        htmlFor="reason-input"
+                        className="text-sm sm:text-base font-medium whitespace-nowrap"
+                        style={{ color: currentTheme.text.primary }}
+                      >
+                        Purpose of Visit
+                      </label>
+                      <div className="flex-1">
+                        <CustomInput
+                          id="reason-input"
+                          name="reasonForVisit"
+                          value={formData.reasonForVisit}
+                          onChange={handleInputChange}
+                          maxLength={100}
+                          className="w-full p-2 rounded-md border"
+                          style={{
+                            borderColor: errors.reasonForVisit ? "rgb(239, 68, 68)" : currentTheme.border,
+                            backgroundColor: currentTheme.inputBackground,
+                            color: currentTheme.text.primary,
+                          }}
+                          aria-label="Enter the purpose of your visit (optional)"
+                        />
+                        {errors.reasonForVisit && (
+                          <p className="text-red-500 text-xs mt-1">{errors.reasonForVisit}</p>
+                        )}
+                        <p className="text-sm text-gray-500 mt-1">
+                          Characters: {formData.reasonForVisit.trim().length}/100
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section
+                  className="p-6 rounded-lg shadow-md border w-full"
+                  style={{
+                    backgroundColor: currentTheme.surface,
+                    borderColor: currentTheme.border,
+                  }}
+                >
+                  <h2
+                    className="text-lg sm:text-xl font-semibold mb-4"
+                    style={{ color: currentTheme.text.primary }}
+                  >
+                    Medical History
+                  </h2>
+                  <div className="grid sm:grid-cols-1 gap-6">
+                    <div className="flex flex-row items-center gap-2">
+                      <label
+                        htmlFor="medical-history-message"
+                        className="text-sm sm:text-base font-medium whitespace-nowrap"
+                        style={{ color: currentTheme.text.primary }}
+                      >
+                        Medical History Summary
+                      </label>
+                      <div className="flex-1">
+                        <textarea
+                          id="medical-history-message"
+                          name="medicalHistoryMessage"
+                          value={formData.medicalHistoryMessage}
+                          onChange={handleInputChange}
+                          className="w-full p-2 rounded-md border"
+                          style={{
+                            borderColor: errors.medicalHistoryMessage ? "rgb(239, 68, 68)" : currentTheme.border,
+                            backgroundColor: currentTheme.inputBackground,
+                            color: currentTheme.text.primary,
+                          }}
+                          rows="3"
+                          maxLength="200"
+                          aria-label="Enter a summary of your medical history (optional)"
+                        />
+                        {errors.medicalHistoryMessage && (
+                          <p className="text-red-500 text-xs mt-1">{errors.medicalHistoryMessage}</p>
+                        )}
+                        <p className="text-sm text-gray-500 mt-1">
+                          Characters: {formData.medicalHistoryMessage.length}/200
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-row items-center gap-2">
+                      <label
+                        htmlFor="medical-history-file"
+                        className="text-sm sm:text-base font-medium whitespace-nowrap"
+                        style={{ color: currentTheme.text.primary }}
+                      >
+                        Medical History (Optional)
+                      </label>
+                      <div className="flex-1">
+                        <input
+                          id="medical-history-file"
+                          type="file"
+                          name="medicalHistory"
+                          onChange={handleFileChange}
+                          accept=".pdf,.doc,.docx"
+                          className="w-full p-2 rounded-md border"
+                          style={{
+                            borderColor: errors.medicalHistory ? "rgb(239, 68, 68)" : currentTheme.border,
+                            backgroundColor: currentTheme.inputBackground,
+                            color: currentTheme.text.primary,
+                          }}
+                          aria-label="Upload medical history file (optional)"
+                        />
+                        {errors.medicalHistory && (
+                          <p className="text-red-500 text-xs mt-1">{errors.medicalHistory}</p>
+                        )}
+                        {formData.medicalHistory && (
+                          <p className="text-sm text-gray-500 mt-1">
+                            Selected file: {formData.medicalHistory.name}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <div className="flex justify-center gap-4">
+                  <CustomButton
+                    type="submit"
+                    variant="primary"
+                    className="w-max py-2 px-4"
+                    disabled={isLoading}
+                    aria-label="Book your appointment"
+                  >
+                    {isLoading ? "Processing..." : "Book Appointment"}
+                  </CustomButton>
+                  <CustomButton
+                    type="button"
+                    variant="secondary"
+                    className="w-max py-2 px-4"
+                    onClick={handleCancel}
+                    aria-label="Cancel and reset form"
+                  >
+                    Cancel
+                  </CustomButton>
+                </div>
+              </form>
+            )}
           </div>
-        )}
-
-        {showForm && (
-          <div className="space-y-4 sm:space-y-6 mt-6 sm:mt-8">
-            <div
-              className="p-6 rounded-lg shadow-md border w-full"
-              style={{ 
-                backgroundColor: currentTheme.surface, 
-                borderColor: currentTheme.border 
-              }}
-            >
-              <h3
-                className="text-lg sm:text-xl font-semibold mb-4"
-                style={{ color: currentTheme.text.primary }}
-              >
-                Personal Information
-              </h3>
-              <div className="grid sm:grid-cols-2 gap-6">
-                <div className="flex flex-row items-center gap-2">
-                  <label
-                    className="text-sm sm:text-base font-medium whitespace-nowrap"
-                    style={{ color: currentTheme.text.primary }}
-                  >
-                    Name
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <div className="flex-1">
-                    <CustomInput
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      required
-                      maxLength={25}
-                      className="w-full p-2 rounded-md border"
-                      style={{
-                        borderColor: errors.name ? "rgb(239, 68, 68)" : currentTheme.border,
-                        backgroundColor: currentTheme.inputBackground,
-                        color: currentTheme.text.primary,
-                      }}
-                    />
-                    {errors.name && (
-                      <p className="text-red-500 text-xs mt-1">{errors.name}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-row items-center gap-2">
-                  <label
-                    className="text-sm sm:text-base font-medium whitespace-nowrap"
-                    style={{ color: currentTheme.text.primary }}
-                  >
-                    Email
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <div className="flex-1">
-                    <CustomInput
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full p-2 rounded-md border"
-                      style={{
-                        borderColor: errors.email ? "rgb(239, 68, 68)" : currentTheme.border,
-                        backgroundColor: currentTheme.inputBackground,
-                        color: currentTheme.text.primary,
-                      }}
-                    />
-                    {errors.email && (
-                      <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-3 gap-6 mt-6">
-                <div className="flex flex-row items-center gap-2">
-                  <label
-                    className="text-sm sm:text-base font-medium whitespace-nowrap"
-                    style={{ color: currentTheme.text.primary }}
-                  >
-                    Phone
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <div className="flex-1">
-                    <CustomInput
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handlePhoneInput}
-                      required
-                      className="w-full p-2 rounded-md border"
-                      style={{
-                        borderColor: errors.phone ? "rgb(239, 68, 68)" : currentTheme.border,
-                        backgroundColor: currentTheme.inputBackground,
-                        color: currentTheme.text.primary,
-                      }}
-                    />
-                    {errors.phone && (
-                      <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-row items-center gap-2">
-                  <label
-                    className="text-sm sm:text-base font-medium whitespace-nowrap"
-                    style={{ color: currentTheme.text.primary }}
-                  >
-                    Date of Birth
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <div className="flex-1">
-                    <DatePicker
-                      selected={formData.dob ? new Date(formData.dob) : null}
-                      onChange={handleDobChange}
-                      maxDate={new Date()}
-                      showYearDropdown
-                      showMonthDropdown
-                      dropdownMode="select"
-                      placeholderText="Select Date of Birth"
-                      className="w-full p-2 rounded-md border"
-                      style={{
-                        borderColor: errors.dob ? "rgb(239, 68, 68)" : currentTheme.border,
-                        backgroundColor: currentTheme.inputBackground,
-                        color: currentTheme.text.primary,
-                      }}
-                      required
-                      dateFormat="dd-MM-yyyy"
-                      onKeyDown={(e) => e.preventDefault()}
-                    />
-                    {errors.dob && (
-                      <p className="text-red-500 text-xs mt-1">{errors.dob}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-row items-center gap-2">
-                  <label
-                    className="text-sm sm:text-base font-medium whitespace-nowrap"
-                    style={{ color: currentTheme.text.primary }}
-                  >
-                    Appointment Type
-                  </label>
-                  <div className="flex-1">
-                    <CustomSelect
-                      name="appointmentType"
-                      value={formData.appointmentType}
-                      onChange={handleInputChange}
-                      options={[
-                        { value: "Consultation", label: "Consultation" },
-                        { value: "Follow-up", label: "Follow-up" },
-                        { value: "Second Opinion", label: "Second Opinion" },
-                      ]}
-                      className="w-full p-2 rounded-md border"
-                      style={{
-                        borderColor: currentTheme.border,
-                        backgroundColor: currentTheme.inputBackground,
-                        color: currentTheme.text.primary,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-1 gap-6 mt-6">
-                <div className="flex flex-row items-center gap-2">
-                  <label
-                    className="text-sm sm:text-base font-medium whitespace-nowrap"
-                    style={{ color: currentTheme.text.primary }}
-                  >
-                    Purpose of Visit
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <div className="flex-1">
-                    <CustomInput
-                      name="reasonForVisit"
-                      value={formData.reasonForVisit}
-                      onChange={handleInputChange}
-                      required
-                      maxLength={100}
-                      className="w-full p-2 rounded-md border"
-                      style={{
-                        borderColor: errors.reasonForVisit ? "rgb(239, 68, 68)" : currentTheme.border,
-                        backgroundColor: currentTheme.inputBackground,
-                        color: currentTheme.text.primary,
-                      }}
-                    />
-                    {errors.reasonForVisit && (
-                      <p className="text-red-500 text-xs mt-1">{errors.reasonForVisit}</p>
-                    )}
-                    <p className="text-sm text-gray-500 mt-1">
-                      Characters: {formData.reasonForVisit.trim().length}/100
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="p-6 rounded-lg shadow-md border w-full"
-              style={{ 
-                backgroundColor: currentTheme.surface, 
-                borderColor: currentTheme.border 
-              }}
-            >
-              <h3
-                className="text-lg sm:text-xl font-semibold mb-4"
-                style={{ color: currentTheme.text.primary }}
-              >
-                Medical History
-              </h3>
-              <div className="grid sm:grid-cols-1 gap-6">
-                <div className="flex flex-row items-center gap-2">
-                  <label
-                    className="text-sm sm:text-base font-medium whitespace-nowrap"
-                    style={{ color: currentTheme.text.primary }}
-                  >
-                    Medical History Summary
-                  </label>
-                  <div className="flex-1">
-                    <textarea
-                      name="medicalHistoryMessage"
-                      value={formData.medicalHistoryMessage}
-                      onChange={handleInputChange}
-                      className="w-full p-2 rounded-md border"
-                      style={{
-                        borderColor: errors.medicalHistoryMessage ? "rgb(239, 68, 68)" : currentTheme.border,
-                        backgroundColor: currentTheme.inputBackground,
-                        color: currentTheme.text.primary,
-                      }}
-                      rows="3"
-                      maxLength="200"
-                    />
-                    {errors.medicalHistoryMessage && (
-                      <p className="text-red-500 text-xs mt-1">{errors.medicalHistoryMessage}</p>
-                    )}
-                    <p className="text-sm text-gray-500 mt-1">
-                      Characters: {formData.medicalHistoryMessage.length}/200
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-row items-center gap-2">
-                  <label
-                    className="text-sm sm:text-base font-medium whitespace-nowrap"
-                    style={{ color: currentTheme.text.primary }}
-                  >
-                    Medical History (Optional)
-                  </label>
-                  <div className="flex-1">
-                    <input
-                      type="file"
-                      name="medicalHistory"
-                      onChange={handleFileChange}
-                      accept=".pdf,.doc,.docx"
-                      className="w-full p-2 rounded-md border"
-                      style={{
-                        borderColor: errors.medicalHistory ? "rgb(239, 68, 68)" : currentTheme.border,
-                        backgroundColor: currentTheme.inputBackground,
-                        color: currentTheme.text.primary,
-                      }}
-                    />
-                    {errors.medicalHistory && (
-                      <p className="text-red-500 text-xs mt-1">{errors.medicalHistory}</p>
-                    )}
-                    {formData.medicalHistory && (
-                      <p className="text-sm text-gray-500 mt-1">
-                        Selected file: {formData.medicalHistory.name}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-center">
-              <CustomButton
-                type="submit"
-                variant="primary"
-                className="w-max py-2 px-4"
-                disabled={isLoading}
-                onClick={handleSubmit}
-              >
-                {isLoading ? "Processing..." : "Book Appointment"}
-              </CustomButton>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+        </section>
+      </main>
+    </>
   );
 }
 

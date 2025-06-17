@@ -1,11 +1,13 @@
 import React from 'react';
 import { ThemeProvider } from './context/ThemeContext';
-import { BrowserRouter, Route, Routes, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Route, Router , Routes, Navigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import About from './pages/About';
 import Services from './pages/Services';
+import UserLogin from './pages/auth/UserLogin';
+import UserRegister from './pages/auth/UserRegister';
 import Testimonials from './pages/Testimonials';
 import BookAppointment from './pages/BookAppointment';
 // import AdminDashboard from './pages/admin/AdminDashboard';
@@ -30,6 +32,7 @@ import Appointments from './pages/admin/Appointment';
 // import ArticlesContent from './pages/admin/ArticlesContent';
 // Add this import at the top with other imports
 import ForgotPassword from './pages/ForgotPassword';
+import MyAppointments from './pages/MyAppointments';
 
 // Create a wrapper component to conditionally render social icons
 function SocialIconsWrapper() {
@@ -57,6 +60,9 @@ function App() {
             <Route path='bookappointment' element={<BookAppointment />}/>
             <Route path='publications' element={<Publications />}/>
             <Route path='articles' element={<Articles />}/>
+            <Route path="login" element={<UserLogin />} />
+            <Route path="userregister" element={<UserRegister />} />
+            <Route path="/my-appointments" element={<MyAppointments />} />
             {/* Add this route */}
            
           </Route>
@@ -91,4 +97,5 @@ function App() {
 
 export default App;
 
-// Add this route in your Routes component
+// In your Routes component
+

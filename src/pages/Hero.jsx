@@ -12,6 +12,7 @@ import {
   FaStar,
 } from "react-icons/fa";
 import bgImage from "../assets/bgimg11.jpg"; // Add this import
+import bg from "../../public/brain-scan-image.jpg"
 
 function Hero() {
   const { currentTheme } = useTheme();
@@ -55,7 +56,8 @@ function Hero() {
       <div
         className="absolute inset-0 z-0"
         style={{
-          backgroundImage: `url(${bgImage})`,
+          backgroundImage: `url(${bg})`,
+          backgroundColor: "black",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
