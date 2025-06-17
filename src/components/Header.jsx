@@ -9,7 +9,6 @@ function Header() {
   const { theme, currentTheme, toggleTheme } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [scrollToSection, setScrollToSection] = useState(null);
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -128,21 +127,23 @@ function Header() {
   }, [isHomePage]);
 
   useEffect(() => {
-    if (isHomePage && scrollToSection) {
-      const timer = setTimeout(() => {
-        const section = document.getElementById(scrollToSection);
+    if (isHomePage && location.state?.scrollTo) {
+      const sectionId = location.state.scrollTo;
+      const scrollToSection = () => {
+        const section = document.getElementById(sectionId);
         if (section) {
           const sectionTop = section.getBoundingClientRect().top + window.scrollY;
           window.scrollTo({
-            top: sectionTop + 10,
+            top: sectionTop - 75,
             behavior: 'smooth'
           });
+        } else {
+          setTimeout(scrollToSection, 100);
         }
-        setScrollToSection(null);
-      }, 100);
-      return () => clearTimeout(timer);
+      };
+      scrollToSection();
     }
-  }, [location.pathname, scrollToSection, isHomePage]);
+  }, [location.pathname, location.state, isHomePage]);
 
   useEffect(() => {
     console.log('Theme updated:', { theme, currentTheme });
@@ -161,8 +162,7 @@ function Header() {
       const headerHeight = header ? header.offsetHeight : 0;
 
       if (!isHomePage) {
-        navigate('/');
-        setScrollToSection(sectionId);
+        navigate('/', { state: { scrollTo: sectionId } });
         return;
       }
 
@@ -312,6 +312,10 @@ function Header() {
         }
         header .group:hover > button {
           color: ${getTextColor()} !important;
+        }
+        /* Ensure dropdown items have proper contrast */
+        header .group .absolute a {
+          color: ${theme === 'light' ? '#000000' : '#e5e7eb'} !important;
         }
       `}</style>
       
