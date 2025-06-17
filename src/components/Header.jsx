@@ -205,7 +205,7 @@ function Header() {
   const handleBookAppointmentClick = () => {
     if (!user) {
       localStorage.setItem('redirectAfterLogin', '/bookappointment');
-      navigate('/login', { state: { redirectTo: '/bookappointment' } });
+      navigate('/login', { state: { redirectTo: '/book-appointment' } });
     } else {
       navigate('/bookappointment');
     }
