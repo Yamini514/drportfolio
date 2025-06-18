@@ -35,7 +35,6 @@ function ServicesContent() {
     type: 'success',
   });
 
-  // Icon mapping function
   const getIconComponent = (iconName) => {
     switch (iconName) {
       case 'FaBrain': return <FaBrain size={16} />;
@@ -50,7 +49,6 @@ function ServicesContent() {
     }
   };
 
-  // Fetch services from Firebase and sort alphabetically
   useEffect(() => {
     const fetchServices = async () => {
       try {
@@ -60,11 +58,9 @@ function ServicesContent() {
           id: doc.id,
           ...doc.data(),
         }));
-        // Sort services by title (case-insensitive)
         const sortedServices = servicesList.sort((a, b) =>
           a.title.toLowerCase().localeCompare(b.title.toLowerCase())
         );
-        // Generate serviceId based on sorted index
         const servicesWithIds = sortedServices.map((service, index) => ({
           ...service,
           serviceId: `SRV${String(index + 1).padStart(3, '0')}`,
@@ -79,7 +75,6 @@ function ServicesContent() {
     fetchServices();
   }, []);
 
-  // Filter services based on search term and status
   const filteredServices = services.filter((service) => {
     const matchesSearch =
       (service.serviceId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -89,7 +84,6 @@ function ServicesContent() {
     return matchesSearch && matchesStatus;
   });
 
-  // Notification component
   const NotificationPopup = ({ message, type, onClose }) => (
     <div
       className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center transition-opacity duration-300 ${
@@ -116,7 +110,6 @@ function ServicesContent() {
     </div>
   );
 
-  // Show notification with auto-dismiss
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
     setTimeout(() => {
@@ -124,7 +117,6 @@ function ServicesContent() {
     }, 5000);
   };
 
-  // Handle form input changes
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     if (name === 'title' && value.length > 100) return;
@@ -135,22 +127,18 @@ function ServicesContent() {
     }));
   };
 
-  // Handle search input change
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
 
-  // Handle status filter change
   const handleStatusFilterChange = (e) => {
     setStatusFilter(e.target.value);
   };
 
-  // Handle view service
   const handleViewClick = (service) => {
     setViewingService(service);
   };
 
-  // Handle edit service
   const handleEditClick = (service) => {
     setEditingService(service.id);
     setFormData({
@@ -162,7 +150,6 @@ function ServicesContent() {
     setShowForm(true);
   };
 
-  // Handle delete service confirmation
   const handleDeleteClick = (serviceId) => {
     setDeleteConfirmation({
       isOpen: true,
@@ -170,14 +157,12 @@ function ServicesContent() {
     });
   };
 
-  // Delete service from Firebase
   const handleDelete = async (serviceId) => {
     try {
       const serviceRef = doc(db, 'services', serviceId);
       await deleteDoc(serviceRef);
       setServices((prev) => {
         const updatedServices = prev.filter((service) => service.id !== serviceId);
-        // Reassign serviceIds after deletion
         return updatedServices
           .sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()))
           .map((service, index) => ({
@@ -193,7 +178,6 @@ function ServicesContent() {
     }
   };
 
-  // Handle form submission (add or update service)
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -202,7 +186,6 @@ function ServicesContent() {
         return;
       }
 
-      // Check for duplicate title
       const isDuplicate = services.some(
         (service) =>
           service.title.toLowerCase() === formData.title.toLowerCase() &&
@@ -216,7 +199,6 @@ function ServicesContent() {
       const currentDate = new Date().toISOString();
 
       if (editingService) {
-        // Update existing service
         const serviceRef = doc(db, 'services', editingService);
         await updateDoc(serviceRef, {
           ...formData,
@@ -228,7 +210,6 @@ function ServicesContent() {
               ? { ...service, ...formData, updatedAt: currentDate }
               : service
           );
-          // Sort and reassign serviceIds
           return updatedServices
             .sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()))
             .map((service, index) => ({
@@ -238,7 +219,6 @@ function ServicesContent() {
         });
         showNotification('Service updated successfully');
       } else {
-        // Add new service
         const servicesCollection = collection(db, 'services');
         const docRef = await addDoc(servicesCollection, {
           ...formData,
@@ -253,7 +233,6 @@ function ServicesContent() {
         };
         setServices((prev) => {
           const updatedServices = [...prev, newService];
-          // Sort and assign serviceIds
           return updatedServices
             .sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()))
             .map((service, index) => ({
@@ -264,7 +243,6 @@ function ServicesContent() {
         showNotification('Service added successfully');
       }
 
-      // Reset form
       setEditingService(null);
       setFormData({
         title: '',
@@ -361,7 +339,7 @@ function ServicesContent() {
                 <CustomButton
                   variant="secondary"
                   onClick={() => setViewingService(null)}
-                  className="border border-gray-500 hover:bg-gray-600 text-sm px-4 py-2"
+                  className="border border-gray-500 hover:bg-gray-600 text-sm px-2 py-1"
                 >
                   Cancel
                 </CustomButton>
@@ -371,7 +349,7 @@ function ServicesContent() {
                     handleEditClick(viewingService);
                     setViewingService(null);
                   }}
-                  className="bg-purple-600 hover:bg-purple-700 text-sm px-4 py-2"
+                  className="bg-purple-600 hover:bg-purple-700 text-sm px-2 py-1"
                 >
                   Edit
                 </CustomButton>
@@ -388,60 +366,58 @@ function ServicesContent() {
               </h2>
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1" style={{ color: currentTheme.text.primary }}>
-                        Service Name
-                      </label>
-                      <CustomInput
-                        name="title"
-                        placeholder="Enter service name"
-                        value={formData.title}
-                        onChange={handleFormChange}
-                        required
-                        maxLength={100}
-                        className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
-                      />
-                      <p className="text-xs mt-1" style={{ color: currentTheme.text.secondary }}>
-                        {formData.title.length}/100 characters
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1" style={{ color: currentTheme.text.primary }}>
-                        Icon
-                      </label>
-                      <CustomSelect
-                        name="icon"
-                        value={formData.icon}
-                        onChange={handleFormChange}
-                        options={[
-                          { value: 'FaBrain', label: 'Brain' },
-                          { value: 'FaXRay', label: 'X-Ray' },
-                          { value: 'FaNotesMedical', label: 'Medical Notes' },
-                          { value: 'FaMicroscope', label: 'Microscope' },
-                          { value: 'FaStethoscope', label: 'Stethoscope' },
-                          { value: 'FaHospital', label: 'Hospital' },
-                          { value: 'FaHeartbeat', label: 'Heartbeat' },
-                          { value: 'FaLaptopMedical', label: 'Laparoscopy' },
-                        ]}
-                        className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1" style={{ color: currentTheme.text.primary }}>
-                        Status
-                      </label>
-                      <CustomSelect
-                        name="status"
-                        value={formData.status}
-                        onChange={handleFormChange}
-                        options={[
-                          { value: 'Active', label: 'Active' },
-                          { value: 'Inactive', label: 'Inactive' },
-                        ]}
-                        className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: currentTheme.text.primary }}>
+                      Service Name
+                    </label>
+                    <CustomInput
+                      name="title"
+                      placeholder="Enter service name"
+                      value={formData.title}
+                      onChange={handleFormChange}
+                      required
+                      maxLength={100}
+                      className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
+                    />
+                    <p className="text-xs mt-1" style={{ color: currentTheme.text.secondary }}>
+                      {formData.title.length}/100 characters
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: currentTheme.text.primary }}>
+                      Icon
+                    </label>
+                    <CustomSelect
+                      name="icon"
+                      value={formData.icon}
+                      onChange={handleFormChange}
+                      options={[
+                        { value: 'FaBrain', label: 'Brain' },
+                        { value: 'FaXRay', label: 'X-Ray' },
+                        { value: 'FaNotesMedical', label: 'Medical Notes' },
+                        { value: 'FaMicroscope', label: 'Microscope' },
+                        { value: 'FaStethoscope', label: 'Stethoscope' },
+                        { value: 'FaHospital', label: 'Hospital' },
+                        { value: 'FaHeartbeat', label: 'Heartbeat' },
+                        { value: 'FaLaptopMedical', label: 'Laparoscopy' },
+                      ]}
+                      className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1" style={{ color: currentTheme.text.primary }}>
+                      Status
+                    </label>
+                    <CustomSelect
+                      name="status"
+                      value={formData.status}
+                      onChange={handleFormChange}
+                      options={[
+                        { value: 'Active', label: 'Active' },
+                        { value: 'Inactive', label: 'Inactive' },
+                      ]}
+                      className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: currentTheme.text.primary }}>
@@ -462,7 +438,7 @@ function ServicesContent() {
                     </p>
                   </div>
                 </div>
-                <div className="flex justify-center space-x-4">
+                <div className="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-4">
                   <CustomButton
                     variant="secondary"
                     onClick={() => {
@@ -475,14 +451,14 @@ function ServicesContent() {
                         status: 'Active',
                       });
                     }}
-                    className="border border-gray-500 hover:bg-gray-600"
+                    className="border border-gray-500 hover:bg-gray-600 w-full sm:w-auto"
                   >
                     Cancel
                   </CustomButton>
                   <CustomButton
                     type="submit"
                     variant="primary"
-                    className="bg-purple-600 hover:bg-purple-700"
+                    className="bg-purple-600 hover:bg-purple-700 w-full sm:w-auto"
                   >
                     {editingService ? 'Save Changes' : 'Add Service'}
                   </CustomButton>
@@ -493,8 +469,8 @@ function ServicesContent() {
             <div className="grid grid-cols-1 gap-4">
               {services.length > 0 ? (
                 <>
-                  <div className="flex flex-col sm:flex-row gap-4 items-center">
-                    <div className="flex-1">
+                  <div className="flex flex-col lg:flex-row gap-4 items-center">
+                    <div className="w-full lg:w-1/3">
                       <CustomSearch
                         placeholder="Search Services with Id and Service Name..."
                         value={searchTerm}
@@ -502,67 +478,58 @@ function ServicesContent() {
                         className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
                       />
                     </div>
-                    <div className="w-40">
-                      <CustomSelect
-                        options={[
-                          { value: 'All Status', label: 'All Status' },
-                          { value: 'Active', label: 'Active' },
-                          { value: 'Inactive', label: 'Inactive' },
-                        ]}
-                        value={statusFilter}
-                        onChange={handleStatusFilterChange}
-                        className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
-                      />
+                    <div className="flex flex-row gap-2 w-full lg:w-auto">
+                      <div className="w-full lg:w-40">
+                        <CustomSelect
+                          options={[
+                            { value: 'All Status', label: 'All Status' },
+                            { value: 'Active', label: 'Active' },
+                            { value: 'Inactive', label: 'Inactive' },
+                          ]}
+                          value={statusFilter}
+                          onChange={handleStatusFilterChange}
+                          className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
+                        />
+                      </div>
+                      <CustomButton
+                        variant="primary"
+                        icon={PlusCircle}
+                        onClick={() => {
+                          setEditingService(null);
+                          setFormData({
+                            title: '',
+                            description: '',
+                            icon: 'FaBrain',
+                            status: 'Active',
+                          });
+                          setShowForm(true);
+                        }}
+                        className="bg-purple-600 hover:bg-purple-700 w-full lg:w-auto"
+                      >
+                        Add New Service
+                      </CustomButton>
                     </div>
-                    <CustomButton
-                      variant="primary"
-                      icon={PlusCircle}
-                      onClick={() => {
-                        setEditingService(null);
-                        setFormData({
-                          title: '',
-                          description: '',
-                          icon: 'FaBrain',
-                          status: 'Active',
-                        });
-                        setShowForm(true);
-                      }}
-                      className="bg-purple-600 hover:bg-purple-700"
-                    >
-                      Add New Service
-                    </CustomButton>
                   </div>
-                  <CustomTable headers={['ID', 'Icon', 'Service Name', 'Description', 'Status', 'Actions']}>
+                  <CustomTable headers={['ID', 'ICON', 'SERVICE NAME', 'DESCRIPTION', 'STATUS', 'ACTIONS']}>
                     {filteredServices.map((service) => (
                       <tr
                         key={service.id}
                         className="hover:bg-gray-50"
                         style={{ backgroundColor: currentTheme.surface }}
                       >
-                        <td
-                          className="w-[10%] px-2 sm:px-4 py-3 whitespace-nowrap text-xs sm:text-sm"
-                          style={{ color: currentTheme.text.secondary }}
-                        >
-                          {service.serviceId}
+                        <td className="px-4 py-2 whitespace-nowrap text-sm" style={{ color: currentTheme.text.secondary }}>
+                          <input type="checkbox" className="mr-2" /> {service.serviceId}
                         </td>
-                        <td className="w-[10%] px-2 sm:px-4 py-3 whitespace-nowrap text-xs sm:text-sm text-center">
-                          <div className="flex justify-center" style={{ color: currentTheme.primary }}>
-                            {getIconComponent(service.icon)}
-                          </div>
+                        <td className="px-4 py-2 whitespace-nowrap text-sm text-center" style={{ color: currentTheme.primary }}>
+                          {getIconComponent(service.icon)}
                         </td>
-                        <td
-                          className="w-[20%] px-2 sm:px-4 py-3 whitespace-nowrap text-xs sm:text-sm font-medium"
-                          style={{ color: currentTheme.text.primary }}
-                        >
+                        <td className="px-4 py-2 whitespace-nowrap text-sm font-medium" style={{ color: currentTheme.text.primary }}>
                           {service.title}
                         </td>
-                        <td
-                          className="w-[30%] px-2 sm:px-4 py-3 text-xs sm:text-sm"
-                          style={{ color: currentTheme.text.secondary }}
-                        >
-                          <div className="max-w-xs truncate">{service.description}</div>
+                        <td className="px-4 py-2 text-sm" style={{ color: currentTheme.text.secondary }}>
+                          <div className="max-w-md truncate">{service.description}</div>
                         </td>
-                        <td className="w-[15%] px-2 sm:px-4 py-3 whitespace-nowrap text-xs sm:text-sm text-center">
+                        <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
                           <span
                             className="px-2 py-1 rounded-full text-xs"
                             style={{
@@ -576,15 +543,15 @@ function ServicesContent() {
                             {service.status}
                           </span>
                         </td>
-                        <td className="w-[15%] px-2 sm:px-4 py-3 whitespace-nowrap text-xs sm:text-sm text-center">
+                        <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
                           <div className="flex justify-center space-x-2">
                             <button
                               onClick={() => handleViewClick(service)}
-                              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+                              className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
                               title="View"
                               aria-label="View service"
                             >
-                              <Eye size={20} />
+                              <Eye size={16} />
                             </button>
                             <button
                               onClick={() => handleEditClick(service)}
@@ -592,7 +559,7 @@ function ServicesContent() {
                               title="Edit"
                               aria-label="Edit service"
                             >
-                              <Edit size={20} />
+                              <Edit size={16} />
                             </button>
                             <button
                               onClick={() => handleDeleteClick(service.id)}
@@ -600,7 +567,7 @@ function ServicesContent() {
                               title="Delete"
                               aria-label="Delete service"
                             >
-                              <Trash2 size={20} />
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </td>
@@ -624,7 +591,7 @@ function ServicesContent() {
                     variant="secondary"
                     icon={PlusCircle}
                     onClick={() => setShowForm(true)}
-                    className="bg-purple-600 hover:bg-purple-700"
+                    className="bg-purple-600 hover:bg-purple-700 w-full sm:w-auto"
                   >
                     Create Your First Service
                   </CustomButton>
