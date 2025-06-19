@@ -4,7 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import { User, LogOut, Calendar } from 'lucide-react';
-import CustomButton from './CustomButton'; // Adjust the import path as needed
+import CustomButton from './CustomButton';
 
 function Header() {
   const { theme, currentTheme, toggleTheme } = useTheme();
@@ -36,7 +36,6 @@ function Header() {
     const color = isHomePage && !isScrolled && !isMenuOpen
       ? currentTheme.textContrast || '#ffffff'
       : currentTheme.text || (theme === 'light' ? '#000000' : '#e5e7eb');
-    console.log('getTextColor:', color, { isHomePage, isScrolled, isMenuOpen, theme, currentTheme });
     return color;
   }, [isHomePage, isScrolled, isMenuOpen, theme, currentTheme]);
 
@@ -44,10 +43,8 @@ function Header() {
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setIsUserMenuOpen(false);
-        console.log('Clicked outside, closing user menu');
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -55,53 +52,35 @@ function Header() {
   useEffect(() => {
     let currentUid = null;
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
-      console.log('Auth state changed, user:', currentUser?.uid);
-      
       if (currentUser && currentUid && currentUser.uid !== currentUid) {
-        console.log('UID mismatch, ignoring auth state change. Expected:', currentUid, 'Received:', currentUser.uid);
         return;
       }
-
       setUser(currentUser);
       if (currentUser) {
         currentUid = currentUser.uid;
         const userRoleFromStorage = localStorage.getItem('userRole');
         if (userRoleFromStorage) {
-          console.log('Using role from localStorage:', userRoleFromStorage);
           setUserRole(userRoleFromStorage);
         } else {
           const cachedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
           if (cachedRole) {
-            console.log('Using cached role for uid:', currentUser.uid, 'role:', cachedRole);
             setUserRole(cachedRole);
             return;
           }
-
           try {
             const userDocRef = doc(db, 'users', currentUser.uid);
             const userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
-              const role = userData.role || 'user';
-              console.log('Fetched role for uid:', currentUser.uid, 'role:', role);
-              setUserRole(role);
-              localStorage.setItem(`userRole_${currentUser.uid}`, role);
-              localStorage.setItem('userRole', role);
-            } else {
-              console.log('No user document for uid:', currentUser.uid);
-              setUserRole('user');
-              localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
-              localStorage.setItem('userRole', 'user');
-            }
+            const role = userDoc.exists() ? userDoc.data().role || 'user' : 'user';
+            setUserRole(role);
+            localStorage.setItem(`userRole_${currentUser.uid}`, role);
+            localStorage.setItem('userRole', role);
           } catch (error) {
-            console.error('Error fetching user role for uid:', currentUser.uid, error);
             setUserRole('user');
             localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
             localStorage.setItem('userRole', 'user');
           }
         }
       } else {
-        console.log('No user logged in');
         setUserRole(null);
         localStorage.removeItem('userRole');
         localStorage.removeItem(`userRole_${currentUid}`);
@@ -112,19 +91,9 @@ function Header() {
   }, []);
 
   useEffect(() => {
-    const handleScroll = () => {
-      const scrolled = window.scrollY > 0;
-      console.log('Scroll detected, window.scrollY:', window.scrollY, 'isScrolled:', scrolled);
-      setIsScrolled(scrolled);
-    };
-
+    const handleScroll = () => setIsScrolled(window.scrollY > 0);
     setIsScrolled(window.scrollY > 0);
-    console.log('Initial scroll check, isHomePage:', isHomePage, 'isScrolled:', window.scrollY > 0);
-
-    if (!isHomePage) {
-      setIsScrolled(true);
-    }
-
+    if (!isHomePage) setIsScrolled(true);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isHomePage]);
@@ -136,10 +105,7 @@ function Header() {
         const section = document.getElementById(sectionId);
         if (section) {
           const sectionTop = section.getBoundingClientRect().top + window.scrollY;
-          window.scrollTo({
-            top: sectionTop - 75,
-            behavior: 'smooth'
-          });
+          window.scrollTo({ top: sectionTop - 75, behavior: 'smooth' });
         } else {
           setTimeout(scrollToSection, 100);
         }
@@ -148,59 +114,40 @@ function Header() {
     }
   }, [location.pathname, location.state, isHomePage]);
 
-  useEffect(() => {
-    console.log('Theme updated:', { theme, currentTheme });
-    console.log('User state:', { userRole });
-  }, [theme, currentTheme, userRole]);
-
   const isTransparentHeader = isHomePage && !isScrolled && !isMenuOpen;
 
   const handleNavClick = (href, sectionId, e) => {
-    if (sectionId) {
-      e.preventDefault();
-    }
+    if (sectionId) e.preventDefault();
     setIsMenuOpen(false);
-
     if (sectionId) {
-      const header = document.querySelector('header');
-      const headerHeight = header ? header.offsetHeight : 0;
-
+      const headerHeight = document.querySelector('header')?.offsetHeight || 0;
       if (!isHomePage) {
         navigate('/', { state: { scrollTo: sectionId } });
         return;
       }
-
       const section = document.getElementById(sectionId);
       if (section) {
         const sectionTop = section.getBoundingClientRect().top + window.scrollY;
-        window.scrollTo({
-          top: sectionTop - 75,
-          behavior: 'smooth'
-        });
+        window.scrollTo({ top: sectionTop - 75, behavior: 'smooth' });
         return;
       }
     }
-
     window.scrollTo(0, 0);
     navigate(`/${href}`);
   };
 
   const handleNameClick = () => {
     setIsMenuOpen(false);
-    if (!isHomePage) {
-      navigate('/');
-    }
+    if (!isHomePage) navigate('/');
     window.scrollTo(0, 0);
   };
 
   const handleLogout = async () => {
     try {
-      console.log('Attempting logout...');
       await auth.signOut();
       setUser(null);
       setUserRole(null);
       setIsUserMenuOpen(false);
-      console.log('Logout successful');
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -226,17 +173,15 @@ function Header() {
             onClick={(e) => {
               e.stopPropagation();
               setIsUserMenuOpen(!isUserMenuOpen);
-              console.log('Toggling user menu, new state:', !isUserMenuOpen);
             }}
           >
             <User className="w-5 h-5" />
             <span className="ml-1">{user.email ? user.email[0].toUpperCase() : null}</span>
           </div>
-          
           {isUserMenuOpen && (
             <div
-              className="absolute right-0 mt-2 w-48 rounded-md shadow-lg z-[100] opacity-0 animate-fadeIn"
-              style={{ 
+              className="absolute right-0 mt-2 w-48 rounded-md shadow-lg z-[100] opacity-100 animate-fadeIn"
+              style={{
                 background: `linear-gradient(135deg, ${theme === 'dark' ? '#2d2d2d' : '#ffffff'} 0%, ${theme === 'dark' ? '#4a4a4a' : '#f0f0f0'} 100%)`,
                 border: `1px solid ${currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')}`,
                 color: theme === 'dark' ? '#ffffff' : '#000000'
@@ -246,7 +191,7 @@ function Header() {
                 {userRole !== 'admin' && (
                   <Link
                     to="/my-appointments"
-                    className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 user-menu-item transition-all duration-200 hover:shadow-[0_0_5px_rgba(255,255,255,0.5)]"
+                    className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 hover:shadow-[0_0_5px_rgba(255,255,255,0.5)]"
                     style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -259,7 +204,7 @@ function Header() {
                 )}
                 <Link
                   to="#"
-                  className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 user-menu-item transition-all duration-200 hover:shadow-[0_0_5px_rgba(255,255,255,0.5)]"
+                  className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 hover:shadow-[0_0_5px_rgba(255,255,255,0.5)]"
                   style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
                   onClick={(e) => {
                     e.preventDefault();
@@ -278,8 +223,8 @@ function Header() {
       ) : (
         <Link
           to="/login"
-          className="font-medium transition-colors duration-300 hover:underline"
-          style={{ color: getTextColor() }}
+          className="font-medium transition-colors duration-300 hover:underline login-link"
+          style={{ color: isTransparentHeader && theme === 'light' ? '#000000' : getTextColor() }}
         >
           Login
         </Link>
@@ -295,7 +240,6 @@ function Header() {
           border: none !important;
           box-shadow: none !important;
           backdrop-filter: none !important;
-          -webkit-backdrop-filter: none !important;
           z-index: 50 !important;
           pointer-events: auto !important;
         }
@@ -303,7 +247,6 @@ function Header() {
           background-color: ${currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff')} !important;
           border-bottom: 1px solid ${currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')};
           backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
           z-index: 50;
         }
         header a, header svg, header p {
@@ -313,13 +256,22 @@ function Header() {
           color: ${getTextColor()} !important;
         }
         header .group .absolute a {
-          color: ${theme === 'light' ? '#000000' : '#ffffff'} !important;
+          color: ${theme === 'light' ? '#000000' : '#e5e7eb'} !important;
         }
-        .user-menu-item {
-          color: ${theme === 'light' ? '#000000' : '#ffffff'} !important;
+        .dropdown-menu {
+          z-index: 100 !important;
+          opacity: 0;
+          visibility: hidden;
+          transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+          transform: translateY(-10px);
+        }
+        .group:hover .dropdown-menu {
+          opacity: 1 !important;
+          visibility: visible !important;
+          transform: translateY(0);
         }
         .research-button {
-          color: #ffffff !important;
+          color: ${isTransparentHeader && theme === 'light' ? '#000000' : getTextColor()} !important;
         }
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }
@@ -329,8 +281,7 @@ function Header() {
           animation: fadeIn 0.3s ease-out forwards;
         }
       `}</style>
-      
-      <header 
+      <header
         key={theme}
         className={`px-4 md:px-8 py-4 fixed w-full top-0 ${isTransparentHeader ? 'home-header-transparent' : 'header-colored'}`}
         style={{
@@ -339,30 +290,28 @@ function Header() {
         }}
       >
         <div className="flex items-center justify-between">
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="text-xl md:text-2xl font-bold"
             onClick={handleNameClick}
           >
             Dr. Laxminadh Sivaraju
           </Link>
-
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
               link.dropdownItems ? (
                 <div key={link.name} className="relative group">
-                  <button 
-                    className="font-medium transition-colors duration-300 flex items-center gap-1 research-button"
-                    onMouseEnter={() => console.log('Research dropdown opened, theme:', theme)}
+                  <button
+                    className={`font-medium transition-colors duration-300 flex items-center gap-1 ${link.name === 'Research' ? 'research-button' : ''}`}
                   >
                     {link.name}
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
-                  <div 
-                    className="absolute left-0 mt-2 w-48 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50"
-                    style={{ 
+                  <div
+                    className="absolute left-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu"
+                    style={{
                       backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
                       borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')
                     }}
@@ -392,7 +341,7 @@ function Header() {
                   {link.name}
                   <span
                     className="absolute inset-x-0 bottom-0 h-0.5 transform transition-transform duration-300 scale-x-0 group-hover:scale-x-100"
-                    style={{ 
+                    style={{
                       backgroundColor: currentTheme.primary || '#7c3aed',
                       transform: location.pathname === `/${link.href}` ? 'scaleX(1)' : 'scaleX(0)'
                     }}
@@ -408,33 +357,23 @@ function Header() {
             </CustomButton>
             {userMenu}
             <span
-              onClick={() => {
-                toggleTheme();
-                console.log('Theme toggled, new theme:', theme);
-              }}
+              onClick={toggleTheme}
               className="cursor-pointer p-2"
               style={{ color: getTextColor() }}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </span>
           </nav>
-
           <div className="flex items-center gap-4 md:hidden">
             <span
-              onClick={() => {
-                toggleTheme();
-                console.log('Theme toggled, new theme:', theme);
-              }}
+              onClick={toggleTheme}
               className="cursor-pointer p-2"
               style={{ color: getTextColor() }}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </span>
             <button
-              onClick={() => {
-                setIsMenuOpen(!isMenuOpen);
-                console.log('Mobile menu toggled, isMenuOpen:', !isMenuOpen);
-              }}
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="p-2"
               aria-label="Toggle menu"
             >
@@ -456,13 +395,12 @@ function Header() {
             </button>
           </div>
         </div>
-
         {isMenuOpen && (
           <nav className="md:hidden pt-4 pb-2" style={{ backgroundColor: currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff') }}>
             {navLinks.map((link) => (
               link.dropdownItems ? (
                 <div key={link.name}>
-                  <div className="px-4 py-2 font-medium research-button" style={{ color: '#ffffff' }}>
+                  <div className="px-4 py-2 font-medium" style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}>
                     {link.name}
                   </div>
                   {link.dropdownItems.map((item) => (
@@ -498,7 +436,7 @@ function Header() {
                 {userRole !== 'admin' && (
                   <Link
                     to="/my-appointments"
-                    className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 user-menu-item"
+                    className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
                     style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                     onClick={() => setIsMenuOpen(false)}
                   >
@@ -508,13 +446,11 @@ function Header() {
                 )}
                 <Link
                   to="#"
-                  className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 user-menu-item"
+                  className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
                   style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                   onClick={(e) => {
                     e.preventDefault();
-                    e.stopPropagation();
                     handleLogout();
-                    setIsMenuOpen(false);
                   }}
                 >
                   <LogOut className="w-4 h-4" />
