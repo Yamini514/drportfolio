@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { Facebook, Linkedin, Instagram, Twitter, Youtube } from 'lucide-react';
+import { Facebook, Linkedin, Instagram, Twitter, Youtube, X } from 'lucide-react';
 
 function SocialIconsResponsive() {
   const { currentTheme } = useTheme();
@@ -10,26 +10,31 @@ function SocialIconsResponsive() {
       icon: <Facebook size={20} />, 
       url: 'https://www.facebook.com/profile.php?id=100071881127167&mibextid=ZbWKwL',
       bgColor: '#1877F2', // Facebook blue
+      name: 'Facebook'
     },
     { 
-      icon: <Twitter size={20} />, 
+      icon: <X size={20} />, 
       url: 'https://x.com/DrLaxminadh?t=npuU8mu-OOyht0HuTdjA2w&s=09',
       bgColor: '#000000', // X black
+      name: 'X'
     },
     { 
       icon: <Linkedin size={20} />, 
       url: 'https://www.linkedin.com/in/dr-laxminadh-sivaraju-neurosurgeon-90022674',
       bgColor: '#0A66C2', // LinkedIn blue
+      name: 'LinkedIn'
     },
     { 
       icon: <Instagram size={20} />, 
       url: 'https://www.instagram.com/dr_laxminadhneuro?igsh=dmkzZ3VieHZnOWQz',
       bgColor: '#E4405F', // Instagram pink (simplified from gradient)
+      name: 'Instagram'
     },
     { 
       icon: <Youtube size={20} />, 
       url: 'https://www.youtube.com/channel/UClNNzst7yNACujYrsBtdZAQ',
       bgColor: '#FF0000', // YouTube red
+      name: 'YouTube'
     }
   ];
 
@@ -42,7 +47,7 @@ function SocialIconsResponsive() {
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center transition-transform duration-300 hover:scale-110"
-          aria-label={`Visit Dr. Laxminadh Sivaraju's profile on ${social.url.split('.')[1]}`}
+          aria-label={`Visit Dr. Laxminadh Sivaraju's profile on ${social.name}`}
         >
           <div 
             className="p-2 rounded-full"

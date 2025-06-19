@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import SocialIconsResponsive from '../pages/SocialIcons';
 
@@ -10,20 +10,50 @@ function Footer() {
   const handleServicesClick = (e) => {
     e.preventDefault();
     if (window.location.pathname === '/') {
-      // If already on homepage, scroll to services section
       const section = document.getElementById('services');
       if (section) {
         const sectionTop = section.getBoundingClientRect().top + window.scrollY;
         window.scrollTo({
-          top: sectionTop - 75, // Adjust for header height
+          top: sectionTop - 75,
           behavior: 'smooth',
         });
       }
     } else {
-      // Navigate to homepage with state to scroll to services
       navigate('/', { state: { scrollTo: 'services' } });
     }
   };
+  const handleContactClick = (e) => {
+    e.preventDefault();
+    if (window.location.pathname === '/') {
+      const section = document.getElementById('contact-form');
+      if (section) {
+        const sectionTop = section.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo({
+          top: sectionTop ,
+          behavior: 'smooth',
+        });
+      }
+    } else {
+      navigate('/contactme', { state: { scrollTo: 'contact-form' } });
+    }
+  };
+
+
+  // const handleContactClick = (e) => {
+  //   e.preventDefault();
+  //   if (window.location.pathname === '/') {
+  //     const section = document.getElementById('contact-form'); // Adjust ID as needed
+  //     if (section) {
+  //       const sectionTop = section.getBoundingClientRect().top + window.scrollY;
+  //       window.scrollTo({
+  //         top: sectionTop - 75,
+  //         behavior: 'smooth',
+  //       });
+  //     }
+  //   } else {
+  //     navigate('/contactme', { state: { scrollTo: 'contact-form' } });
+  //   }
+  // };
 
   return (
     <footer
@@ -35,9 +65,7 @@ function Footer() {
       className="pt-12 pb-6"
     >
       <div className="container mx-auto px-4">
-        {/* Main Footer Content */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-          {/* About Section */}
           <div className="w-full md:max-w-[300px]">
             <h3 className="text-xl font-bold mb-3 md:mb-4">Dr. Laxminadh Sivaraju</h3>
             <p className="text-sm text-justify md:text-left" style={{ color: currentTheme.text.secondary }}>
@@ -46,39 +74,62 @@ function Footer() {
             </p>
           </div>
 
-          {/* Quick Links */}
           <div>
             <h3 className="text-lg font-semibold mb-3">Quick Links</h3>
             <ul className="space-y-2">
               {['Reviews', 'ContactMe', 'Services', 'Terms and Conditions'].map((link) => (
                 <li key={link}>
-                  <a
-                    href={
-                      link === 'Services'
-                        ? '#'
-                        : `/${link.toLowerCase() === 'reviews' ? 'review' : link.toLowerCase().replace(' ', '-')}`
-                    }
-                    onClick={link === 'Services' ? handleServicesClick : undefined}
-                    className="text-sm hover:underline transition-colors"
-                    style={{
-                      color: currentTheme.text.secondary,
-                      '--hover-color': currentTheme.primary || '#9333ea',
-                    }}
-                  >
-                    {link === 'ContactMe' ? 'Contact' : link}
-                  </a>
+                  {link === 'Services' ? (
+                    <a
+                      href="#"
+                      onClick={handleServicesClick}
+                      className="text-sm hover:underline transition-colors"
+                      style={{
+                        color: currentTheme.text.secondary,
+                        '--hover-color': currentTheme.primary || '#9333ea',
+                      }}
+                    >
+                      Services
+                    </a>
+                  ) : link === 'ContactMe' ? (
+                    <a
+                      href="#"
+                      onClick={handleContactClick}
+                      className="text-sm hover:underline transition-colors"
+                      style={{
+                        color: currentTheme.text.secondary,
+                        '--hover-color': currentTheme.primary || '#9333ea',
+                      }}
+                    >
+                      Contact
+                    </a>
+                  ) : (
+                    <Link
+                      to={`/${link.toLowerCase() === 'reviews' ? 'review' : link.toLowerCase().replace(' ', '-')}`}
+                      onClick={(e) => {
+                        if (link.toLowerCase() === 'reviews') {
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                      }}
+                      className="text-sm hover:underline transition-colors"
+                      style={{
+                        color: currentTheme.text.secondary,
+                        '--hover-color': currentTheme.primary || '#9333ea',
+                      }}
+                    >
+                      {link === 'ContactMe' ? 'Contact' : link}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Social Media */}
           <div className="flex flex-col">
             <h3 className="text-lg font-semibold mb-3">Social Media</h3>
             <SocialIconsResponsive size={18} />
           </div>
 
-          {/* Clinic Hours */}
           <div>
             <h3 className="text-lg font-semibold mb-3">Clinic Hours</h3>
             <ul className="space-y-2">
@@ -103,7 +154,6 @@ function Footer() {
           </div>
         </div>
 
-        {/* Bottom Footer */}
         <div className="border-t" style={{ borderColor: currentTheme.border }}>
           <div className="pt-6 flex flex-col md:flex-row justify-between items-center">
             <p className="text-sm mb-4 md:mb-0" style={{ color: currentTheme.text.secondary }}>
