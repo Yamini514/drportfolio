@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../firebase/config";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { auth, db } from "../../firebase/config";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import CustomInput from "../../components/CustomInput";
 import CustomButton from "../../components/CustomButton";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -16,24 +17,32 @@ const AdminLogin = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  // Dummy admin credentials
-  const exampleData = {
-    email: "admin@gmail.com",
-    password: "admin@123",
-  };
+  // Session expiration time (30 minutes in milliseconds)
+  const SESSION_TIMEOUT = 60 * 1000;
 
   useEffect(() => {
-    // Check for saved credentials when component mounts
+    // Check for saved email and session validity when component mounts
     const savedEmail = localStorage.getItem("adminEmail");
-    const savedPassword = localStorage.getItem("adminPassword"); // Add this line
-    const savedRememberMe = localStorage.getItem("rememberMe") === "true";
+    const savedRememberMe = localStorage.getItem("adminRememberMe") === "true";
+    const sessionStart = localStorage.getItem("adminSessionStart");
 
-    if (savedEmail && savedPassword && savedRememberMe) {
-      setCredentials({
-        email: savedEmail,
-        password: savedPassword // Restore password too
-      });
+    if (savedEmail && savedRememberMe) {
+      setCredentials((prev) => ({ ...prev, email: savedEmail }));
       setRememberMe(true);
+    }
+
+    // Check if session exists and is still valid
+    if (sessionStart) {
+      const currentTime = new Date().getTime();
+      const sessionTime = parseInt(sessionStart, 10);
+      if (currentTime - sessionTime > SESSION_TIMEOUT) {
+        // Session expired, clear localStorage and sign out
+        signOut(auth).catch(console.error);
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("isAdminLoggedIn");
+        localStorage.removeItem("adminSessionStart");
+        setError("Session has expired. Please log in again.");
+      }
     }
   }, []);
 
@@ -43,35 +52,82 @@ const AdminLogin = () => {
     setError("");
 
     try {
+      // Validate input
+      if (!credentials.email || !credentials.password) {
+        throw new Error("Email and password are required.");
+      }
+
+      // Sign in with Firebase Authentication
       const userCredential = await signInWithEmailAndPassword(
         auth,
         credentials.email,
         credentials.password
       );
+      const user = userCredential.user;
 
-      if (userCredential.user) {
-        // Handle remember me functionality
-        if (rememberMe) {
-          localStorage.setItem("adminEmail", credentials.email);
-          localStorage.setItem("adminPassword", credentials.password); // Add this line
-          localStorage.setItem("rememberMe", "true");
-        } else {
-          localStorage.removeItem("adminEmail");
-          localStorage.removeItem("adminPassword"); // Add this line
-          localStorage.removeItem("rememberMe");
+      // Check if user is an admin in Firestore
+      const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+      if (adminDoc.exists()) {
+        const adminData = adminDoc.data();
+        if (adminData.role !== 'admin') {
+          throw new Error("Invalid admin role.");
+        }
+      } else {
+        // Check if user is registered as a regular user
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          throw new Error("Please use the user login page.");
         }
 
-        localStorage.setItem(
-          "adminToken",
-          await userCredential.user.getIdToken()
-        );
-        localStorage.setItem("isAdminLoggedIn", "true");
-
-        navigate("/admin/dashboard");
+        // If not in users or admins, create admin entry (for first-time admin login)
+        await setDoc(doc(db, 'admins', user.uid), {
+          email: credentials.email,
+          role: 'admin',
+          createdAt: new Date().toISOString(),
+        });
       }
+
+      // Handle remember me functionality (store only email)
+      if (rememberMe) {
+        localStorage.setItem("adminEmail", credentials.email);
+        localStorage.setItem("adminRememberMe", "true");
+      } else {
+        localStorage.removeItem("adminEmail");
+        localStorage.removeItem("adminRememberMe");
+      }
+
+      // Store session data
+      localStorage.setItem("adminToken", await user.getIdToken());
+      localStorage.setItem("isAdminLoggedIn", "true");
+      localStorage.setItem("adminSessionStart", new Date().getTime().toString());
+
+      navigate("/admin/dashboard");
     } catch (error) {
-      console.error("Login error:", error);
-      setError("Invalid credentials. Please try again.");
+      console.error("Login error:", error.message);
+      await signOut(auth).catch(console.error);
+      localStorage.removeItem("adminToken");
+      localStorage.removeItem("isAdminLoggedIn");
+      localStorage.removeItem("adminSessionStart");
+
+      switch (error.message) {
+        case "Email and password are required.":
+          setError("Please enter both email and password.");
+          break;
+        case "Please use the user login page.":
+          setError("Please use the user login page.");
+          break;
+        case "Invalid admin role.":
+          setError("Invalid admin role. Please contact support.");
+          break;
+        default:
+          if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+            setError("Invalid email or password. Please try again.");
+          } else if (error.code === 'auth/too-many-requests') {
+            setError("Too many login attempts. Please try again later.");
+          } else {
+            setError("Login failed. Please try again.");
+          }
+      }
     } finally {
       setLoading(false);
     }
@@ -98,12 +154,6 @@ const AdminLogin = () => {
           >
             Admin Login
           </h2>
-          {/* Display dummy credentials for development */}
-          {/* <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
-            <p className="text-blue-800 font-medium">Demo Credentials:</p>
-            <p className="text-blue-600">Email: {exampleData.email}</p>
-            <p className="text-blue-600">Password: {exampleData.password}</p>
-          </div> */}
         </div>
         <form onSubmit={handleLogin} className="mt-8 space-y-6">
           <div className="space-y-4">
@@ -134,7 +184,7 @@ const AdminLogin = () => {
                 onClick={() => setShowPassword(!showPassword)}
                 style={{ color: currentTheme.text.primary }}
               >
-                {showPassword ? <FaEyeSlash size={20} /> : <FaEye size={20} />}
+                {showPassword ? <FaEye size={20} /> : <FaEyeSlash size={20} />}
               </button>
             </div>
             <div className="flex items-center justify-between">
@@ -177,7 +227,12 @@ const AdminLogin = () => {
           >
             {loading ? "Signing in..." : "Sign in"}
           </CustomButton>
+
         </form>
+        <div>
+          <h6>Email:Admin@arinishtha.com</h6>
+          <h6>Password:admin@123</h6>
+        </div>
       </div>
     </div>
   );
