@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import { User, LogOut, Calendar } from 'lucide-react';
+import CustomButton from './CustomButton'; // Adjust the import path as needed
 
 function Header() {
   const { theme, currentTheme, toggleTheme } = useTheme();
@@ -43,26 +44,18 @@ function Header() {
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setIsUserMenuOpen(false);
+        console.log('Clicked outside, closing user menu');
       }
     };
 
-    const handleScroll = () => {
-      setIsUserMenuOpen(false);
-    };
-
     document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', handleScroll);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
     let currentUid = null;
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
-      console.log('Auth state changed, user:', currentUser?.uid, 'email:', currentUser?.email);
+      console.log('Auth state changed, user:', currentUser?.uid);
       
       if (currentUser && currentUid && currentUser.uid !== currentUid) {
         console.log('UID mismatch, ignoring auth state change. Expected:', currentUid, 'Received:', currentUser.uid);
@@ -72,35 +65,45 @@ function Header() {
       setUser(currentUser);
       if (currentUser) {
         currentUid = currentUser.uid;
-        const cachedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
-        if (cachedRole) {
-          console.log('Using cached role for uid:', currentUser.uid, 'role:', cachedRole);
-          setUserRole(cachedRole);
-          return;
-        }
+        const userRoleFromStorage = localStorage.getItem('userRole');
+        if (userRoleFromStorage) {
+          console.log('Using role from localStorage:', userRoleFromStorage);
+          setUserRole(userRoleFromStorage);
+        } else {
+          const cachedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
+          if (cachedRole) {
+            console.log('Using cached role for uid:', currentUser.uid, 'role:', cachedRole);
+            setUserRole(cachedRole);
+            return;
+          }
 
-        try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            const role = userData.role || 'user';
-            console.log('Fetched role for uid:', currentUser.uid, 'role:', role);
-            setUserRole(role);
-            localStorage.setItem(`userRole_${currentUser.uid}`, role);
-          } else {
-            console.log('No user document for uid:', currentUser.uid);
+          try {
+            const userDocRef = doc(db, 'users', currentUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              const role = userData.role || 'user';
+              console.log('Fetched role for uid:', currentUser.uid, 'role:', role);
+              setUserRole(role);
+              localStorage.setItem(`userRole_${currentUser.uid}`, role);
+              localStorage.setItem('userRole', role);
+            } else {
+              console.log('No user document for uid:', currentUser.uid);
+              setUserRole('user');
+              localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
+              localStorage.setItem('userRole', 'user');
+            }
+          } catch (error) {
+            console.error('Error fetching user role for uid:', currentUser.uid, error);
             setUserRole('user');
             localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
+            localStorage.setItem('userRole', 'user');
           }
-        } catch (error) {
-          console.error('Error fetching user role for uid:', currentUser.uid, error);
-          setUserRole('user');
-          localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
         }
       } else {
         console.log('No user logged in');
         setUserRole(null);
+        localStorage.removeItem('userRole');
         localStorage.removeItem(`userRole_${currentUid}`);
         currentUid = null;
       }
@@ -147,7 +150,8 @@ function Header() {
 
   useEffect(() => {
     console.log('Theme updated:', { theme, currentTheme });
-  }, [theme, currentTheme]);
+    console.log('User state:', { userRole });
+  }, [theme, currentTheme, userRole]);
 
   const isTransparentHeader = isHomePage && !isScrolled && !isMenuOpen;
 
@@ -217,38 +221,33 @@ function Header() {
     <>
       {user ? (
         <div className="relative" ref={userMenuRef}>
-          <button
+          <div
+            className="w-8 h-8 flex items-center justify-center cursor-pointer transition-transform duration-300 hover:scale-110"
             onClick={(e) => {
               e.stopPropagation();
               setIsUserMenuOpen(!isUserMenuOpen);
-              console.log('User menu toggled, isUserMenuOpen:', !isUserMenuOpen);
-            }}
-            className="flex items-center justify-center gap-2 p-2 rounded-full hover:opacity-80 w-8 h-8"
-            style={{ 
-              backgroundColor: currentTheme.primary || '#7c3aed',
-              color: currentTheme.textContrast || '#ffffff'
+              console.log('Toggling user menu, new state:', !isUserMenuOpen);
             }}
           >
-            {user.email ? user.email[0].toUpperCase() : <User className="w-5 h-5" />}
-          </button>
+            <User className="w-5 h-5" />
+            <span className="ml-1">{user.email ? user.email[0].toUpperCase() : null}</span>
+          </div>
           
           {isUserMenuOpen && (
             <div
-              className="absolute right-0 mt-2 w-48 rounded-md shadow-lg z-50"
+              className="absolute right-0 mt-2 w-48 rounded-md shadow-lg z-[100] opacity-0 animate-fadeIn"
               style={{ 
-                backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
-                border: `1px solid ${currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')}`
+                background: `linear-gradient(135deg, ${theme === 'dark' ? '#2d2d2d' : '#ffffff'} 0%, ${theme === 'dark' ? '#4a4a4a' : '#f0f0f0'} 100%)`,
+                border: `1px solid ${currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')}`,
+                color: theme === 'dark' ? '#ffffff' : '#000000'
               }}
             >
               <div className="py-1">
-                <div className="px-4 py-2 border-b" style={{ borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb') }}>
-                  <p className="text-sm truncate">{user.email}</p>
-                  <p className="text-xs truncate">{userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : 'User'}</p>
-                </div>
                 {userRole !== 'admin' && (
                   <Link
                     to="/my-appointments"
-                    className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500"
+                    className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 user-menu-item transition-all duration-200 hover:shadow-[0_0_5px_rgba(255,255,255,0.5)]"
+                    style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsUserMenuOpen(false);
@@ -258,32 +257,32 @@ function Header() {
                     My Appointments
                   </Link>
                 )}
-                <button
+                <Link
+                  to="#"
+                  className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 user-menu-item transition-all duration-200 hover:shadow-[0_0_5px_rgba(255,255,255,0.5)]"
+                  style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleLogout();
                     setIsUserMenuOpen(false);
                   }}
-                  className="flex items-center gap-2 w-full px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 text-left"
                 >
                   <LogOut className="w-4 h-4" />
                   Logout
-                </button>
+                </Link>
               </div>
             </div>
           )}
         </div>
       ) : (
-        <button
-          onClick={() => navigate('/login')}
-          className="px-4 py-2 rounded-md font-medium hover:opacity-90 transition-opacity"
-          style={{ 
-            backgroundColor: currentTheme.primary || '#7c3aed',
-            color: currentTheme.textContrast || '#ffffff'
-          }}
+        <Link
+          to="/login"
+          className="font-medium transition-colors duration-300 hover:underline"
+          style={{ color: getTextColor() }}
         >
           Login
-        </button>
+        </Link>
       )}
     </>
   );
@@ -307,15 +306,27 @@ function Header() {
           -webkit-backdrop-filter: blur(10px);
           z-index: 50;
         }
-        header a, header button, header svg, header p {
+        header a, header svg, header p {
           color: ${getTextColor()} !important;
         }
         header .group:hover > button {
           color: ${getTextColor()} !important;
         }
-        /* Ensure dropdown items have proper contrast */
         header .group .absolute a {
-          color: ${theme === 'light' ? '#000000' : '#e5e7eb'} !important;
+          color: ${theme === 'light' ? '#000000' : '#ffffff'} !important;
+        }
+        .user-menu-item {
+          color: ${theme === 'light' ? '#000000' : '#ffffff'} !important;
+        }
+        .research-button {
+          color: #ffffff !important;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
         }
       `}</style>
       
@@ -341,7 +352,7 @@ function Header() {
               link.dropdownItems ? (
                 <div key={link.name} className="relative group">
                   <button 
-                    className="font-medium transition-colors duration-300 pb-1 flex items-center gap-1"
+                    className="font-medium transition-colors duration-300 flex items-center gap-1 research-button"
                     onMouseEnter={() => console.log('Research dropdown opened, theme:', theme)}
                   >
                     {link.name}
@@ -362,7 +373,7 @@ function Header() {
                         to={`/${item.href}`}
                         className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500"
                         onClick={() => {
-                          window.scrollTo(0,0);
+                          window.scrollTo(0, 0);
                           navigate(`/${item.href}`);
                         }}
                       >
@@ -389,44 +400,36 @@ function Header() {
                 </Link>
               )
             ))}
-            <button
+            <CustomButton
+              variant="primary"
               onClick={handleBookAppointmentClick}
-              style={{ backgroundColor: currentTheme.primary || '#7c3aed', color: currentTheme.textContrast || '#ffffff' }}
-              className="px-4 py-2 rounded-md hover:opacity-90 transition-opacity"
             >
               Book Appointment
-            </button>
+            </CustomButton>
             {userMenu}
-            <button 
-              style={{
-                backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
-                border: `1px solid ${currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')}`
-              }}
-              className="p-2 rounded-full transition-all duration-300 hover:opacity-80"
+            <span
               onClick={() => {
                 toggleTheme();
                 console.log('Theme toggled, new theme:', theme);
               }}
-              aria-label="Toggle theme"
+              className="cursor-pointer p-2"
+              style={{ color: getTextColor() }}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
+            </span>
           </nav>
 
           <div className="flex items-center gap-4 md:hidden">
-            <button 
+            <span
               onClick={() => {
                 toggleTheme();
                 console.log('Theme toggled, new theme:', theme);
               }}
-              className="p-2 rounded-full"
-              style={{
-                backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
-                border: `1px solid ${currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')}`
-              }}
+              className="cursor-pointer p-2"
+              style={{ color: getTextColor() }}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
+            </span>
             <button
               onClick={() => {
                 setIsMenuOpen(!isMenuOpen);
@@ -459,12 +462,15 @@ function Header() {
             {navLinks.map((link) => (
               link.dropdownItems ? (
                 <div key={link.name}>
-                  <div className="px-4 py-2 font-medium">{link.name}</div>
+                  <div className="px-4 py-2 font-medium research-button" style={{ color: '#ffffff' }}>
+                    {link.name}
+                  </div>
                   {link.dropdownItems.map((item) => (
                     <Link
                       key={item.name}
                       to={`/${item.href}`}
                       className="block py-2 px-8 hover:bg-opacity-10 hover:bg-gray-500"
+                      style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                       onClick={() => {
                         setIsMenuOpen(false);
                         window.scrollTo(0, 0);
@@ -480,6 +486,7 @@ function Header() {
                   key={link.name}
                   to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
                   className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
+                  style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                   onClick={(e) => handleNavClick(link.href, link.sectionId, e)}
                 >
                   {link.name}
@@ -488,40 +495,49 @@ function Header() {
             ))}
             {user ? (
               <div className="px-4 py-2">
-                <p className="text-sm truncate">{user.email}</p>
-                <p className="text-xs truncate">{userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : 'User'}</p>
                 {userRole !== 'admin' && (
                   <Link
                     to="/my-appointments"
-                    className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
+                    className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 user-menu-item"
+                    style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                     onClick={() => setIsMenuOpen(false)}
                   >
+                    <Calendar className="w-4 h-4" />
                     My Appointments
                   </Link>
                 )}
-                <button
-                  onClick={handleLogout}
-                  className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
+                <Link
+                  to="#"
+                  className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 user-menu-item"
+                  style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleLogout();
+                    setIsMenuOpen(false);
+                  }}
                 >
+                  <LogOut className="w-4 h-4" />
                   Logout
-                </button>
+                </Link>
               </div>
             ) : (
               <Link
                 to="/login"
                 className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
+                style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                 onClick={() => setIsMenuOpen(false)}
               >
                 Login
               </Link>
             )}
-            <button
+            <CustomButton
+              variant="primary"
               onClick={handleBookAppointmentClick}
-              style={{ backgroundColor: currentTheme.primary || '#7c3aed', color: currentTheme.textContrast || '#ffffff' }}
-              className="block w-full mt-2 px-4 py-2 rounded-md hover:opacity-90 transition-opacity text-center"
+              className="block w-full mt-2"
             >
               Book Appointment
-            </button>
+            </CustomButton>
           </nav>
         )}
       </header>
