@@ -168,7 +168,7 @@ function Header() {
     <div className="relative group">
       <button
         className="flex items-center gap-2 font-medium transition-colors duration-300"
-        style={{ color: getTextColor() }}
+        style={{ color: "${isTransparentHeader && theme === 'Dark' ? '#000000' : getTextColor()} !important" }}
       >
         <User className="w-5 h-5" />
         <span>{user.email ? user.email[0].toUpperCase() : 'U'}</span>
