@@ -164,73 +164,57 @@ function Header() {
     setIsMenuOpen(false);
   };
 
-  const userMenu = (
-    <>
-      {user ? (
-        <div className="relative" ref={userMenuRef}>
-          <div
-            className="w-8 h-8 flex items-center justify-center cursor-pointer transition-transform duration-300 hover:scale-110"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsUserMenuOpen(!isUserMenuOpen);
-            }}
-          >
-            <User className="w-5 h-5" />
-            <span className="ml-1">{user.email ? user.email[0].toUpperCase() : null}</span>
-          </div>
-          {isUserMenuOpen && (
-            <div
-              className="absolute right-0 mt-2 w-48 rounded-md shadow-lg z-[100] opacity-100 animate-fadeIn"
-              style={{
-                background: `linear-gradient(135deg, ${theme === 'dark' ? '#2d2d2d' : '#ffffff'} 0%, ${theme === 'dark' ? '#4a4a4a' : '#f0f0f0'} 100%)`,
-                border: `1px solid ${currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')}`,
-                color: theme === 'dark' ? '#ffffff' : '#000000'
-              }}
+  const userMenu = user ? (
+    <div className="relative group">
+      <button
+        className="flex items-center gap-2 font-medium transition-colors duration-300"
+        style={{ color: getTextColor() }}
+      >
+        <User className="w-5 h-5" />
+        <span>{user.email ? user.email[0].toUpperCase() : 'U'}</span>
+        {/* <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+        </svg> */}
+      </button>
+      <div
+        className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu"
+        style={{
+          backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
+          borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb'),
+          color: theme === 'dark' ? '#ffffff' : '#000000'
+        }}
+      >
+        <div className="py-1">
+          {userRole !== 'admin' && (
+            <Link
+              to="/my-appointments"
+              className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200"
+              onClick={() => setIsUserMenuOpen(false)}
             >
-              <div className="py-1">
-                {userRole !== 'admin' && (
-                  <Link
-                    to="/my-appointments"
-                    className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 hover:shadow-[0_0_5px_rgba(255,255,255,0.5)]"
-                    style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsUserMenuOpen(false);
-                    }}
-                  >
-                    <Calendar className="w-4 h-4" />
-                    My Appointments
-                  </Link>
-                )}
-                <Link
-                  to="#"
-                  className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 hover:shadow-[0_0_5px_rgba(255,255,255,0.5)]"
-                  style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleLogout();
-                    setIsUserMenuOpen(false);
-                  }}
-                >
-                  <LogOut className="w-4 h-4" />
-                  Logout
-                </Link>
-              </div>
-            </div>
+              <Calendar className="w-4 h-4" />
+              My Appointments
+            </Link>
           )}
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-left"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
         </div>
-      ) : (
-        <Link
-          to="/login"
-          className="font-medium transition-colors duration-300 hover:underline login-link"
-          style={{ color: isTransparentHeader && theme === 'light' ? '#000000' : getTextColor() }}
-        >
-          Login
-        </Link>
-      )}
-    </>
+      </div>
+    </div>
+  ) : (
+    <Link
+      to="/login"
+      className="font-medium transition-colors duration-300 hover:underline login-link"
+      style={{ color: isTransparentHeader && theme === 'light' ? '#000000' : getTextColor() }}
+    >
+      Login
+    </Link>
   );
+  
 
   return (
     <>
@@ -271,7 +255,7 @@ function Header() {
           transform: translateY(0);
         }
         .research-button {
-          color: ${isTransparentHeader && theme === 'light' ? '#000000' : getTextColor()} !important;
+          color: ${isTransparentHeader && theme === 'Dark' ? '#000000' : getTextColor()} !important;
         }
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }
@@ -437,7 +421,7 @@ function Header() {
                   <Link
                     to="/my-appointments"
                     className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
-                    style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
+                    style={{ color: theme === 'Dark' ? '#000000' : '#e5e7eb' }}
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <Calendar className="w-4 h-4" />
@@ -447,7 +431,7 @@ function Header() {
                 <Link
                   to="#"
                   className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
-                  style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
+                  style={{ color: theme === 'light' ? '#e5e7eb' : '#000000' }}
                   onClick={(e) => {
                     e.preventDefault();
                     handleLogout();
