@@ -22,38 +22,11 @@ function Footer() {
       navigate('/', { state: { scrollTo: 'services' } });
     }
   };
+
   const handleContactClick = (e) => {
     e.preventDefault();
-    if (window.location.pathname === '/') {
-      const section = document.getElementById('contact-form');
-      if (section) {
-        const sectionTop = section.getBoundingClientRect().top + window.scrollY;
-        window.scrollTo({
-          top: sectionTop ,
-          behavior: 'smooth',
-        });
-      }
-    } else {
-      navigate('/contactme', { state: { scrollTo: 'contact-form' } });
-    }
+    navigate('/contactme', { state: { scrollToTop: true } });
   };
-
-
-  // const handleContactClick = (e) => {
-  //   e.preventDefault();
-  //   if (window.location.pathname === '/') {
-  //     const section = document.getElementById('contact-form'); // Adjust ID as needed
-  //     if (section) {
-  //       const sectionTop = section.getBoundingClientRect().top + window.scrollY;
-  //       window.scrollTo({
-  //         top: sectionTop - 75,
-  //         behavior: 'smooth',
-  //       });
-  //     }
-  //   } else {
-  //     navigate('/contactme', { state: { scrollTo: 'contact-form' } });
-  //   }
-  // };
 
   return (
     <footer

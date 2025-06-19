@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { FaPhone, FaWhatsapp, FaEnvelope } from 'react-icons/fa';
 import emailjs from '@emailjs/browser';
+import { useLocation } from 'react-router-dom';
 
 function ContactMe() {
   const { currentTheme } = useTheme();
@@ -21,6 +22,13 @@ function ContactMe() {
     phone: '',
     message: ''
   });
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.scrollToTop) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [location]);
 
   const validatePhone = (phone) => {
     const phoneRegex = /^[6-9]\d{9}$/;
@@ -96,7 +104,6 @@ function ContactMe() {
       [name]: processedValue
     }));
 
-    // Validate on change to provide immediate feedback
     setErrors(prev => ({
       ...prev,
       [name]: validateField(name, processedValue)
@@ -114,7 +121,6 @@ function ContactMe() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate all fields before submission
     const newErrors = {
       fullName: validateField('fullName', formData.fullName),
       email: validateField('email', formData.email),
@@ -124,7 +130,6 @@ function ContactMe() {
 
     setErrors(newErrors);
 
-    // Check if there are any errors
     if (Object.values(newErrors).some(error => error)) {
       return;
     }
@@ -231,7 +236,6 @@ function ContactMe() {
                   className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
                   required
                   placeholder="Enter your email"
-                  
                 />
                 {errors.email && (
                   <p className="text-sm text-red-500 mt-1">{errors.email}</p>
@@ -320,8 +324,6 @@ function ContactMe() {
                     className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                     style={{ color: currentTheme.primary }}
                   >
-                    {/* <FaWhatsapp className="text-lg" /> */}
-                    {/* <span>WhatsApp</span> */}
                   </a>
                   <a 
                     href="tel:+919381453352" 
@@ -339,8 +341,6 @@ function ContactMe() {
                     className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                     style={{ color: currentTheme.primary }}
                   >
-                    
-                    {/* <span>WhatsApp</span> */}
                   </a>
                 </div>
               </div>
