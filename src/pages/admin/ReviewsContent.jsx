@@ -130,7 +130,7 @@ function ReviewsContent() {
         backgroundColor: currentTheme.surface,
         color: currentTheme.text.primary,
         border: `1px solid ${currentTheme.border}`,
-        width: '50%',
+        width: '90%',
         maxWidth: '600px',
       }}
     >
@@ -205,16 +205,6 @@ function ReviewsContent() {
         <h2 className="text-2xl font-bold" style={{ color: currentTheme.text.primary }}>
           Reviews Management
         </h2>
-        {!showForm && (
-          <CustomButton
-            onClick={() => setShowForm(true)}
-            variant="primary"
-            className="px-4 py-2"
-            style={{ backgroundColor: currentTheme.primary, color: currentTheme.text.inverse }}
-          >
-            Add New Review
-          </CustomButton>
-        )}
       </div>
 
       {showForm ? (
@@ -223,23 +213,6 @@ function ReviewsContent() {
           className="space-y-4 p-6 rounded-lg shadow relative"
           style={{ backgroundColor: currentTheme.surface, border: `1px solid ${currentTheme.border}` }}
         >
-          <div className="flex justify-end mb-4">
-            <CustomButton
-              variant="secondary"
-              onClick={() => {
-                setShowForm(false);
-                setNewReview({ username: '', rating: 0, reviewText: '' });
-                setFormErrors({});
-              }}
-              className="px-4 py-2"
-              style={{
-                backgroundColor: currentTheme.background.secondary,
-                color: currentTheme.text.primary,
-              }}
-            >
-              Cancel
-            </CustomButton>
-          </div>
           <CustomInput
             label="Name"
             name="username"
@@ -272,14 +245,31 @@ function ReviewsContent() {
             rows={6}
             error={formErrors.reviewText}
           />
-          <CustomButton
-            type="submit"
-            variant="primary"
-            className="w-full"
-            style={{ backgroundColor: currentTheme.primary, color: currentTheme.text.inverse }}
-          >
-            Submit Review
-          </CustomButton>
+          <div className="flex justify-center space-x-4 mt-6">
+            <CustomButton
+              variant="secondary"
+              onClick={() => {
+                setShowForm(false);
+                setNewReview({ username: '', rating: 0, reviewText: '' });
+                setFormErrors({});
+              }}
+              className="px-4 py-2"
+              style={{
+                backgroundColor: currentTheme.background.secondary,
+                color: currentTheme.text.primary,
+              }}
+            >
+              Cancel
+            </CustomButton>
+            <CustomButton
+              type="submit"
+              variant="primary"
+              className="px-4 py-2"
+              style={{ backgroundColor: currentTheme.primary, color: currentTheme.text.inverse }}
+            >
+              Submit Review
+            </CustomButton>
+          </div>
         </form>
       ) : viewingReview ? (
         <ReviewView review={viewingReview} />
