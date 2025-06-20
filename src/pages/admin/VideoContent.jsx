@@ -167,7 +167,7 @@ function VideoContent() {
   };
 
   return (
-    <div className="p-6 sm:p-6">
+    <div className="p-4 sm:p-6">
       {/* Combined Header and Search Section */}
       {!showForm && (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
@@ -189,7 +189,7 @@ function VideoContent() {
 
       {/* Video Form Section */}
       {showForm && (
-        <div id="video-form" className="mb-6 rounded-lg p-4 sm:p-6 transition-all duration-300"
+        <div id="video-form" className="mb-6 rounded-lg p-4 sm:p-6 transition-all duration-300 max-w-md mx-auto"
           style={{ 
             backgroundColor: currentTheme.background,
             border: `1px solid ${currentTheme.border}`
@@ -201,7 +201,7 @@ function VideoContent() {
             </h3>
           </div>
           
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} className="space-y-4">
             <CustomInput
               label="Video Title"
               name="title"
@@ -219,22 +219,20 @@ function VideoContent() {
               required
             />
             
-            <div className="grid grid-cols-1 gap-4">
-              <CustomInput
-                label="Video Duration"
-                name="duration"
-                value={formData.duration}
-                onChange={handleInputChange}
-                placeholder="e.g. 5:30"
-                required
-              />
-            </div>
+            <CustomInput
+              label="Video Duration"
+              name="duration"
+              value={formData.duration}
+              onChange={handleInputChange}
+              placeholder="e.g. 5:30"
+              required
+            />
             
-            <div className="flex flex-col mt-4 sm:flex-row justify-end gap-2 sm:space-x-3">
-              <CustomButton variant="secondary" onClick={resetForm} icon={X}>
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 mt-4">
+              <CustomButton variant="secondary" onClick={resetForm} icon={X} className="w-24">
                 Cancel
               </CustomButton>
-              <CustomButton type="submit" icon={Check}>
+              <CustomButton type="submit" icon={Check} className="w-24">
                 {editingVideo ? 'Save Changes' : 'Add Video'}
               </CustomButton>
             </div>

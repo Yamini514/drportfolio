@@ -36,7 +36,6 @@ function BookAppointment() {
     endDate: maxDate,
   });
   const [selectedDayName, setSelectedDayName] = useState("");
-  const MAX_SLOTS_PER_DAY = 5;
   const [selectedSlot, setSelectedSlot] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -91,17 +90,14 @@ function BookAppointment() {
 
       if (uniqueLocations.length > 0) {
         setLocations(uniqueLocations);
-        setSelectedLocation(uniqueLocations[0].name);
       } else {
-        setLocations([{ name: "Prime", docId: null }]);
-        setSelectedLocation("Prime");
-        setBookingMessage("No locations found. Defaulting to Prime.");
+        setLocations([]);
+        setBookingMessage("No locations found. Please try again later.");
       }
     } catch (error) {
       console.error("Error fetching locations:", error.code, error.message);
-      setLocations([{ name: "Prime", docId: null }]);
-      setSelectedLocation("Prime");
-      setBookingMessage(`Error loading locations: ${error.message}. Using default location: Prime.`);
+      setLocations([]);
+      setBookingMessage(`Error loading locations: ${error.message}. Please try again.`);
     } finally {
       setIsLoading(false);
     }
@@ -520,7 +516,6 @@ function BookAppointment() {
           counts[key] = (counts[key] || 0) + 1;
         });
         const fullyBooked = Object.entries(counts)
-          .filter(([key, count]) => count >= MAX_SLOTS_PER_DAY)
           .map(([key]) => key.split("|")[0]);
         setBookedDates(fullyBooked);
         console.log("Fully booked dates:", fullyBooked);
@@ -848,7 +843,10 @@ function BookAppointment() {
                   id="location-select"
                   value={selectedLocation}
                   onChange={handleLocationChange}
-                  options={locations.map((loc) => ({ value: loc.name, label: loc.name }))}
+                  options={[
+                    { value: "", label: "Select your location", disabled: true },
+                    ...locations.map((loc) => ({ value: loc.name, label: loc.name })),
+                  ]}
                   required
                   className="w-32 sm:w-40 p-2 rounded-md border text-sm sm:text-base"
                   style={{
