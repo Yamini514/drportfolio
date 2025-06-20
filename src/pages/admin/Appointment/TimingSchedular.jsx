@@ -13,7 +13,6 @@ import {
   CheckCircle,
   Plus,
   Trash2,
-  Eye,
   Pencil,
 } from "lucide-react";
 import { getAuth } from "firebase/auth";
@@ -62,10 +61,6 @@ const TimingSchedular = () => {
       sunday: false,
     },
   });
-  const [dateRange, setDateRange] = useState({
-    startDate: "",
-    endDate: "",
-  });
   const [blockedPeriods, setBlockedPeriods] = useState([]);
   const [newBlock, setNewBlock] = useState({
     type: "day",
@@ -75,10 +70,6 @@ const TimingSchedular = () => {
   });
   const [editingIndex, setEditingIndex] = useState(null);
   const [editingLocation, setEditingLocation] = useState(null);
-  const [viewingLocation, setViewingLocation] = useState(null);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [showAddScheduleForm, setShowAddScheduleForm] = useState(false);
-  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [lastSavedSchedule, setLastSavedSchedule] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState({
     show: false,
@@ -86,6 +77,8 @@ const TimingSchedular = () => {
     locationIndex: null,
     scheduleId: null,
   });
+  const [showAddScheduleForm, setShowAddScheduleForm] = useState(false);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
 
   const getTodayString = () => {
     const today = new Date();
@@ -96,16 +89,6 @@ const TimingSchedular = () => {
     const maxDate = new Date();
     maxDate.setMonth(maxDate.getMonth() + 3);
     return maxDate.toISOString().split("T")[0];
-  };
-
-  const calculateEndDate = (startDate) => {
-    const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + 3);
-    return endDate.toISOString().split("T")[0];
-  };
-
-  const showNotification = (message, type = "success") => {
-    setNotification({ show: true, message, type });
   };
 
   const formatDate = (dateString) => {
@@ -138,15 +121,12 @@ const TimingSchedular = () => {
       const locEndDate = new Date(loc.endDate || loc.startDate);
       const locHasSelectedDays = Object.values(loc.days).some((day) => day);
 
-      // Check date range overlap first
       const dateRangeOverlap = startDate <= locEndDate && endDate >= locStartDate;
       if (!dateRangeOverlap) continue;
 
-      // Check time overlap
       const timeOverlap = newSchedule.startTime <= loc.endTime && newSchedule.endTime >= loc.startTime;
       if (!timeOverlap) continue;
 
-      // Check for specific conflicts based on days
       if (hasSelectedDays || locHasSelectedDays) {
         for (
           let d = new Date(Math.max(startDate, locStartDate));
@@ -164,7 +144,7 @@ const TimingSchedular = () => {
               location: loc.name,
               startTime: loc.startTime,
               endTime: loc.endTime,
-            }]; // Early exit after finding the first conflict
+            }];
           }
         }
       } else if (timeOverlap && dateRangeOverlap) {
@@ -174,7 +154,7 @@ const TimingSchedular = () => {
           location: loc.name,
           startTime: loc.startTime,
           endTime: loc.endTime,
-        }]; // Early exit
+        }];
       }
     }
 
@@ -188,7 +168,6 @@ const TimingSchedular = () => {
     const maxDate = new Date();
     maxDate.setMonth(maxDate.getMonth() + 3);
 
-    // Validate location name
     if (!newSchedule.name.trim()) {
       errors.name = "Location name is required";
     } else if (newSchedule.name.trim().length < 3) {
@@ -197,7 +176,6 @@ const TimingSchedular = () => {
       errors.name = "Location name can only contain letters, numbers, spaces and hyphens";
     }
 
-    // Validate start date
     if (!newSchedule.startDate) {
       errors.startDate = "Start date is required";
     } else {
@@ -208,7 +186,6 @@ const TimingSchedular = () => {
         errors.startDate = "Start date cannot be more than 3 months from today";
       }
 
-      // Check if start date is blocked
       const isStartBlocked = blockedPeriods.some((period) => {
         const blockStart = new Date(period.startDate);
         if (period.type === "day") {
@@ -222,7 +199,6 @@ const TimingSchedular = () => {
       }
     }
 
-    // Validate end date or days
     const hasSelectedDays = Object.values(newSchedule.days).some((day) => day);
     if (!newSchedule.endDate && !hasSelectedDays) {
       errors.days = "Please select either an end date or specific days";
@@ -235,7 +211,6 @@ const TimingSchedular = () => {
         errors.endDate = "End date cannot be more than 3 months from today";
       }
 
-      // Check if end date is blocked
       const isEndBlocked = blockedPeriods.some((period) => {
         const blockStart = new Date(period.startDate);
         if (period.type === "day") {
@@ -249,7 +224,6 @@ const TimingSchedular = () => {
       }
     }
 
-    // Validate times
     if (!newSchedule.startTime) {
       errors.startTime = "Start time is required";
     }
@@ -259,11 +233,10 @@ const TimingSchedular = () => {
       errors.endTime = "End time must be after start time";
     }
 
-    // Check schedule conflicts
     const conflicts = checkScheduleConflicts();
     if (conflicts.length > 0) {
       const firstConflict = conflicts[0];
-      const conflictMsg = ` There is an active schedule at  ${firstConflict.location} on ${firstConflict.day}, ${formatDate(firstConflict.date)}. Adjust the date or time to resolve.`;
+      const conflictMsg = `There is an active schedule at ${firstConflict.location} on ${firstConflict.day}, ${formatDate(firstConflict.date)}. Adjust the date or time to resolve.`;
       errors.scheduleConflict = conflictMsg;
     }
 
@@ -271,68 +244,9 @@ const TimingSchedular = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const checkForBookingConflicts = async (schedule) => {
-    try {
-      const appointmentsRef = collection(db, "appointments", "data", "schedule");
-      const appointmentsSnapshot = await getDocs(
-        query(
-          appointmentsRef,
-          where("date", ">=", schedule.startDate),
-          where("date", "<=", schedule.endDate || schedule.startDate),
-          where("location", "==", schedule.name)
-        )
-      );
-
-      const conflicts = [];
-      appointmentsSnapshot.forEach((doc) => {
-        const appointment = doc.data();
-        if (
-          appointment.time >= schedule.startTime &&
-          appointment.time <= schedule.endTime
-        ) {
-          conflicts.push({
-            date: appointment.date,
-            time: appointment.time,
-          });
-        }
-      });
-
-      return conflicts;
-    } catch (error) {
-      console.error("Error checking conflicts:", error);
-      throw error;
-    }
-  };
-
-  const checkExistingBookings = async (index) => {
-    try {
-      const location = schedule.locations[index];
-      if (!location) return false;
-
-      const appointmentsRef = collection(db, "appointments", "data", "schedule");
-      const q = query(appointmentsRef, where("location", "==", location.name));
-      const snapshot = await getDocs(q);
-
-      const hasBookings = snapshot.docs.some((doc) => {
-        console.log("Has bookings:", hasBookings);
-        const appointment = doc.data();
-        const appointmentDate = new Date(appointment.date);
-        const startDate = new Date(location.startDate);
-        const endDate = new Date(location.endDate || location.startDate);
-        return appointmentDate >= startDate && appointmentDate <= endDate;
-      });
-
-      return hasBookings;
-    } catch (error) {
-      console.error("Error checking bookings:", error);
-      return false;
-    }
-  };
-
   const handleSaveSchedule = async () => {
     try {
       if (!validateForm()) {
-        // showNotification("Please fix form errors before saving: " + Object.values(formErrors).join("; "), "error");
         return;
       }
       setIsSaving(true);
@@ -358,17 +272,21 @@ const TimingSchedular = () => {
         endDate: endDate.toISOString().split("T")[0],
       };
 
-      const updatedLocations = [...schedule.locations, scheduleData]; // Removed sorting here
+      const updatedLocations = [...schedule.locations, scheduleData];
 
+      // Update Firebase
       await setDoc(doc(db, "settings", "schedule"), {
         locations: updatedLocations,
         defaultTimes: {
           startTime: newSchedule.startTime,
           endTime: newSchedule.endTime,
         },
+        updatedAt: new Date().toISOString(),
       });
 
-      // Batch state updates
+      // Generate schedule documents in Firebase
+      await generateScheduleDocuments(scheduleData);
+
       setSchedule((prev) => ({
         ...prev,
         locations: updatedLocations,
@@ -404,6 +322,83 @@ const TimingSchedular = () => {
     }
   };
 
+  const handleLocationUpdate = async () => {
+    try {
+      if (!validateForm()) {
+        return;
+      }
+      setIsSaving(true);
+
+      const startDate = new Date(newSchedule.startDate);
+      let endDate;
+      const hasSelectedDays = Object.values(newSchedule.days).some((day) => day);
+      if (newSchedule.endDate && newSchedule.isEndDateUserDefined) {
+        endDate = new Date(newSchedule.endDate);
+      } else if (hasSelectedDays) {
+        endDate = new Date(startDate);
+        endDate.setMonth(startDate.getMonth() + 3);
+      } else {
+        endDate = startDate;
+      }
+
+      const updatedSchedule = {
+        ...newSchedule,
+        endDate: endDate.toISOString().split("T")[0],
+        id: schedule.locations[editingIndex]?.id || Date.now().toString(),
+        createdAt: schedule.locations[editingIndex]?.createdAt || new Date().toISOString(),
+        isMultipleDays: endDate.getTime() !== startDate.getTime(),
+      };
+
+      const updatedLocations = schedule.locations.map((loc, idx) =>
+        idx === editingIndex ? updatedSchedule : loc
+      );
+
+      // Update Firebase
+      await setDoc(doc(db, "settings", "schedule"), {
+        locations: updatedLocations,
+        defaultTimes: schedule.defaultTimes,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Generate schedule documents in Firebase
+      await generateScheduleDocuments(updatedSchedule);
+
+      setSchedule((prev) => ({
+        ...prev,
+        locations: updatedLocations,
+      }));
+      setLastSavedSchedule(updatedSchedule);
+      setShowConfirmationModal(true);
+      setShowAddScheduleForm(false);
+      setEditingIndex(null);
+      setNewSchedule({
+        name: "",
+        startTime: "09:00",
+        endTime: "17:00",
+        startDate: "",
+        endDate: "",
+        isActive: true,
+        isEndDateUserDefined: false,
+        days: {
+          monday: false,
+          tuesday: false,
+          wednesday: false,
+          thursday: false,
+          friday: false,
+          saturday: false,
+          sunday: false,
+        },
+      });
+
+      showNotification("Schedule updated successfully");
+    } catch (error) {
+      console.error("Error updating schedule:", error);
+      showNotification("Error updating schedule: " + error.message, "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDeleteClick = (index) => {
     setDeleteConfirmation({
       show: true,
@@ -420,35 +415,23 @@ const TimingSchedular = () => {
 
       setLoading(true);
 
-      const hasBookings = await checkExistingBookings(locationIndex);
-      if (hasBookings) {
-        showNotification("Cannot delete schedule with existing bookings", "error");
-        setDeleteConfirmation({
-          show: false,
-          periodId: null,
-          locationIndex: null,
-          scheduleId: null,
-        });
-        return;
-      }
-
       const locationToDelete = schedule.locations[locationIndex];
 
-      // 1. Delete from settings/schedule
+      // Update the settings/schedule document
       const updatedLocations = schedule.locations.filter((_, i) => i !== locationIndex);
       await setDoc(doc(db, "settings", "schedule"), {
         ...schedule,
         locations: updatedLocations,
       });
 
-      // 2. Delete from appointments/data/schedule
+      // Delete all schedule documents in appointments/data/schedule with matching location
       const scheduleRef = collection(db, "appointments", "data", "schedule");
       const q = query(scheduleRef, where("location", "==", locationToDelete.name));
       const querySnapshot = await getDocs(q);
       const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
       await Promise.all(deletePromises);
 
-      // 3. Delete from appointments/schedule if exists
+      // Delete the specific document in appointments/schedule if it exists
       try {
         await deleteDoc(doc(db, "appointments", "schedule", locationToDelete.id));
       } catch (error) {
@@ -476,85 +459,6 @@ const TimingSchedular = () => {
     }
   };
 
-  const handleDeleteLocation = async (index) => {
-    handleDeleteClick(index);
-  };
-
-  const handleLocationUpdate = async () => {
-    try {
-      if (!validateForm()) {
-        showNotification("Please fix form errors before updating: " + Object.values(formErrors).join("; "), "error");
-        return;
-      }
-
-      const startDate = new Date(newSchedule.startDate);
-      let endDate;
-      const hasSelectedDays = Object.values(newSchedule.days).some((day) => day);
-      if (newSchedule.endDate && newSchedule.isEndDateUserDefined) {
-        endDate = new Date(newSchedule.endDate);
-      } else if (hasSelectedDays) {
-        endDate = new Date(startDate);
-        endDate.setMonth(startDate.getMonth() + 3);
-      } else {
-        endDate = startDate;
-      }
-
-      const updatedSchedule = {
-        ...newSchedule,
-        endDate: endDate.toISOString().split("T")[0],
-        id: schedule.locations[editingIndex]?.id || Date.now().toString(),
-      };
-
-      const updatedLocations = schedule.locations.map((loc, idx) =>
-        idx === editingIndex ? updatedSchedule : loc
-      );
-
-      await setDoc(doc(db, "settings", "schedule"), {
-        ...schedule,
-        locations: updatedLocations,
-      });
-
-      setSchedule((prev) => ({
-        ...prev,
-        locations: updatedLocations,
-      }));
-
-      setLastSavedSchedule(updatedSchedule);
-      setShowConfirmationModal(true);
-
-      setShowAddScheduleForm(false);
-      setEditingIndex(null);
-      setNewSchedule({
-        name: "",
-        startTime: "09:00",
-        endTime: "17:00",
-        startDate: "",
-        endDate: "",
-        isActive: true,
-        isEndDateUserDefined: false,
-        days: {
-          monday: false,
-          tuesday: false,
-          wednesday: false,
-          thursday: false,
-          friday: false,
-          saturday: false,
-          sunday: false,
-        },
-      });
-
-      showNotification("Schedule updated successfully");
-    } catch (error) {
-      console.error("Error updating schedule:", error);
-      showNotification("Error updating schedule: " + error.message, "error");
-    }
-  };
-
-  const handleViewLocation = (location) => {
-    setViewingLocation(location);
-    setShowViewModal(true);
-  };
-
   const handleEditLocation = (index) => {
     const locationToEdit = schedule.locations[index];
     const hasSelectedDays = Object.values(locationToEdit.days).some((day) => day);
@@ -566,13 +470,6 @@ const TimingSchedular = () => {
     setEditingLocation({ ...adjustedLocation });
     setNewSchedule({ ...adjustedLocation });
     setShowAddScheduleForm(true);
-  };
-
-  const handleDateRangeChange = (field, value) => {
-    setDateRange((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
   };
 
   const handleNewBlockChange = (field, value) => {
@@ -653,13 +550,14 @@ const TimingSchedular = () => {
   const confirmRemoveBlockedPeriod = async () => {
     try {
       const { periodId } = deleteConfirmation;
-      setBlockedPeriods((prev) => prev.filter((period) => period.id !== periodId));
+      const updatedPeriods = blockedPeriods.filter((period) => period.id !== periodId);
 
       await setDoc(doc(db, "settings", "blockedPeriods"), {
-        periods: blockedPeriods.filter((period) => period.id !== periodId),
+        periods: updatedPeriods,
         updatedAt: new Date().toISOString(),
       });
 
+      setBlockedPeriods(updatedPeriods);
       setDeleteConfirmation({
         show: false,
         periodId: null,
@@ -698,7 +596,7 @@ const TimingSchedular = () => {
     }
   };
 
-  const generateScheduleDocuments = async () => {
+  const generateScheduleDocuments = async (location) => {
     try {
       setLoading(true);
 
@@ -711,70 +609,67 @@ const TimingSchedular = () => {
         });
       }
 
-      const scheduleRef = collection(db, "appointments/data/schedule");
+      const scheduleRef = collection(db, "appointments", "data", "schedule");
 
       const currentDate = new Date();
       currentDate.setHours(0, 0, 0, 0);
 
-      for (const location of schedule.locations || []) {
-        if (!location.startDate) {
-          console.warn(`Skipping location "${location.name}" due to missing dates`);
-          continue;
-        }
+      if (!location.startDate) {
+        console.warn(`Skipping location "${location.name}" due to missing dates`);
+        return false;
+      }
 
-        const startDate = new Date(location.startDate);
-        const endDate = new Date(location.endDate || location.startDate);
+      const startDate = new Date(location.startDate);
+      const endDate = new Date(location.endDate || location.startDate);
 
-        if (startDate < currentDate) {
-          console.warn(`Skipping location "${location.name}" due to past start date`);
-          continue;
-        }
+      if (startDate < currentDate) {
+        console.warn(`Skipping location "${location.name}" due to past start date`);
+        return false;
+      }
 
-        if (startDate > endDate) {
-          console.warn(`Invalid date range for location "${location.name}"`);
-          continue;
-        }
+      if (startDate > endDate) {
+        console.warn(`Invalid date range for location "${location.name}"`);
+        return false;
+      }
 
-        for (
-          let currentDate = new Date(startDate);
-          currentDate <= endDate;
-          currentDate.setDate(currentDate.getDate() + 1)
-        ) {
-          const dateString = currentDate.toISOString().split("T")[0];
-          const dayName = currentDate
-            .toLocaleDateString("en-US", { weekday: "long" })
-            .toLowerCase();
+      for (
+        let currentDate = new Date(startDate);
+        currentDate <= endDate;
+        currentDate.setDate(currentDate.getDate() + 1)
+      ) {
+        const dateString = currentDate.toISOString().split("T")[0];
+        const dayName = currentDate
+          .toLocaleDateString("en-US", { weekday: "long" })
+          .toLowerCase();
 
-          if (dayName === "sunday") continue;
+        if (dayName === "sunday") continue;
 
-          const hasSelectedDays = Object.values(location.days).some((day) => day);
-          if (hasSelectedDays && !location.days[dayName]) continue;
+        const hasSelectedDays = Object.values(location.days).some((day) => day);
+        if (hasSelectedDays && !location.days[dayName]) continue;
 
-          const timeSlots = createTimeSlots(location);
+        const timeSlots = createTimeSlots(location);
 
-          const isBlocked = blockedPeriods.some((period) => {
-            const blockStart = new Date(period.startDate);
-            if (period.type === "day") {
-              return blockStart.toDateString() === currentDate.toDateString();
-            }
-            const blockEnd = new Date(period.endDate);
-            return currentDate >= blockStart && currentDate <= blockEnd;
-          });
-
-          if (!isBlocked && timeSlots.length > 0) {
-            await addDoc(scheduleRef, {
-              date: dateString,
-              dayName: dayName,
-              location: location.name,
-              timeSlots: timeSlots,
-              isOpen: true,
-              createdAt: new Date(),
-            });
+        const isBlocked = blockedPeriods.some((period) => {
+          const blockStart = new Date(period.startDate);
+          if (period.type === "day") {
+            return blockStart.toDateString() === currentDate.toDateString();
           }
+          const blockEnd = new Date(period.endDate);
+          return currentDate >= blockStart && currentDate <= blockEnd;
+        });
+
+        if (!isBlocked && timeSlots.length > 0) {
+          await addDoc(scheduleRef, {
+            date: dateString,
+            dayName: dayName,
+            location: location.name,
+            timeSlots: timeSlots,
+            isOpen: true,
+            createdAt: new Date(),
+          });
         }
       }
 
-      showNotification("Schedule documents generated successfully");
       return true;
     } catch (error) {
       console.error("Error generating schedule documents:", error);
@@ -785,87 +680,8 @@ const TimingSchedular = () => {
     }
   };
 
-  const handleSave = async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const updatedSchedule = {
-        ...schedule,
-        locations: schedule.locations.map((location) => ({
-          ...location,
-          startTime: location.startTime || "09:00",
-          endTime: location.endTime || "17:00",
-          days: { ...location.days, sunday: false },
-        })),
-      };
-
-      await setDoc(doc(db, "settings", "schedule"), {
-        locations: updatedSchedule.locations.map((location) => ({
-          name: location.name,
-          startTime: location.startTime,
-          endTime: location.endTime,
-          startDate: location.startDate,
-          endDate: location.endDate || location.startDate,
-          timings: createTimeSlots(location),
-          days: {
-            monday: location.days.monday || false,
-            tuesday: location.days.tuesday || false,
-            wednesday: location.days.wednesday || false,
-            thursday: location.days.thursday || false,
-            friday: location.days.friday || false,
-            saturday: location.days.saturday || false,
-            sunday: false,
-          },
-          isEndDateUserDefined: location.isEndDateUserDefined || false,
-        })),
-        updatedAt: new Date().toISOString(),
-      });
-
-      await setDoc(doc(db, "settings", "blockedPeriods"), {
-        periods: blockedPeriods,
-        updatedAt: new Date().toISOString(),
-      });
-
-      const success = await generateScheduleDocuments();
-
-      if (success) {
-        showNotification("Schedule and availability settings saved successfully");
-      }
-    } catch (error) {
-      console.error("Error saving data:", error);
-      setError("Failed to save changes: " + error.message);
-      showNotification("Failed to save changes", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const saveEditedLocation = async (index) => {
-    const updatedLocations = [...schedule.locations];
-    updatedLocations[index] = editingLocation;
-
-    try {
-      await setDoc(doc(db, "settings", "schedule"), {
-        ...schedule,
-        locations: updatedLocations,
-      });
-
-      setSchedule((prev) => ({ ...prev, locations: updatedLocations }));
-      setEditingIndex(null);
-      setEditingLocation(null);
-      setLastSavedSchedule(editingLocation);
-      setShowConfirmationModal(true);
-      showNotification("Location updated successfully");
-    } catch (error) {
-      console.error("Error saving edited location:", error);
-      showNotification("Failed to save changes", "error");
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingIndex(null);
-    setEditingLocation(null);
+  const showNotification = (message, type = "success") => {
+    setNotification({ show: true, message, type });
   };
 
   const isBlockActive = (period) => {
@@ -887,76 +703,6 @@ const TimingSchedular = () => {
       return "Single Day";
     }
     return "Extended Period";
-  };
-
-  const ViewModal = ({ location, onClose }) => {
-    const hasSelectedDays = Object.values(location.days).some((day) => day);
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div
-          className="bg-white rounded-lg p-6 w-full max-w-2xl"
-          style={{ backgroundColor: currentTheme.surface }}
-        >
-          <h2
-            className="text-2xl font-semibold mb-4"
-            style={{ color: currentTheme.text.primary }}
-          >
-            Location Details
-          </h2>
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="font-medium" style={{ color: currentTheme.text.primary }}>
-                Location Name
-              </label>
-              <p style={{ color: currentTheme.text.secondary }}>{location.name}</p>
-            </div>
-            <div>
-              <label className="font-medium" style={{ color: currentTheme.text.primary }}>
-                Timing
-              </label>
-              <p style={{ color: currentTheme.text.secondary }}>
-                {location.startTime} - {location.endTime}
-              </p>
-            </div>
-            <div>
-              <label className="font-medium" style={{ color: currentTheme.text.primary }}>
-                {hasSelectedDays && !location.isEndDateUserDefined ? "Starting From" : "Date Range"}
-              </label>
-              <p style={{ color: currentTheme.text.secondary }}>
-                {hasSelectedDays && !location.isEndDateUserDefined
-                  ? `${formatDate(location.startDate)} (Weekly for 3 months)`
-                  : `${formatDate(location.startDate)} - ${formatDate(location.endDate)}`}
-                {hasSelectedDays && location.isEndDateUserDefined && location.isMultipleDays && " (Recurring on selected days)"}
-              </p>
-            </div>
-            <div className="col-span-2">
-              <label className="font-medium" style={{ color: currentTheme.text.primary }}>
-                Available Days
-              </label>
-              <div className="flex gap-2 mt-1 text-black">
-                {Object.entries(location.days).map(([day, isAvailable]) => (
-                  <span
-                    key={day}
-                    className={`px-2 py-1 rounded`}
-                    style={{
-                      backgroundColor: isAvailable
-                        ? currentTheme.success.light
-                        : currentTheme.error.light,
-                      color: isAvailable ? currentTheme.success.dark : currentTheme.error.dark,
-                    }}
-                  >
-                    {day.charAt(0).toUpperCase() + day.slice(1)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <CustomButton onClick={onClose}>Close</CustomButton>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   const ConfirmationModal = ({ schedule, onClose }) => {
@@ -1062,15 +808,6 @@ const TimingSchedular = () => {
         if (blockedPeriodsDoc.exists()) {
           setBlockedPeriods(blockedPeriodsDoc.data().periods || []);
         }
-
-        const dateRangeDoc = await getDoc(doc(db, "settings", "schedule"));
-        if (dateRangeDoc.exists()) {
-          const storedRange = dateRangeDoc.data();
-          setDateRange({
-            startDate: storedRange.startDate || "",
-            endDate: storedRange.endDate || "",
-          });
-        }
       } catch (error) {
         console.error("Error loading data:", error);
         setError("Failed to load schedule data");
@@ -1165,7 +902,7 @@ const TimingSchedular = () => {
           onClick={() => setSelectedTab("blocks")}
         >
           <AlertTriangle size={16} className="mr-2" />
-          Blocked Periods
+          Unavailable dates
           {activeBlocksCount > 0 && (
             <span className="ml-2 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
               {activeBlocksCount}
@@ -1218,7 +955,7 @@ const TimingSchedular = () => {
           {!showAddScheduleForm && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
               {schedule.locations
-                .slice() // Create a shallow copy to avoid mutating the original array
+                .slice()
                 .sort((a, b) => {
                   const dateA = new Date(a.startDate);
                   const dateB = new Date(b.startDate);
@@ -1247,7 +984,7 @@ const TimingSchedular = () => {
                             <Pencil size={16} />
                           </button>
                           <button
-                            onClick={() => handleDeleteLocation(index)}
+                            onClick={() => handleDeleteClick(index)}
                             className="p-2 rounded-full hover:bg-gray-100 text-red-500"
                           >
                             <Trash2 size={16} />
@@ -1412,7 +1149,7 @@ const TimingSchedular = () => {
                   }}
                   disabled={isSaving}
                 >
-                  {isSaving ? "Saving..." : editingIndex !== null ? "Update Changes" : "Save Changes"}
+                  {isSaving ? "Saving..." : editingIndex !== null ? "Update Schedule" : "Save Schedule"}
                 </CustomButton>
               </div>
             </div>
@@ -1489,7 +1226,7 @@ const TimingSchedular = () => {
               style={{ color: currentTheme.text.primary }}
             >
               <AlertTriangle size={20} className="mr-2" />
-              Current Blocked Periods
+              My current unavailable dates
             </h3>
             {blockedPeriods.length === 0 ? (
               <div
@@ -1573,30 +1310,6 @@ const TimingSchedular = () => {
           <span>{error}</span>
         </div>
       )}
-
-      <div
-        className="flex flex-wrap items-center gap-4 pt-4 border-t"
-        style={{ borderColor: currentTheme.border }}
-      >
-        <CustomButton
-          onClick={handleSave}
-          disabled={loading}
-          icon={loading ? Clock : CheckCircle}
-        >
-          {loading ? "Saving..." : "Save Changes"}
-        </CustomButton>
-        <div
-          className="text-sm p-3 rounded-lg flex-1"
-          style={{
-            color: currentTheme.text.secondary,
-            backgroundColor: currentTheme.primary + "10",
-          }}
-        >
-          <CheckCircle size={14} className="inline mr-2" />
-          This will save your schedule and generate available slots from{" "}
-          {formatDate(dateRange.startDate)} to {formatDate(dateRange.endDate)}.
-        </div>
-      </div>
     </div>
   );
 };
