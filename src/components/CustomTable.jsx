@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 
-function CustomTable({ headers, children, onBulkDelete }) {
+function CustomTable({ headers, children, onBulkDelete, enableBulkDelete = false }) {
   const { currentTheme } = useTheme();
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRows, setSelectedRows] = useState([]);
@@ -34,7 +34,7 @@ function CustomTable({ headers, children, onBulkDelete }) {
 
   return (
     <div>
-      {selectedRows.length > 0 && (
+      {enableBulkDelete && selectedRows.length > 1 && (
         <div className="flex justify-end mb-4">
           <button
             onClick={handleBulkDeleteClick}
@@ -45,7 +45,6 @@ function CustomTable({ headers, children, onBulkDelete }) {
               border: `1px solid ${currentTheme.border}`,
               cursor: 'pointer',
             }}
-            disabled={selectedRows.length <= 1}
           >
             Delete Selected
           </button>
@@ -56,14 +55,16 @@ function CustomTable({ headers, children, onBulkDelete }) {
           <table className="w-full table-fixed min-w-[640px]" style={{ backgroundColor: currentTheme.surface, borderCollapse: 'collapse' }}>
             <thead className="sticky top-0 z-10" style={{ backgroundColor: currentTheme.primary, borderColor: currentTheme.border }}>
               <tr>
-                <th className="py-3 pl-4 pr-2 w-10">
-                  <input
-                    type="checkbox"
-                    checked={currentRows.length > 0 && selectedRows.length === currentRows.length}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4"
-                  />
-                </th>
+                {enableBulkDelete && (
+                  <th className="py-3 pl-4 pr-2 w-10">
+                    <input
+                      type="checkbox"
+                      checked={currentRows.length > 0 && selectedRows.length === currentRows.length}
+                      onChange={handleSelectAll}
+                      className="w-4 h-4"
+                    />
+                  </th>
+                )}
                 {headers.map((header, index) => (
                   <th
                     key={index}
@@ -82,14 +83,16 @@ function CustomTable({ headers, children, onBulkDelete }) {
                   if (!React.isValidElement(child)) return child;
                   const rowId = child.key;
                   const enhancedCells = [
-                    <td key="checkbox" className="py-3 pl-4 pr-2 w-10">
-                      <input
-                        type="checkbox"
-                        checked={selectedRows.includes(rowId)}
-                        onChange={() => handleSelectRow(rowId)}
-                        className="w-4 h-4"
-                      />
-                    </td>,
+                    enableBulkDelete && (
+                      <td key="checkbox" className="py-3 pl-4 pr-2 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(rowId)}
+                          onChange={() => handleSelectRow(rowId)}
+                          className="w-4 h-4"
+                        />
+                      </td>
+                    ),
                     ...React.Children.map(child.props.children, (cell, cellIndex) => {
                       if (!React.isValidElement(cell)) return cell;
                       let cellContent = '';
@@ -101,12 +104,12 @@ function CustomTable({ headers, children, onBulkDelete }) {
                         title: cellContent,
                       });
                     }),
-                  ];
+                  ].filter(Boolean);
                   return React.cloneElement(child, { className: `${child.props.className || ''}`, children: enhancedCells });
                 })
               ) : (
                 <tr>
-                  <td colSpan={headers.length + 1} className="px-3 py-8 text-center text-sm" style={{ color: currentTheme.text.secondary }}>
+                  <td colSpan={headers.length + (enableBulkDelete ? 1 : 0)} className="px-3 py-8 text-center text-sm" style={{ color: currentTheme.text.secondary }}>
                     No data available
                   </td>
                 </tr>
