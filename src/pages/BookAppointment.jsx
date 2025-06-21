@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { format, isSameDay, parse, isValid } from "date-fns";
-import { db } from "../firebase/config";
+import { db, auth } from "../firebase/config"; // Import auth from Firebase
 import {
   collection,
   getDocs,
@@ -43,8 +43,10 @@ function BookAppointment() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    pid: "",
     phone: "",
     dob: "",
+    age: "", // Added age field
     reasonForVisit: "",
     appointmentType: "Consultation",
     medicalHistory: null,
@@ -59,6 +61,40 @@ function BookAppointment() {
   const [timeSlots, setTimeSlots] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [locationMismatch, setLocationMismatch] = useState(false);
+
+  // Fetch pid and user data for the authenticated user
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const userRef = doc(db, "users", user.uid);
+          const userDoc = await getDoc(userRef);
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setFormData((prev) => ({
+              ...prev,
+              pid: userData.pid || "",
+              name: userData.name || "",
+              email: userData.email || user.email || "",
+              phone: userData.phone || "",
+            }));
+            if (!userData.pid) {
+              setBookingMessage("User PID not found. Please contact support.");
+            }
+          } else {
+            setBookingMessage("User data not found. Please contact support.");
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error.code, error.message);
+          setBookingMessage("Error loading user data. Please try again.");
+        }
+      } else {
+        setBookingMessage("Please log in to book an appointment.");
+      }
+    };
+    fetchUserData();
+  }, []);
 
   useEffect(() => {
     emailjs.init("2pSuAO6tF3T-sejH-");
@@ -302,12 +338,13 @@ function BookAppointment() {
       timeZone: "Asia/Kolkata",
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
+      hour12: true,
     });
     const parts = formatter.formatToParts(now);
     const hour = parts.find((part) => part.type === "hour").value;
     const minute = parts.find((part) => part.type === "minute").value;
-    return `${hour}:${minute}`;
+    const period = parts.find((part) => part.type === "dayPeriod")?.value || "AM";
+    return `${hour}:${minute} ${period}`;
   };
 
   useEffect(() => {
@@ -467,17 +504,18 @@ function BookAppointment() {
         if (period === "AM" && slotHour === 12) slotHour24 = 0;
         const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
 
+        const [currentHour, currentMinute] = currentTime
+          .split(":")
+          .map(Number);
+        const currentTimeInMinutes = currentHour * 60 + (period === "PM" && currentHour !== 12 ? currentMinute + 720 : currentMinute);
+
         const endHour24 = 17;
-        const endMinute = 30;
+        const endMinute = 0;
         const endTimeInMinutes = endHour24 * 60 + endMinute;
 
         if (isToday) {
-          const [currentHour, currentMinute] = currentTime
-            .split(":")
-            .map(Number);
-          const currentTimeInMinutes = currentHour * 60 + currentMinute;
           return (
-            slotTimeInMinutes >= currentTimeInMinutes &&
+            slotTimeInMinutes > currentTimeInMinutes &&
             slotTimeInMinutes <= endTimeInMinutes
           );
         }
@@ -662,10 +700,12 @@ function BookAppointment() {
     setBlockReason("");
     setLocationMismatch(false);
     setFormData({
-      name: "",
-      email: "",
+      name: formData.name,
+      email: formData.email,
+      pid: formData.pid,
       phone: "",
       dob: "",
+      age: "", // Reset age
       reasonForVisit: "",
       appointmentType: "Consultation",
       medicalHistory: null,
@@ -690,6 +730,10 @@ function BookAppointment() {
     }
     if (!formData.dob) {
       setErrors((prev) => ({ ...prev, dob: "Date of Birth is required" }));
+      return false;
+    }
+    if (!formData.pid) {
+      setErrors((prev) => ({ ...prev, pid: "User PID is required" }));
       return false;
     }
 
@@ -725,6 +769,7 @@ function BookAppointment() {
         weekday: selectedDayName,
         name: formData.name,
         email: formData.email,
+        pid: formData.pid,
         phone: formData.phone,
         dob: formData.dob,
         reasonForVisit: formData.reasonForVisit,
@@ -741,7 +786,7 @@ function BookAppointment() {
         const message = `Dear ${formData.name}, your appointment is confirmed for ${format(
           new Date(selectedDate),
           "MMMM d, yyyy"
-        )} at ${selectedSlot} at ${selectedLocation}. Appointment Type: ${formData.appointmentType}.`;
+        )} at ${selectedSlot} at ${selectedLocation}. Appointment Type: ${formData.appointmentType}. PID: ${formData.pid}.`;
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, "_blank");
       }
@@ -754,6 +799,7 @@ function BookAppointment() {
           time: selectedSlot,
           location: selectedLocation,
           appointment_type: formData.appointmentType,
+          pid: formData.pid,
         };
 
         await emailjs
@@ -775,10 +821,12 @@ function BookAppointment() {
         setSelectedDayName("");
         setSelectedSlot("");
         setFormData({
-          name: "",
-          email: "",
+          name: formData.name,
+          email: formData.email,
+          pid: formData.pid,
           phone: "",
           dob: "",
+          age: "", // Reset age
           reasonForVisit: "",
           appointmentType: "Consultation",
           medicalHistory: null,
@@ -795,6 +843,22 @@ function BookAppointment() {
       setIsLoading(false);
     }
   };
+
+  // Age calculation based on DOB
+  useEffect(() => {
+    if (formData.dob) {
+      const birthDate = new Date(formData.dob);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      setFormData((prev) => ({ ...prev, age: age >= 0 ? age : "" }));
+    } else {
+      setFormData((prev) => ({ ...prev, age: "" }));
+    }
+  }, [formData.dob]);
 
   return (
     <div className="min-h-[calc(100vh-200px)] flex items-center justify-center p-4 sm:p-6">
@@ -848,7 +912,7 @@ function BookAppointment() {
                     ...locations.map((loc) => ({ value: loc.name, label: loc.name })),
                   ]}
                   required
-                  className="w-32 sm:w-40 p-2 rounded-md border text-sm sm:text-base"
+                  className="w-60 sm:w-60 p-2 rounded-md border text-sm sm:text-base"
                   style={{
                     borderColor: currentTheme.border,
                     backgroundColor: currentTheme.inputBackground,
@@ -879,7 +943,7 @@ function BookAppointment() {
                   }
                   filterDate={filterUnavailableDates}
                   required
-                  className="w-32 sm:w-40 p-2 rounded-md border text-sm sm:text-base"
+                  className="w-45 sm:w-45 p-2 rounded-md border text-sm sm:text-base"
                   style={{
                     borderColor: currentTheme.border,
                     backgroundColor: currentTheme.inputBackground,
@@ -962,7 +1026,7 @@ function BookAppointment() {
                 >
                   Personal Information
                 </h3>
-                <div className="grid sm:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                   <div className="flex flex-row items-center gap-2">
                     <label
                       className="text-sm sm:text-base font-medium whitespace-nowrap"
@@ -1012,6 +1076,31 @@ function BookAppointment() {
                       />
                       {errors.email && (
                         <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-row items-center gap-2">
+                    <label
+                      className="text-sm sm:text-base font-medium whitespace-nowrap"
+                      style={{ color: currentTheme.text.primary }}
+                    >
+                      PID
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <div className="flex-1">
+                      <CustomInput
+                        name="pid"
+                        value={formData.pid}
+                        readOnly
+                        className="w-full p-2 rounded-md border"
+                        style={{
+                          borderColor: errors.pid ? "rgb(239, 68, 68)" : currentTheme.border,
+                          backgroundColor: currentTheme.inputBackground,
+                          color: currentTheme.text.primary,
+                        }}
+                      />
+                      {errors.pid && (
+                        <p className="text-red-500 text-xs mt-1">{errors.pid}</p>
                       )}
                     </div>
                   </div>
@@ -1081,6 +1170,29 @@ function BookAppointment() {
                       className="text-sm sm:text-base font-medium whitespace-nowrap"
                       style={{ color: currentTheme.text.primary }}
                     >
+                      Age
+                    </label>
+                    <div className="flex-1">
+                      <CustomInput
+                        name="age"
+                        value={formData.age || ""}
+                        readOnly
+                        className="w-full p-2 rounded-md border"
+                        style={{
+                          borderColor: currentTheme.border,
+                          backgroundColor: currentTheme.inputBackground,
+                          color: currentTheme.text.primary,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-6 mt-6">
+                  <div className="flex flex-row items-center gap-2">
+                    <label
+                      className="text-sm sm:text-base font-medium whitespace-nowrap"
+                      style={{ color: currentTheme.text.primary }}
+                    >
                       Appointment Type
                     </label>
                     <div className="flex-1">
@@ -1102,8 +1214,6 @@ function BookAppointment() {
                       />
                     </div>
                   </div>
-                </div>
-                <div className="grid sm:grid-cols-1 gap-6 mt-6">
                   <div className="flex flex-row items-center gap-2">
                     <label
                       className="text-sm sm:text-base font-medium whitespace-nowrap"
