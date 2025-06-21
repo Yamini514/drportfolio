@@ -28,6 +28,31 @@ const UserRegister = () => {
   const navigate = useNavigate();
   const { currentTheme } = useTheme();
 
+  // Function to generate PID in the format PID{currentYear}-XXXXX and ensure uniqueness
+  const generatePID = async () => {
+    const currentYear = new Date().getFullYear();
+    let pid;
+    let isUnique = false;
+    const maxAttempts = 5; // Limit attempts to avoid infinite loops
+    let attempts = 0;
+
+    while (!isUnique && attempts < maxAttempts) {
+      const randomDigits = Math.floor(10000 + Math.random() * 90000); // 5 random digits
+      pid = `PID${currentYear}-${randomDigits}`;
+      const usersRef = collection(db, 'users');
+      const pidQuery = query(usersRef, where('pid', '==', pid));
+      const pidSnapshot = await getDocs(pidQuery);
+      isUnique = pidSnapshot.empty;
+      attempts++;
+    }
+
+    if (!isUnique) {
+      throw new Error('Unable to generate a unique PID after multiple attempts.');
+    }
+
+    return pid;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -42,7 +67,7 @@ const UserRegister = () => {
     setSuccess('');
   };
 
-  const validateForm = () => {
+  const validateForm = async () => {
     let isValid = true;
     const newErrors = {
       name: '',
@@ -53,10 +78,19 @@ const UserRegister = () => {
       general: '',
     };
 
-    // Validate name
+    // Validate name (minimum 3 characters and unique)
     if (formData.name.trim().length < 3) {
       newErrors.name = 'Name must be at least 3 characters long';
       isValid = false;
+    } else {
+      // Check if name is unique
+      const usersRef = collection(db, 'users');
+      const nameQuery = query(usersRef, where('name', '==', formData.name.trim()));
+      const nameSnapshot = await getDocs(nameQuery);
+      if (!nameSnapshot.empty) {
+        newErrors.name = 'This name is already taken. Please choose a different name.';
+        isValid = false;
+      }
     }
 
     // Validate phone (mandatory)
@@ -110,11 +144,14 @@ const UserRegister = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (!(await validateForm())) return;
 
     setErrors({ name: '', email: '', phone: '', password: '', confirmPassword: '', general: '' });
     setSuccess('');
     setLoading(true);
+
+    // Start timer
+    const startTime = performance.now();
 
     try {
       // Generate a placeholder email if none provided
@@ -153,6 +190,9 @@ const UserRegister = () => {
         return;
       }
 
+      // Generate unique PID
+      const pid = await generatePID();
+
       // Create new user
       const userCredential = await createUserWithEmailAndPassword(auth, authEmail, formData.password);
 
@@ -161,12 +201,19 @@ const UserRegister = () => {
         name: formData.name,
         email: formData.email || null,
         phone: formData.phone,
+        pid: pid,
         createdAt: new Date().toISOString(),
         registrationDate: new Date().toISOString(),
         role: 'user',
       });
 
-      setSuccess('Account created successfully! Logging you in...');
+      // Calculate registration time
+      const endTime = performance.now();
+      const registrationTime = ((endTime - startTime) / 1000).toFixed(2); // Convert to seconds, 2 decimal places
+
+      setSuccess(
+        `Account created successfully in ${registrationTime} seconds! Your PID is <strong>${pid}</strong>. Logging you in...`
+      );
 
       // Automatically log in the user
       await signInWithEmailAndPassword(auth, authEmail, formData.password);
@@ -278,9 +325,10 @@ const UserRegister = () => {
             </p>
           )}
           {success && (
-            <p className="text-green-500 text-sm text-center bg-green-50 p-2 rounded-md transition-all duration-200">
-              {success}
-            </p>
+            <p
+              className="text-green-500 text-sm text-center bg-green-50 p-2 rounded-md transition-all duration-200"
+              dangerouslySetInnerHTML={{ __html: success }}
+            />
           )}
           <div className="flex flex-col space-y-4">
             <CustomButton type="submit" disabled={loading} className="justify-center">
