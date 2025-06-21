@@ -254,7 +254,7 @@ const UserRegister = () => {
           <div className="grid grid-cols-1 gap-6">
             <div>
               <CustomInput
-                label="Full Name"
+                label="Name"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
