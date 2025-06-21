@@ -52,6 +52,19 @@ function MyAppointments() {
     }
   }, [isAuthenticated]);
 
+  const getStatusColor = (status) => {
+    switch (status.toLowerCase()) {
+      case 'confirmed':
+        return 'text-green-500';
+      case 'deleted':
+        return 'text-red-500';
+      case 'pending':
+        return 'text-orange-500';
+      default:
+        return '';
+    }
+  };
+
   if (loading || loadingAppointments) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: currentTheme.background }}>
@@ -88,9 +101,11 @@ function MyAppointments() {
                     <p className="font-semibold">Date: {format(new Date(appointment.date), 'MMMM d, yyyy')}</p>
                     <p>Time: {appointment.time}</p>
                     <p>Location: {appointment.location}</p>
-                    <p>Status: <span className="capitalize">{appointment.status}</span></p>
                   </div>
                   <div className="text-right">
+                    <p className={`font-semibold capitalize ${getStatusColor(appointment.status)}`}>
+                      Status: {appointment.status}
+                    </p>
                     <p>Type: {appointment.appointmentType}</p>
                     <p className="mt-2 text-sm" style={{ color: currentTheme.text.secondary }}>
                       Reason: {appointment.reasonForVisit}
