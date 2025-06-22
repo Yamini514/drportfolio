@@ -76,7 +76,7 @@ function Hero() {
               />
 
               <p className="text-lg md:text:xl font-medium text-gray-200">
-                One of the Leading Neurosurgeon in Hyderabad
+              One of the leading Neurosurgeons in Hyderabad.
               </p>
             </div>
           </div>
