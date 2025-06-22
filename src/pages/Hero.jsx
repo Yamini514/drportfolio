@@ -44,7 +44,7 @@ function Hero() {
       label: "Trained Neurosurgeons",
     },
     { icon: <FaGlobe />, count: "15+", label: "International Conferences" },
-    { icon: <FaSmile />, count: "100%", label: "Satisfaction" },
+    { icon: <FaSmile />, count: "100%", label: "Satisfied Customers" },
   ];
 
   return (
@@ -76,7 +76,7 @@ function Hero() {
               />
 
               <p className="text-lg md:text:xl font-medium text-gray-200">
-                Leading Neurosurgeon in Hyderabad
+                One of the Leading Neurosurgeon in Hyderabad
               </p>
             </div>
           </div>
