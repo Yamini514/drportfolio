@@ -40,6 +40,13 @@ function Header() {
     return color;
   }, [isHomePage, isScrolled, isMenuOpen, theme, currentTheme]);
 
+  const getResearchTextColor = useCallback(() => {
+    if (theme === 'dark' || (isHomePage && !isScrolled && !isMenuOpen)) {
+      return '#ffffff'; // White for dark mode or transparent background
+    }
+    return '#000000'; // Black for white background
+  }, [theme, isHomePage, isScrolled, isMenuOpen]);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
@@ -255,7 +262,7 @@ function Header() {
           transform: translateY(0);
         }
         .research-button {
-          color: ${isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor()} !important;
+          color: ${getResearchTextColor()} !important;
         }
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }
