@@ -1,43 +1,68 @@
-import React, { useState } from 'react';
-import { auth, db } from '../../firebase/config';
-import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
-import CustomInput from '../../components/CustomInput';
+import {
+  auth,
+  db,
+} from '../../firebase/config';
+import {
+  createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
+  signInWithEmailAndPassword,
+} from 'firebase/auth';
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  setDoc,
+  where,
+} from 'firebase/firestore';
 import CustomButton from '../../components/CustomButton';
+import CustomInput from '../../components/CustomInput';
+
+// Constants
+const INITIAL_FORM_DATA = {
+  name: '',
+  email: '',
+  phone: '',
+  countryCode: '+1', // Default to US; adjust as needed
+  password: '',
+  confirmPassword: '',
+};
+
+const INITIAL_ERRORS = {
+  name: '',
+  email: '',
+  phone: '',
+  countryCode: '',
+  password: '',
+  confirmPassword: '',
+  general: '',
+};
 
 const UserRegister = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [errors, setErrors] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-    general: '',
-  });
+  // State
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  const [errors, setErrors] = useState(INITIAL_ERRORS);
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pid, setPid] = useState(''); // Store PID for WhatsApp link
+
+  // Hooks
   const navigate = useNavigate();
   const { currentTheme } = useTheme();
 
-  // Function to generate PID in the format PID{currentYear}-XXXXX and ensure uniqueness
+  // Helper Functions
   const generatePID = async () => {
     const currentYear = new Date().getFullYear();
+    const maxAttempts = 5;
+    let attempts = 0;
     let pid;
     let isUnique = false;
-    const maxAttempts = 5; // Limit attempts to avoid infinite loops
-    let attempts = 0;
 
     while (!isUnique && attempts < maxAttempts) {
-      const randomDigits = Math.floor(10000 + Math.random() * 90000); // 5 random digits
+      const randomDigits = Math.floor(10000 + Math.random() * 90000);
       pid = `PID${currentYear}-${randomDigits}`;
       const usersRef = collection(db, 'users');
       const pidQuery = query(usersRef, where('pid', '==', pid));
@@ -47,60 +72,45 @@ const UserRegister = () => {
     }
 
     if (!isUnique) {
-      throw new Error('Unable to generate a unique PID after multiple attempts.');
+      throw new Error('Unable to generate unique PID after multiple attempts.');
     }
 
     return pid;
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-    setErrors({
-      ...errors,
-      [name]: '',
-      general: '',
-    });
-    setSuccess('');
-  };
-
   const validateForm = async () => {
+    const newErrors = { ...INITIAL_ERRORS };
     let isValid = true;
-    const newErrors = {
-      name: '',
-      email: '',
-      phone: '',
-      password: '',
-      confirmPassword: '',
-      general: '',
-    };
 
-    // Validate name (minimum 3 characters and unique)
+    // Name validation
     if (formData.name.trim().length < 3) {
       newErrors.name = 'Name must be at least 3 characters long';
       isValid = false;
     } else {
-      // Check if name is unique
       const usersRef = collection(db, 'users');
       const nameQuery = query(usersRef, where('name', '==', formData.name.trim()));
       const nameSnapshot = await getDocs(nameQuery);
       if (!nameSnapshot.empty) {
-        newErrors.name = 'This name is already taken. Please choose a different name.';
+        newErrors.name = 'This name is already taken. Please choose another.';
         isValid = false;
       }
     }
 
-    // Validate phone (mandatory)
+    // Phone validation
     const phoneRegex = /^[0-9]{10}$/;
     if (!phoneRegex.test(formData.phone)) {
       newErrors.phone = 'Please enter a valid 10-digit phone number';
       isValid = false;
     }
 
-    // Validate email (optional, only if provided)
+    // Country code validation
+    const countryCodeRegex = /^\+\d{1,3}$/;
+    if (!countryCodeRegex.test(formData.countryCode)) {
+      newErrors.countryCode = 'Please enter a valid country code (e.g., +1)';
+      isValid = false;
+    }
+
+    // Email validation
     if (formData.email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
@@ -109,15 +119,15 @@ const UserRegister = () => {
       }
     }
 
-    // Validate password
+    // Password validation
     const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
     if (!passwordRegex.test(formData.password)) {
       newErrors.password =
-        'Password must be at least 8 characters long and contain at least one letter, one number, and one special character';
+        'Password must be at least 8 characters with a letter, number, and special character';
       isValid = false;
     }
 
-    // Validate confirm password
+    // Confirm password validation
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
       isValid = false;
@@ -130,34 +140,38 @@ const UserRegister = () => {
   const handleFirebaseError = (error) => {
     switch (error.code) {
       case 'auth/email-already-in-use':
-        return { email: 'This email is already registered. Please login instead.' };
+        return { email: 'This email is already registered. Please login.' };
       case 'auth/invalid-email':
         return { email: 'Invalid email format' };
       case 'auth/weak-password':
         return { password: 'Password is too weak' };
       case 'auth/network-request-failed':
-        return { general: 'Network error. Please check your connection and try again.' };
+        return { general: 'Network error. Please check your connection.' };
       default:
-        return { general: error.message || 'An error occurred during registration' };
+        return { general: error.message || 'Registration error occurred' };
     }
+  };
+
+  // Event Handlers
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: '', general: '' }));
+    setSuccess('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!(await validateForm())) return;
 
-    setErrors({ name: '', email: '', phone: '', password: '', confirmPassword: '', general: '' });
+    setErrors(INITIAL_ERRORS);
     setSuccess('');
     setLoading(true);
 
-    // Start timer
     const startTime = performance.now();
 
     try {
-      // Generate a placeholder email if none provided
       const authEmail = formData.email || `${formData.phone}@example.com`;
-
-      // Check if email or phone already exists in users or admins
       const usersRef = collection(db, 'users');
       const adminsRef = collection(db, 'admins');
       const emailQuery = query(usersRef, where('email', '==', formData.email));
@@ -171,56 +185,59 @@ const UserRegister = () => {
       ]);
 
       if (!emailSnapshot.empty || !phoneSnapshot.empty || !adminEmailSnapshot.empty) {
-        setErrors({
-          ...errors,
-          general: 'An account with this email or phone number already exists.',
-        });
+        setErrors((prev) => ({
+          ...prev,
+          general: 'Account with this email or phone already exists.',
+        }));
         setLoading(false);
         return;
       }
 
-      // Check if email already exists in Firebase Authentication
       const signInMethods = await fetchSignInMethodsForEmail(auth, authEmail);
       if (signInMethods.length > 0) {
-        setErrors({
-          ...errors,
-          email: 'An account with this email or phone number already exists. Please login instead.',
-        });
+        setErrors((prev) => ({
+          ...prev,
+          email: 'Account with this email/phone exists. Please login.',
+        }));
         setLoading(false);
         return;
       }
 
-      // Generate unique PID
-      const pid = await generatePID();
+      const generatedPid = await generatePID();
+      setPid(generatedPid); // Store PID for WhatsApp link
 
-      // Create new user
-      const userCredential = await createUserWithEmailAndPassword(auth, authEmail, formData.password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        authEmail,
+        formData.password,
+      );
 
-      // Store user data in Firestore
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         name: formData.name,
         email: formData.email || null,
         phone: formData.phone,
-        pid: pid,
+        pid: generatedPid,
         createdAt: new Date().toISOString(),
         registrationDate: new Date().toISOString(),
         role: 'user',
       });
 
-      // Calculate registration time
       const endTime = performance.now();
-      const registrationTime = ((endTime - startTime) / 1000).toFixed(2); // Convert to seconds, 2 decimal places
+      const registrationTime = ((endTime - startTime) / 1000).toFixed(2);
+
+      // Generate WhatsApp Click to Chat URL
+      const phoneNumber = `${formData.countryCode}${formData.phone}`; // E.g., +12025550123
+      const message = encodeURIComponent(
+        `Thank you for registering! Your PID is ${generatedPid}. Please keep it safe.`,
+      );
+      const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
 
       setSuccess(
-        `Account created successfully in ${registrationTime} seconds! Your PID is <strong>${pid}</strong>. Logging you in...`
+        `Account created in ${registrationTime}s! Your PID is <strong>${generatedPid}</strong>. ` +
+        `<a href="${whatsappUrl}" target="_blank" class="text-blue-500 underline">Click here to send PID to WhatsApp</a>.`,
       );
 
-      // Automatically log in the user
       await signInWithEmailAndPassword(auth, authEmail, formData.password);
-
-      setTimeout(() => {
-        navigate('/login');
-      }, 1000);
     } catch (error) {
       setErrors(handleFirebaseError(error));
       console.error('Registration error:', error);
@@ -229,6 +246,17 @@ const UserRegister = () => {
     }
   };
 
+  // Effects
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        navigate('/login', { state: { phone: formData.phone } });
+      }, 30000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, navigate, formData.phone]);
+
+  // Render
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
@@ -239,19 +267,17 @@ const UserRegister = () => {
         style={{
           backgroundColor: currentTheme.surface,
           borderColor: currentTheme.primary || '#8B5CF6',
-          boxShadow: `0 4px 6px rgba(0, 0, 0, 0.3)`,
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
         }}
       >
-        <div>
-          <h2
-            className="text-3xl font-bold text-center mb-8"
-            style={{ color: currentTheme.text.primary }}
-          >
-            Create Account
-          </h2>
-        </div>
+        <h2
+          className="text-3xl font-bold text-center mb-8"
+          style={{ color: currentTheme.text.primary }}
+        >
+          Create Account
+        </h2>
         <form className="grid gap-6" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 gap-6">
+          <div className="grid gap-6">
             <div>
               <CustomInput
                 label="Name"
@@ -261,22 +287,37 @@ const UserRegister = () => {
                 required
               />
               {errors.name && (
-                <p className="text-red-500 text-xs mt-1 transition-all duration-200">{errors.name}</p>
+                <p className="text-red-500 text-xs mt-1">{errors.name}</p>
               )}
             </div>
-            <div>
-              <CustomInput
-                label="Phone Number"
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                required
-                pattern="\d{10}"
-              />
-              {errors.phone && (
-                <p className="text-red-500 text-xs mt-1 transition-all duration-200">{errors.phone}</p>
-              )}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <CustomInput
+                  label="Country Code"
+                  name="countryCode"
+                  value={formData.countryCode}
+                  onChange={handleChange}
+                  required
+                  placeholder="+1"
+                />
+                {errors.countryCode && (
+                  <p className="text-red-500 text-xs mt-1">{errors.countryCode}</p>
+                )}
+              </div>
+              <div className="col-span-2">
+                <CustomInput
+                  label="Phone Number"
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  required
+                  pattern="\d{10}"
+                />
+                {errors.phone && (
+                  <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
+                )}
+              </div>
             </div>
             <div>
               <CustomInput
@@ -287,7 +328,7 @@ const UserRegister = () => {
                 onChange={handleChange}
               />
               {errors.email && (
-                <p className="text-red-500 text-xs mt-1 transition-all duration-200">{errors.email}</p>
+                <p className="text-red-500 text-xs mt-1">{errors.email}</p>
               )}
             </div>
             <div>
@@ -300,7 +341,7 @@ const UserRegister = () => {
                 required
               />
               {errors.password && (
-                <p className="text-red-500 text-xs mt-1 transition-all duration-200">{errors.password}</p>
+                <p className="text-red-500 text-xs mt-1">{errors.password}</p>
               )}
             </div>
             <div>
@@ -313,20 +354,18 @@ const UserRegister = () => {
                 required
               />
               {errors.confirmPassword && (
-                <p className="text-red-500 text-xs mt-1 transition-all duration-200">
-                  {errors.confirmPassword}
-                </p>
+                <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>
               )}
             </div>
           </div>
           {errors.general && (
-            <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-md transition-all duration-200">
+            <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-md">
               {errors.general}
             </p>
           )}
           {success && (
             <p
-              className="text-green-500 text-sm text-center bg-green-50 p-2 rounded-md transition-all duration-200"
+              className="text-green-500 text-sm text-center bg-green-50 p-2 rounded-md"
               dangerouslySetInnerHTML={{ __html: success }}
             />
           )}
