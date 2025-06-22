@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from '../context/ThemeContext';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
-import { User, LogOut, Calendar } from 'lucide-react';
+import { User, LogOut, Calendar, UserCircle } from 'lucide-react';
 import CustomButton from './CustomButton';
 
 function Header() {
@@ -20,6 +20,7 @@ function Header() {
   const isHomePage = location.pathname === '/' || location.pathname === '';
 
   const navLinks = [
+    { name: 'Home', href: '' },
     { name: 'About', href: '', sectionId: 'about' },
     { name: 'Services', href: '', sectionId: 'services' },
     { name: 'Testimonials', href: 'review' },
@@ -65,19 +66,20 @@ function Header() {
           const cachedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
           if (cachedRole) {
             setUserRole(cachedRole);
-            return;
-          }
-          try {
-            const userDocRef = doc(db, 'users', currentUser.uid);
-            const userDoc = await getDoc(userDocRef);
-            const role = userDoc.exists() ? userDoc.data().role || 'user' : 'user';
-            setUserRole(role);
-            localStorage.setItem(`userRole_${currentUser.uid}`, role);
-            localStorage.setItem('userRole', role);
-          } catch (error) {
-            setUserRole('user');
-            localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
-            localStorage.setItem('userRole', 'user');
+          } else {
+            try {
+              const userDocRef = doc(db, 'users', currentUser.uid);
+              const userDoc = await getDoc(userDocRef);
+              const role = userDoc.exists() ? userDoc.data().role || 'user' : 'user';
+              setUserRole(role);
+              localStorage.setItem(`userRole_${currentUser.uid}`, role);
+              localStorage.setItem('userRole', role);
+            } catch (error) {
+              console.error('Error fetching user role:', error);
+              setUserRole('user');
+              localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
+              localStorage.setItem('userRole', 'user');
+            }
           }
         }
       } else {
@@ -168,13 +170,10 @@ function Header() {
     <div className="relative group">
       <button
         className="flex items-center gap-2 font-medium transition-colors duration-300"
-        style={{ color: "${isTransparentHeader && theme === 'Dark' ? '#000000' : getTextColor()} !important" }}
+        style={{ color: `${isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor()} !important` }}
       >
         <User className="w-5 h-5" />
         <span>{user.email ? user.email[0].toUpperCase() : 'U'}</span>
-        {/* <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-        </svg> */}
       </button>
       <div
         className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu"
@@ -208,13 +207,14 @@ function Header() {
   ) : (
     <Link
       to="/login"
-      className="font-medium transition-colors duration-300 hover:underline login-link"
+      className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline login-link"
       style={{ color: isTransparentHeader && theme === 'light' ? '#000000' : getTextColor() }}
+      onClick={() => setIsMenuOpen(false)}
+      title="Login"
     >
-      Login
+      <UserCircle className="w-5 h-5" />
     </Link>
   );
-  
 
   return (
     <>
@@ -255,7 +255,7 @@ function Header() {
           transform: translateY(0);
         }
         .research-button {
-          color: ${isTransparentHeader && theme === 'Dark' ? '#000000' : getTextColor()} !important;
+          color: ${isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor()} !important;
         }
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }
@@ -421,40 +421,37 @@ function Header() {
                   <Link
                     to="/my-appointments"
                     className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
-                    style={{ color: theme === 'Dark' ? '#000000' : '#e5e7eb' }}
+                    style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <Calendar className="w-4 h-4" />
                     My Appointments
                   </Link>
                 )}
-                <Link
-                  to="#"
-                  className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
-                  style={{ color: theme === 'light' ? '#e5e7eb' : '#000000' }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleLogout();
-                  }}
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-left"
+                  style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                 >
                   <LogOut className="w-4 h-4" />
                   Logout
-                </Link>
+                </button>
               </div>
             ) : (
               <Link
                 to="/login"
-                className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
+                className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
                 style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                 onClick={() => setIsMenuOpen(false)}
               >
+                <UserCircle className="w-4 h-4" />
                 Login
               </Link>
             )}
             <CustomButton
               variant="primary"
               onClick={handleBookAppointmentClick}
-              className="block w-full mt-2"
+              className="block w-full mt-2 mx-4"
             >
               Book Appointment
             </CustomButton>
