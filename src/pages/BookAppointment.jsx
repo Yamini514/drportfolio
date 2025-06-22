@@ -264,7 +264,6 @@ function BookAppointment() {
       });
       setTimeSlots(sortedSlots);
 
-
 System: setDaySchedule({ isOpen: sortedSlots.length > 0 });
       if (sortedSlots.length === 0 && !isDateBlocked && !isSunday && !locationMismatch) {
         setBookingMessage("All slots are booked for this day. Please select another day.");
