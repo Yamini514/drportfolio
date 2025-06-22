@@ -23,7 +23,7 @@ function Header() {
     { name: 'Home', href: '' },
     { name: 'About', href: '', sectionId: 'about' },
     { name: 'Services', href: '', sectionId: 'services' },
-    { name: 'Testimonials', href: 'review' },
+    { name: 'Testimonials', href: '', sectionId: 'review' },
     {
       name: 'Research',
       dropdownItems: [
