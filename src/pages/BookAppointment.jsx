@@ -10,7 +10,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { Clock } from "lucide-react";
 import emailjs from "@emailjs/browser";
 import SelfBookingForm from "../pages/admin/Appointment/SelfBookingForm";
-import OtherPatientForm from "../pages/admin/Appointment/OtherPatientForm";
+// import OtherPatientForm from "../pages/admin/Appointment/OtherPatientForm";
 import { format, isSameDay, parse, isValid } from "date-fns";
 
 function BookAppointment() {
@@ -733,7 +733,7 @@ System: setDaySchedule({ isOpen: sortedSlots.length > 0 });
             />
           )}
 
-          {showForm && bookingFor === "other" && (
+          {/* {showForm && bookingFor === "other" && (
             <OtherPatientForm
               otherPatientData={otherPatientData}
               setOtherPatientData={setOtherPatientData}
@@ -744,7 +744,7 @@ System: setDaySchedule({ isOpen: sortedSlots.length > 0 });
               handleCancel={handleCancel}
               isLoading={isLoading}
             />
-          )}
+          )} */}
         </div>
       </div>
     </div>
