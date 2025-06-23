@@ -44,7 +44,7 @@ function Hero() {
       label: "Trained Neurosurgeons",
     },
     { icon: <FaGlobe />, count: "15+", label: "International Conferences" },
-    { icon: <FaSmile />, count: "100%", label: "Satisfied Customers" },
+    { icon: <FaSmile />, count: "100%", label: "Satisfied Patients" },
   ];
 
   return (
