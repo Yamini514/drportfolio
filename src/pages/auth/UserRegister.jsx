@@ -26,7 +26,6 @@ const INITIAL_FORM_DATA = {
   name: '',
   email: '',
   phone: '',
-  countryCode: '+1', // Default to US; adjust as needed
   password: '',
   confirmPassword: '',
 };
@@ -35,7 +34,6 @@ const INITIAL_ERRORS = {
   name: '',
   email: '',
   phone: '',
-  countryCode: '',
   password: '',
   confirmPassword: '',
   general: '',
@@ -47,7 +45,7 @@ const UserRegister = () => {
   const [errors, setErrors] = useState(INITIAL_ERRORS);
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pid, setPid] = useState(''); // Store PID for WhatsApp link
+  const [pid, setPid] = useState('');
 
   // Hooks
   const navigate = useNavigate();
@@ -100,13 +98,6 @@ const UserRegister = () => {
     const phoneRegex = /^[0-9]{10}$/;
     if (!phoneRegex.test(formData.phone)) {
       newErrors.phone = 'Please enter a valid 10-digit phone number';
-      isValid = false;
-    }
-
-    // Country code validation
-    const countryCodeRegex = /^\+\d{1,3}$/;
-    if (!countryCodeRegex.test(formData.countryCode)) {
-      newErrors.countryCode = 'Please enter a valid country code (e.g., +1)';
       isValid = false;
     }
 
@@ -168,8 +159,6 @@ const UserRegister = () => {
     setSuccess('');
     setLoading(true);
 
-    const startTime = performance.now();
-
     try {
       const authEmail = formData.email || `${formData.phone}@example.com`;
       const usersRef = collection(db, 'users');
@@ -204,7 +193,7 @@ const UserRegister = () => {
       }
 
       const generatedPid = await generatePID();
-      setPid(generatedPid); // Store PID for WhatsApp link
+      setPid(generatedPid);
 
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -222,20 +211,7 @@ const UserRegister = () => {
         role: 'user',
       });
 
-      const endTime = performance.now();
-      const registrationTime = ((endTime - startTime) / 1000).toFixed(2);
-
-      // Generate WhatsApp Click to Chat URL
-      const phoneNumber = `${formData.countryCode}${formData.phone}`; // E.g., +12025550123
-      const message = encodeURIComponent(
-        `Thank you for registering! Your PID is ${generatedPid}. Please keep it safe.`,
-      );
-      const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
-
-      setSuccess(
-        `Account created in ${registrationTime}s! Your PID is <strong>${generatedPid}</strong>. ` +
-        `<a href="${whatsappUrl}" target="_blank" class="text-blue-500 underline">Click here to send PID to WhatsApp</a>.`,
-      );
+      setSuccess(`Your PID is <strong>${generatedPid}</strong>`);
 
       await signInWithEmailAndPassword(auth, authEmail, formData.password);
     } catch (error) {
@@ -250,6 +226,7 @@ const UserRegister = () => {
   useEffect(() => {
     if (success) {
       const timer = setTimeout(() => {
+        setSuccess('');
         navigate('/login', { state: { phone: formData.phone } });
       }, 30000);
       return () => clearTimeout(timer);
@@ -290,34 +267,19 @@ const UserRegister = () => {
                 <p className="text-red-500 text-xs mt-1">{errors.name}</p>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <CustomInput
-                  label="Country Code"
-                  name="countryCode"
-                  value={formData.countryCode}
-                  onChange={handleChange}
-                  required
-                  placeholder="+1"
-                />
-                {errors.countryCode && (
-                  <p className="text-red-500 text-xs mt-1">{errors.countryCode}</p>
-                )}
-              </div>
-              <div className="col-span-2">
-                <CustomInput
-                  label="Phone Number"
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  required
-                  pattern="\d{10}"
-                />
-                {errors.phone && (
-                  <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
-                )}
-              </div>
+            <div>
+              <CustomInput
+                label="Phone Number"
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                required
+                pattern="\d{10}"
+              />
+              {errors.phone && (
+                <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
+              )}
             </div>
             <div>
               <CustomInput
