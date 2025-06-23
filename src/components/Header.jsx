@@ -12,6 +12,7 @@ function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [pid, setPid] = useState(null); // Updated to use 'pid' based on Firestore
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -42,9 +43,9 @@ function Header() {
 
   const getResearchTextColor = useCallback(() => {
     if (theme === 'dark' || (isHomePage && !isScrolled && !isMenuOpen)) {
-      return '#ffffff'; // White for dark mode or transparent background
+      return '#ffffff';
     }
-    return '#000000'; // Black for white background
+    return '#000000';
   }, [theme, isHomePage, isScrolled, isMenuOpen]);
 
   useEffect(() => {
@@ -67,32 +68,55 @@ function Header() {
       if (currentUser) {
         currentUid = currentUser.uid;
         const userRoleFromStorage = localStorage.getItem('userRole');
-        if (userRoleFromStorage) {
+        const pidFromStorage = localStorage.getItem(`pid_${currentUser.uid}`);
+        if (userRoleFromStorage && pidFromStorage) {
           setUserRole(userRoleFromStorage);
+          setPid(pidFromStorage);
         } else {
           const cachedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
-          if (cachedRole) {
+          const cachedPid = localStorage.getItem(`pid_${currentUser.uid}`);
+          if (cachedRole && cachedPid) {
             setUserRole(cachedRole);
+            setPid(cachedPid);
           } else {
             try {
               const userDocRef = doc(db, 'users', currentUser.uid);
               const userDoc = await getDoc(userDocRef);
-              const role = userDoc.exists() ? userDoc.data().role || 'user' : 'user';
-              setUserRole(role);
-              localStorage.setItem(`userRole_${currentUser.uid}`, role);
-              localStorage.setItem('userRole', role);
+              if (userDoc.exists()) {
+                const role = userDoc.data().role || 'user';
+                const pidValue = userDoc.data().pid || `PID-${currentUser.uid.slice(0, 6)}`; // Fallback PID
+                setUserRole(role);
+                setPid(pidValue);
+                localStorage.setItem(`userRole_${currentUser.uid}`, role);
+                localStorage.setItem('userRole', role);
+                localStorage.setItem(`pid_${currentUser.uid}`, pidValue);
+                localStorage.setItem('pid', pidValue);
+              } else {
+                setUserRole('user');
+                setPid(`PID-${currentUser.uid.slice(0, 6)}`);
+                localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
+                localStorage.setItem('userRole', 'user');
+                localStorage.setItem(`pid_${currentUser.uid}`, `PID-${currentUser.uid.slice(0, 6)}`);
+                localStorage.setItem('pid', `PID-${currentUser.uid.slice(0, 6)}`);
+              }
             } catch (error) {
-              console.error('Error fetching user role:', error);
+              console.error('Error fetching user data:', error);
               setUserRole('user');
+              setPid(`PID-${currentUser.uid.slice(0, 6)}`);
               localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
               localStorage.setItem('userRole', 'user');
+              localStorage.setItem(`pid_${currentUser.uid}`, `PID-${currentUser.uid.slice(0, 6)}`);
+              localStorage.setItem('pid', `PID-${currentUser.uid.slice(0, 6)}`);
             }
           }
         }
       } else {
         setUserRole(null);
+        setPid(null);
         localStorage.removeItem('userRole');
         localStorage.removeItem(`userRole_${currentUid}`);
+        localStorage.removeItem('pid');
+        localStorage.removeItem(`pid_${currentUid}`);
         currentUid = null;
       }
     });
@@ -156,6 +180,7 @@ function Header() {
       await auth.signOut();
       setUser(null);
       setUserRole(null);
+      setPid(null);
       setIsUserMenuOpen(false);
     } catch (error) {
       console.error('Logout error:', error);
@@ -174,42 +199,46 @@ function Header() {
   };
 
   const userMenu = user ? (
-    <div className="relative group">
+    <div className="relative group" ref={userMenuRef}>
       <button
+        onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
         className="flex items-center gap-2 font-medium transition-colors duration-300"
         style={{ color: `${isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor()} !important` }}
       >
         <User className="w-5 h-5" />
-        <span>{user.email ? user.email[0].toUpperCase() : 'U'}</span>
+        <span>U</span>
       </button>
-      <div
-        className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu"
-        style={{
-          backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
-          borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb'),
-          color: theme === 'dark' ? '#ffffff' : '#000000'
-        }}
-      >
-        <div className="py-1">
-          {userRole !== 'admin' && (
-            <Link
-              to="/my-appointments"
-              className="flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200"
-              onClick={() => setIsUserMenuOpen(false)}
+      {isUserMenuOpen && (
+        <div
+          className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu"
+          style={{
+            backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
+            borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb'),
+            color: theme === 'dark' ? '#ffffff' : '#000000'
+          }}
+        >
+          <div className="py-1">
+            <div className="px-4 py-2">
+              PID: {pid || 'Not Available'}
+            </div>
+            {userRole !== 'admin' && (
+              <Link
+                to="/my-appointments"
+                className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200"
+                onClick={() => setIsUserMenuOpen(false)}
+              >
+                My Appointments
+              </Link>
+            )}
+            <button
+              onClick={handleLogout}
+              className="w-full px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-left"
             >
-              <Calendar className="w-4 h-4" />
-              My Appointments
-            </Link>
-          )}
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-left"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </button>
+              Logout
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   ) : (
     <Link
@@ -427,20 +456,18 @@ function Header() {
                 {userRole !== 'admin' && (
                   <Link
                     to="/my-appointments"
-                    className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
+                    className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
                     style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    <Calendar className="w-4 h-4" />
                     My Appointments
                   </Link>
                 )}
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-left"
+                  className="w-full py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-left"
                   style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                 >
-                  <LogOut className="w-4 h-4" />
                   Logout
                 </button>
               </div>
