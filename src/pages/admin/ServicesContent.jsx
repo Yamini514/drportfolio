@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { PlusCircle, Edit, Trash2, Eye, X, AlertTriangle, CheckCircle } from 'lucide-react';
-import { FaBrain, FaXRay, FaNotesMedical, FaMicroscope, FaStethoscope, FaHospital, FaHeartbeat, FaLaptopMedical } from 'react-icons/fa';
-import { db } from '../../firebase/config'; // Assumes Firebase is initialized correctly
+import { FaBrain, FaXRay, FaNotesMedical, FaMicroscope, FaStethoscope, FaHospital, FaHeartbeat, FaLaptopMedical, FaBone } from 'react-icons/fa';
+import { db } from '../../firebase/config';
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { useTheme } from '../../context/ThemeContext';
 import CustomInput from '../../components/CustomInput';
@@ -46,6 +46,7 @@ function ServicesContent() {
       FaHospital: <FaHospital size={16} />,
       FaHeartbeat: <FaHeartbeat size={16} />,
       FaLaptopMedical: <FaLaptopMedical size={16} />,
+      FaBone: <FaBone size={16} />,
     };
     return iconMap[iconName] || <FaBrain size={16} />;
   };
@@ -197,9 +198,9 @@ function ServicesContent() {
         setServices((prev) =>
           prev
             .map((service) =>
-              service.id === editingService ? { ...service, ...formData, updatedAt: currentDateila } : service
+              service.id === editingService ? { ...service, ...formData, updatedAt: currentDate } : service
             )
-            .sort((a, v) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()))
+            .sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()))
             .map((service, index) => ({ ...service, serviceId: `SRV${String(index + 1).padStart(3, '0')}` }))
         );
         showNotification('Service updated successfully');
@@ -251,8 +252,8 @@ function ServicesContent() {
           </h1>
           {viewingService ? (
             <div
-              className="rounded-lg shadow p-6 max-w-2xl mx-auto"
-              style={{ backgroundColor: 'transparent', border: `1px solid ${currentTheme.border || '#6B46C1'}` }}
+              className="rounded-lg shadow p-6 mx-auto"
+              style={{ backgroundColor: 'transparent', border: `1px solid ${currentTheme.border || '#6B46C1'}`, width: '800px', maxWidth: '100%' }}
             >
               <div className="mb-6">
                 <h2 className="text-lg font-bold" style={{ color: currentTheme.text?.primary || '#000000' }}>
@@ -323,8 +324,8 @@ function ServicesContent() {
           ) : showForm ? (
             <div
               id="service-form"
-              className="rounded-lg shadow p-4 max-w-2xl mx-auto border-purple-500"
-              style={{ backgroundColor: 'transparent', borderWidth: '1px' }}
+              className="rounded-lg shadow p-6 mx-auto"
+              style={{ backgroundColor: 'transparent', border: `1px solid ${currentTheme.border || '#6B46C1'}`, width: '800px', maxWidth: '100%' }}
             >
               <h2 className="text-lg font-medium mb-4" style={{ color: currentTheme.text?.primary || '#000000' }}>
                 {editingService ? 'Edit Service' : 'Add New Service'}
@@ -363,7 +364,8 @@ function ServicesContent() {
                         { value: 'FaMicroscope', label: 'Microscope' },
                         { value: 'FaStethoscope', label: 'Stethoscope' },
                         { value: 'FaHospital', label: 'Hospital' },
-                        { value: 'FaHeartbeat', label: 'Heartbeat' },
+                        { value: 'FaHeartbeat', label: 'Neck Pain' },
+                        { value: 'FaBone', label: 'Spine Surgery' },
                         { value: 'FaLaptopMedical', label: 'Laparoscopy' },
                       ]}
                       className="w-full border border-gray-500 rounded-md focus:ring focus:ring-purple-500"
@@ -390,9 +392,7 @@ function ServicesContent() {
                     </label>
                     <CustomInput
                       type="textarea"
-                      name=" _
-
-description"
+                      name="description"
                       placeholder="Enter service description"
                       value={formData.description}
                       onChange={handleFormChange}
