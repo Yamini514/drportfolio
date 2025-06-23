@@ -41,7 +41,8 @@ function Video() {
   };
 
   return (
-    <div className="px-6 pb-5 md:px-6 md:pb-5 lg:px-8" style={{ backgroundColor: currentTheme.background }}>
+    <section id="Video" className='pt-2'>
+    <div  className="px-6 pb-5 md:px-6 md:pb-5 lg:px-8" style={{ backgroundColor: currentTheme.background }}>
       <div className="container mx-auto">
         {/* Header Section */}
         <div className="text-center mb-12">
@@ -113,6 +114,7 @@ function Video() {
         </div>
       </div>
     </div>
+    </section>
   );
 }
 

@@ -25,6 +25,9 @@ function Header() {
     { name: 'About', href: '', sectionId: 'about' },
     { name: 'Services', href: '', sectionId: 'services' },
     { name: 'Testimonials', href: '', sectionId: 'review' },
+    { name: 'Gallery', href: '', sectionId:'gallery'},
+    {name: 'Video', href: '', sectionId:'Video'},
+    { name: 'Contact', href: '', sectionId: 'contactme' },
     {
       name: 'Research',
       dropdownItems: [

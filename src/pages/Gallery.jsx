@@ -88,6 +88,7 @@ function Gallery() {
 
   if (loading) {
     return (
+     
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: currentTheme.background }}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mx-auto mb-4 mt-4" style={{ borderColor: currentTheme.primary }}></div>
@@ -98,6 +99,7 @@ function Gallery() {
   }
 
   return (
+    <section id="gallery">
     <div 
       className="px-5 pb-10 md:px-12 md:pb-12 lg:px-16" 
       style={{ backgroundColor: currentTheme.background }}
@@ -185,6 +187,7 @@ function Gallery() {
         )}
       </div>
     </div>
+    </section>
   );
 }
 
