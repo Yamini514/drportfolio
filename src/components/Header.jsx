@@ -374,6 +374,8 @@ function Header() {
             ))}
             <CustomButton
               variant="primary"
+
+
               onClick={handleBookAppointmentClick}
             >
               Book Appointment
@@ -488,7 +490,7 @@ function Header() {
             <CustomButton
               variant="primary"
               onClick={handleBookAppointmentClick}
-              className="block w-full mt-2 mx-4"
+              className="block w-auto justify-center mt-2 mx-4"
             >
               Book Appointment
             </CustomButton>
