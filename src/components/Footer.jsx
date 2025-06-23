@@ -60,10 +60,12 @@ function Footer() {
               © 2025 Dr. Laxminadh Sivaraju Neurosurgeon | All Rights Reserved. |{' '}
               <Link
                 to="/terms-and-conditions"
-                className="text-sm hover:underline transition-colors"
+                className="text-sm"
+                disabled
                 style={{
-                  color: currentTheme.text.secondary,
-                  '--hover-color': currentTheme.primary || '#9333ea',
+                  color: currentTheme.text.disabled || '#9ca3af', // Grayed out color, fallback to Tailwind's gray-400
+                  pointerEvents: 'none', // Disables clicking
+                  cursor: 'not-allowed', // Shows disabled cursor
                 }}
               >
                 Terms and Conditions
