@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import CustomButton from '../../components/CustomButton';
 import CustomInput from '../../components/CustomInput';
+import emailjs from '@emailjs/browser';
 
 // Constants
 const INITIAL_FORM_DATA = {
@@ -46,10 +47,28 @@ const UserRegister = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [pid, setPid] = useState('');
+  const [showWhatsAppPrompt, setShowWhatsAppPrompt] = useState(false);
 
   // Hooks
   const navigate = useNavigate();
   const { currentTheme } = useTheme();
+
+  // EmailJS Configuration
+  const sendRegistrationEmail = async (pid, email) => {
+    const templateParams = {
+      subject: `Registration Successful - Your PID: ${pid}`,
+      name: formData.name,
+      pid: pid,
+      email: email || `${formData.phone}@example.com`,
+      content: `Hi ${formData.name},\nYour PID (${pid})\n${formData.content || ''}\nWarm regards,\nDr. LakshmiNadh Sivraju`,
+    };
+
+    try {
+      await emailjs.send('service_l920egs', 'template_iremp8a', templateParams, '2pSuAO6tF3T-sejH-');
+    } catch (error) {
+      console.error('Email sending failed:', error);
+    }
+  };
 
   // Helper Functions
   const generatePID = async () => {
@@ -211,7 +230,9 @@ const UserRegister = () => {
         role: 'user',
       });
 
+      await sendRegistrationEmail(generatedPid, formData.email);
       setSuccess(`Your PID is <strong>${generatedPid}</strong>`);
+      setShowWhatsAppPrompt(true);
 
       await signInWithEmailAndPassword(auth, authEmail, formData.password);
     } catch (error) {
@@ -222,16 +243,32 @@ const UserRegister = () => {
     }
   };
 
+  const handleWhatsAppConfirm = () => {
+    const message = `Hi ${formData.name}, Your PID is ${pid}. Thank you for registering!`;
+    const encodedMessage = encodeURIComponent(message);
+    const phoneNumber = formData.phone;
+    const countryCode = '+91';
+    const whatsAppUrl = `https://wa.me/${countryCode}${phoneNumber}?text=${encodedMessage}`;
+    window.open(whatsAppUrl, '_blank');
+    setShowWhatsAppPrompt(false);
+    navigate('/login', { state: { phone: formData.phone } });
+  };
+
+  const handleWhatsAppDecline = () => {
+    setShowWhatsAppPrompt(false);
+    navigate('/login', { state: { phone: formData.phone } });
+  };
+
   // Effects
   useEffect(() => {
-    if (success) {
+    if (success && !showWhatsAppPrompt) {
       const timer = setTimeout(() => {
         setSuccess('');
         navigate('/login', { state: { phone: formData.phone } });
       }, 30000);
       return () => clearTimeout(timer);
     }
-  }, [success, navigate, formData.phone]);
+  }, [success, navigate, formData.phone, showWhatsAppPrompt]);
 
   // Render
   return (
@@ -330,6 +367,42 @@ const UserRegister = () => {
               className="text-green-500 text-sm text-center bg-green-50 p-2 rounded-md"
               dangerouslySetInnerHTML={{ __html: success }}
             />
+          )}
+          {showWhatsAppPrompt && (
+            <div
+              className="text-center p-6 rounded-lg shadow-md"
+              style={{
+                backgroundColor: currentTheme.background.secondary || '#F3F4F6',
+                border: `1px solid ${currentTheme.primary || '#8B5CF6'}`,
+              }}
+            >
+              <p
+                className="text-lg font-semibold mb-4"
+                style={{ color: currentTheme.text.primary }}
+              >
+                Save Your PID on WhatsApp?
+              </p>
+              <p
+                className="text-sm mb-6"
+                style={{ color: currentTheme.text.secondary }}
+              >
+                Would you like to receive your PID via WhatsApp for easy access?
+              </p>
+              <div className="flex justify-center space-x-4">
+                <CustomButton
+                  onClick={handleWhatsAppConfirm}
+                  className="justify-center bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  Yes, Send to WhatsApp
+                </CustomButton>
+                <CustomButton
+                  onClick={handleWhatsAppDecline}
+                  className="justify-center bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  No, Skip
+                </CustomButton>
+              </div>
+            </div>
           )}
           <div className="flex flex-col space-y-4">
             <CustomButton type="submit" disabled={loading} className="justify-center">
