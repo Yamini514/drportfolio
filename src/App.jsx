@@ -33,6 +33,7 @@ import Appointments from './pages/admin/Appointment';
 // Add this import at the top with other imports
 import ForgotPassword from './pages/ForgotPassword';
 import MyAppointments from './pages/MyAppointments';
+import Forgotpassword from './pages/auth/Forgotpassword';
 
 // Create a wrapper component to conditionally render social icons
 function SocialIconsWrapper() {
@@ -63,6 +64,7 @@ function App() {
             <Route path="login" element={<UserLogin />} />
             <Route path="userregister" element={<UserRegister />} />
             <Route path="/my-appointments" element={<MyAppointments />} />
+            <Route path="/userforgotpassword" element={<Forgotpassword />} />
             {/* Add this route */}
            
           </Route>

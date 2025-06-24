@@ -12,7 +12,7 @@ import {
   FaStar,
 } from "react-icons/fa";
 import bgImage from "../assets/bgimg11.jpg"; // Add this import
-import bg from "../../public/brain-scan-image.jpg"
+import bg from "../assets/brain-scan-image.jpg"
 
 function Hero() {
   const { currentTheme } = useTheme();
