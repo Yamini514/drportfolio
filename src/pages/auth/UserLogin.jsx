@@ -1,26 +1,29 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../../firebase/config';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
+import bcrypt from 'bcryptjs';
 
 const UserLogin = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ email: '', password: '' });
-  const [errors, setErrors] = useState({ email: '', password: '', general: '' });
+  const [formData, setFormData] = useState({ loginId: '', password: '' });
+  const [errors, setErrors] = useState({ loginId: '', password: '', general: '' });
   const [loading, setLoading] = useState(false);
   const { currentTheme } = useTheme();
 
-  // Session timeout logic
   const timeoutRef = useRef(null);
-  const SESSION_TIMEOUT = 2 * 60 * 1000; // 2 minutes
+  const SESSION_TIMEOUT = 2 * 60 * 1000;
 
   const resetTimeout = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     timeoutRef.current = setTimeout(handleTimeout, SESSION_TIMEOUT);
   };
 
@@ -47,16 +50,17 @@ const UserLogin = () => {
   const clearSessionTimeout = () => {
     const events = ['mousemove', 'click', 'keypress'];
     events.forEach((event) => window.removeEventListener(event, resetTimeout));
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
   };
 
   useEffect(() => {
-    console.log('Location state:', location.state);
     if (!auth || !db) {
-      console.error('Firebase auth or Firestore is not initialized. Check firebase/config.js');
+      console.error('Firebase auth or Firestore is not initialized.');
       setErrors((prev) => ({
         ...prev,
-        general: 'Authentication or database service is not available. Please try again later.',
+        general: 'Authentication or database service is not available.',
       }));
       return;
     }
@@ -69,7 +73,7 @@ const UserLogin = () => {
           if (userDoc.exists()) {
             const role = userDoc.data().role;
             const from = location.state?.from || location.state?.redirectTo;
-            const restrictedPaths = ['/login', '/userregister'];
+            const restrictedPaths = ['/login', '/userregister', '/userforgotpassword'];
             let destination;
             if (typeof from === 'string' && !restrictedPaths.includes(from)) {
               destination = from;
@@ -79,7 +83,6 @@ const UserLogin = () => {
               destination = localStorage.getItem('redirectAfterLogin') || '/';
               localStorage.removeItem('redirectAfterLogin');
             }
-            console.log(`Already logged in as ${role}, navigating to: ${destination}`);
             setupSessionTimeout();
             navigate(destination, { replace: true });
           } else {
@@ -87,14 +90,14 @@ const UserLogin = () => {
             await signOut(auth);
             localStorage.removeItem('isUserLoggedIn');
             localStorage.removeItem('userRole');
-            navigate('/login', { state: { error: 'User data not found. Please contact support.' } });
+            navigate('/login', { state: { error: 'User data not found.' } });
           }
         } catch (error) {
           console.error('Error checking user role:', error.message);
           await signOut(auth);
           localStorage.removeItem('isUserLoggedIn');
           localStorage.removeItem('userRole');
-          navigate('/login', { state: { error: 'Failed to verify user. Please try again.' } });
+          navigate('/login', { state: { error: 'Failed to verify user.' } });
         }
       };
       checkUserRole();
@@ -109,15 +112,35 @@ const UserLogin = () => {
     setErrors((prev) => ({ ...prev, [name]: '', general: '' }));
   };
 
+  const isPhoneNumber = (input) => {
+    return /^\+?\d{10,15}$/.test(input.replace(/\s/g, ''));
+  };
+
+  const isPID = (input) => {
+    return /^PID\d{4}-\d{5}$/.test(input.trim());
+  };
+
+  const standardizePhoneNumber = (phone) => {
+    let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+    if (!cleaned.startsWith('+')) {
+      cleaned = `+91${cleaned}`;
+    }
+    return cleaned;
+  };
+
   const validateForm = () => {
     let isValid = true;
-    const newErrors = { email: '', password: '', general: '' };
+    const newErrors = { loginId: '', password: '', general: '' };
 
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
+    if (!formData.loginId.trim()) {
+      newErrors.loginId = 'Email, phone number, or PID is required';
       isValid = false;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      newErrors.email = 'Please enter a valid email address';
+    } else if (
+      !isPhoneNumber(formData.loginId) &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.loginId.trim()) &&
+      !isPID(formData.loginId)
+    ) {
+      newErrors.loginId = 'Please enter a valid email, phone number, or PID';
       isValid = false;
     }
 
@@ -139,18 +162,18 @@ const UserLogin = () => {
       case 'auth/user-not-found':
       case 'auth/wrong-password':
         return {
-          email: 'Invalid email or password',
-          password: 'Invalid email or password',
+          loginId: 'Invalid email, phone number, PID, or password',
+          password: 'Invalid email, phone number, PID, or password',
           general: 'Please check your credentials and try again.',
         };
       case 'auth/too-many-requests':
         return { general: 'Too many login attempts. Please try again later.' };
       case 'auth/network-request-failed':
-        return { general: 'Network error. Please check your connection and try again.' };
+        return { general: 'Network error. Please check your connection.' };
       case 'auth/user-disabled':
-        return { general: 'This account has been disabled. Please contact support.' };
+        return { general: 'This account has been disabled.' };
       default:
-        return { general: 'Failed to login. Please try again or contact support.' };
+        return { general: 'Failed to login. Please try again.' };
     }
   };
 
@@ -162,70 +185,102 @@ const UserLogin = () => {
     }
 
     setLoading(true);
-    setErrors({ email: '', password: '', general: '' });
+    setErrors({ loginId: '', password: '', general: '' });
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
-      const user = userCredential.user;
+      let userCredential;
+      let userDoc;
+      let email;
 
-      // Fetch user data from Firestore
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists()) {
+      if (isPhoneNumber(formData.loginId) || isPID(formData.loginId)) {
+        const field = isPhoneNumber(formData.loginId) ? 'phone' : 'pid';
+        const value = isPhoneNumber(formData.loginId)
+          ? formData.loginId.replace(/[\s\-\(\)]/g, '')
+          : formData.loginId.trim();
+        console.log(`Querying Firestore for ${field}:`, value);
+        const q = query(collection(db, 'users'), where(field, '==', value));
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+          console.log(`No user found for ${field}:`, value);
+          throw new Error(`No user found with this ${field === 'phone' ? 'phone number' : 'PID'}. Please check or register.`);
+        }
+
+        userDoc = querySnapshot.docs[0];
+        const userId = userDoc.id;
         const userData = userDoc.data();
-        const role = userData.role;
 
-        // Validate user role
-        if (role !== 'user') {
-          throw new Error('Invalid user role');
+        // Verify password
+        const isValidPassword = bcrypt.compareSync(formData.password, userData.password);
+        if (!isValidPassword) {
+          throw new Error('Invalid password.');
         }
 
-        // Store login state and role in localStorage
-        localStorage.setItem('isUserLoggedIn', 'true');
-        localStorage.setItem('userRole', role);
-        setupSessionTimeout();
-
-        console.log(`Login successful as ${role}`);
-
-        // Determine redirect destination
-        let destination = '/';
-        const storedRedirect = localStorage.getItem('redirectAfterLogin');
-        if (storedRedirect) {
-          destination = storedRedirect;
-          localStorage.removeItem('redirectAfterLogin');
-        } else if (location.state?.redirectTo) {
-          destination = location.state.redirectTo;
-        } else if (location.state?.from) {
-          const from = location.state.from;
-          const restrictedPaths = ['/login', '/userregister'];
-          if (typeof from === 'string' && !restrictedPaths.includes(from)) {
-            destination = from;
-          } else if (from?.pathname && !restrictedPaths.includes(from.pathname)) {
-            destination = from.pathname;
-          }
-        }
-
-        console.log(`Navigating to: ${destination}`);
-        navigate(destination, { replace: true });
+        email = userData.email || `${userData.phone}@example.com`;
+        userCredential = await signInWithEmailAndPassword(auth, email, formData.password);
       } else {
-        // Check if user is an admin
+        email = formData.loginId.trim();
+        userCredential = await signInWithEmailAndPassword(auth, email, formData.password);
+        const userDocRef = doc(db, 'users', userCredential.user.uid);
+        userDoc = await getDoc(userDocRef);
+        if (!userDoc.exists()) {
+          throw new Error('User data not found in Firestore');
+        }
+        const userData = userDoc.data();
+        const isValidPassword = bcrypt.compareSync(formData.password, userData.password);
+        if (!isValidPassword) {
+          throw new Error('Invalid password.');
+        }
+      }
+
+      const user = userCredential.user;
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDocData = await getDoc(userDocRef);
+      if (!userDocData.exists()) {
         const adminDoc = await getDoc(doc(db, 'admins', user.uid));
         if (adminDoc.exists()) {
           throw new Error('Please use the admin login page.');
-        } else {
-          throw new Error('User data not found in Firestore');
+        }
+        throw new Error('User data not found in Firestore');
+      }
+      if (userDocData.data().role !== 'user') {
+        throw new Error('Invalid user role');
+      }
+
+      localStorage.setItem('isUserLoggedIn', 'true');
+      localStorage.setItem('userRole', 'user');
+      setupSessionTimeout();
+
+      let destination = '/';
+      const storedRedirect = localStorage.getItem('redirectAfterLogin');
+      if (storedRedirect) {
+        destination = storedRedirect;
+        localStorage.removeItem('redirectAfterLogin');
+      } else if (location.state?.redirectTo) {
+        destination = location.state.redirectTo;
+      } else if (location.state?.from) {
+        const from = location.state.from;
+        const restrictedPaths = ['/login', '/userregister', '/forgot-password'];
+        if (typeof from === 'string' && !restrictedPaths.includes(from)) {
+          destination = from;
+        } else if (from?.pathname && !restrictedPaths.includes(from.pathname)) {
+          destination = from.pathname;
         }
       }
+
+      navigate(destination, { replace: true });
     } catch (error) {
-      console.error('Login error:', error.code || 'custom-error', error.message);
+      console.error('Login error:', error.message);
       await signOut(auth).catch((err) => console.error('Sign out error:', err));
       localStorage.removeItem('isUserLoggedIn');
       localStorage.removeItem('userRole');
-      if (error.message === 'User data not found in Firestore') {
-        setErrors({ general: 'User data not found. Please contact support.' });
+      if (error.message.includes('No user found')) {
+        setErrors({ general: error.message });
       } else if (error.message === 'Invalid user role') {
         setErrors({ general: 'Invalid user role. Please contact support.' });
       } else if (error.message === 'Please use the admin login page.') {
         setErrors({ general: 'Please use the admin login page.' });
+      } else if (error.message === 'Invalid password.') {
+        setErrors({ password: 'Invalid password', general: 'Please check your password and try again.' });
       } else {
         setErrors(handleFirebaseError(error));
       }
@@ -236,59 +291,73 @@ const UserLogin = () => {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-6"
+      className="min-h-screen flex items-center justify-center p-4 sm:p-6"
       style={{ backgroundColor: currentTheme.background.primary }}
     >
       <div
-        className="w-full max-w-md space-y-8 p-8 rounded-xl shadow-lg border-2"
+        className="w-full max-w-md space-y-8 p-8 sm:p-10 rounded-2xl shadow-xl border-2"
         style={{
-          backgroundColor: currentTheme.surface,
+          backgroundColor: currentTheme.background.primary,
           borderColor: currentTheme.primary || '#8B5CF6',
-          boxShadow: `0 4px 6px rgba(0, 0, 0, 0.3)`,
+          boxShadow: '0 6px 12px rgba(0, 0, 0, 0.2)',
         }}
       >
-        <div>
+        <div className="text-center">
           <h2
-            className="text-3xl font-bold text-center mb-8"
+            className="text-3xl font-bold mb-6"
             style={{ color: currentTheme.text.primary }}
           >
             User Login
           </h2>
           {location.state?.sessionExpired && (
-            <p
-              className="text-center text-sm mb-4"
-              style={{ color: currentTheme.text.error || '#EF4444' }}
+            <div
+              className="text-sm mb-6 p-3 rounded-md"
+              style={{
+                backgroundColor: currentTheme.background.error || '#FEE2E2',
+                color: currentTheme.text.error || '#EF4444',
+              }}
+              role="alert"
             >
-              Session expired due to inactivity. Please log in again.
-            </p>
+              Your session has expired due to inactivity. Please log in again.
+            </div>
           )}
           {location.state?.error && (
-            <p
-              className="text-center text-sm mb-4"
-              style={{ color: currentTheme.text.error || '#EF4444' }}
+            <div
+              className="text-sm mb-6 p-3 rounded-md"
+              style={{
+                backgroundColor: currentTheme.background.error || '#FEE2E2',
+                color: currentTheme.text.error || '#EF4444',
+              }}
+              role="alert"
             >
               {location.state.error}
-            </p>
+            </div>
           )}
           {errors.general && (
-            <p
-              className="text-center text-sm mb-4"
-              style={{ color: currentTheme.text.error || '#EF4444' }}
+            <div
+              className="text-sm mb-6 p-3 rounded-md"
+              style={{
+                backgroundColor: currentTheme.background.error || '#FEE2E2',
+                color: currentTheme.text.error || '#EF4444',
+              }}
+              role="alert"
             >
               {errors.general}
-            </p>
+            </div>
           )}
         </div>
         <form className="space-y-6" onSubmit={handleLogin}>
           <CustomInput
-            label="Email"
-            type="email"
-            name="email"
-            value={formData.email}
+            label="Email, Phone Number, or PID"
+            type="text"
+            name="loginId"
+            value={formData.loginId}
             onChange={handleChange}
             required
-            error={errors.email}
+            error={errors.loginId}
             noBackground={true}
+            placeholder="Enter your email, phone number, or PID"
+            aria-describedby="loginId-error"
           />
           <CustomInput
             label="Password"
@@ -298,30 +367,42 @@ const UserLogin = () => {
             onChange={handleChange}
             required
             error={errors.password}
+            noBackground={true}
+            placeholder="Enter your password"
+            aria-describedby="password-error"
           />
-          <div className="flex flex-col space-y-4">
+          <div className="space-y-4">
             <CustomButton
               type="submit"
               disabled={loading}
-              className="justify-center"
+              className="w-full justify-center py-3 text-lg font-medium transition-colors duration-200 hover:bg-opacity-90"
+              style={{
+                backgroundColor: loading ? currentTheme.disabled : currentTheme.primary,
+                color: currentTheme.text.button,
+              }}
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Logging in...' : 'Sign In'}
             </CustomButton>
-            <p
-              className="text-center text-sm"
-              style={{ color: currentTheme.text.secondary }}
-            >
-              Don't have an account?{' '}
+            <div className="flex justify-between text-sm">
+              <button
+                type="button"
+                onClick={() => navigate('/forgot-password')}
+                className="font-medium hover:underline transition-colors duration-200"
+                style={{ color: currentTheme.primary || '#8B5CF6' }}
+                aria-label="Navigate to forgot password page"
+              >
+                Forgot Password?
+              </button>
               <button
                 type="button"
                 onClick={() => navigate('/userregister')}
-                className="font-medium hover:underline text-center"
-                style={{ color: currentTheme.primary }}
+                className="font-medium hover:underline transition-colors duration-200"
+                style={{ color: currentTheme.primary || '#8B5CF6' }}
                 aria-label="Navigate to registration page"
               >
-                Register here
+                Create an Account
               </button>
-            </p>
+            </div>
           </div>
         </form>
       </div>

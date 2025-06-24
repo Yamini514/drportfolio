@@ -14,13 +14,13 @@ function ContactMe() {
     email: '',
     phone: '',
     message: '',
-    timestamp: null
+    timestamp: null,
   });
   const [errors, setErrors] = useState({
     fullName: '',
     email: '',
     phone: '',
-    message: ''
+    message: '',
   });
   const location = useLocation();
 
@@ -87,54 +87,42 @@ function ContactMe() {
       processedValue = value.slice(0, 200);
     }
 
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: processedValue
+      [name]: processedValue,
     }));
 
-    setErrors(prev => ({
+    setErrors((prev) => ({
       ...prev,
-      [name]: validateField(name, processedValue)
+      [name]: validateField(name, processedValue),
     }));
   };
 
   // Validate on blur
   const handleBlur = (e) => {
     const { name, value } = e.target;
-    setErrors(prev => ({
+    setErrors((prev) => ({
       ...prev,
-      [name]: validateField(name, value)
+      [name]: validateField(name, value),
     }));
   };
 
-  // Send WhatsApp notification via backend
-  const sendWhatsAppNotification = async (phone, templateName, params) => {
+  // Send WhatsApp notification via direct link
+  const sendWhatsAppNotification = (phone, templateName, params) => {
     try {
-      console.log(`Sending WhatsApp to ${phone} with template ${templateName}`);
-      const response = await fetch('http://localhost:3000/send-whatsapp', { // Replace with your backend URL in production
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone,
-          templateName,
-          params,
-        }),
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to send WhatsApp message: ${response.status} - ${errorText}`);
+      console.log(`Preparing WhatsApp message for ${phone} with template ${templateName}`);
+      let message;
+      if (templateName === 'form_submission_confirmation') {
+        message = `Dear ${params[0].value}, we have received your enquiry. We will contact you soon.`;
+      } else {
+        message = `New enquiry from ${params[0].value}. Email: ${params[1].value}, Phone: ${params[2].value}, Message: ${params[3].value}`;
       }
-      console.log(`WhatsApp sent successfully to ${phone}`);
+      const whatsappUrl = `https://wa.me/${phone.replace('+', '')}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+      console.log(`Opened WhatsApp link for ${phone}`);
     } catch (error) {
-      console.error('Error sending WhatsApp notification:', error);
-      // Fallback: Open WhatsApp Click-to-Chat
-      const message = templateName === 'form_submission_confirmation'
-        ? `Dear ${params[0].value}, we have received your enquiry. We will contact you soon.`
-        : `New enquiry from ${params[0].value}. Email: ${params[1].value}, Phone: ${params[2].value}, Message: ${params[3].value}`;
-      window.open(`https://wa.me/${phone.replace('+', '')}?text=${encodeURIComponent(message)}`, '_blank');
-      throw error; // Re-throw to handle in handleSubmit
+      console.error('Error opening WhatsApp link:', error);
+      throw error;
     }
   };
 
@@ -147,12 +135,12 @@ function ContactMe() {
       fullName: validateField('fullName', formData.fullName),
       email: validateField('email', formData.email),
       phone: validateField('phone', formData.phone),
-      message: validateField('message', formData.message)
+      message: validateField('message', formData.message),
     };
 
     setErrors(newErrors);
 
-    if (Object.values(newErrors).some(error => error)) {
+    if (Object.values(newErrors).some((error) => error)) {
       console.log('Validation errors:', newErrors);
       return;
     }
@@ -160,7 +148,7 @@ function ContactMe() {
     try {
       const dataToSubmit = {
         ...formData,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       console.log('Saving to Firestore...');
@@ -168,37 +156,38 @@ function ContactMe() {
       console.log('Firestore save successful');
 
       console.log('Sending EmailJS...');
+      const emailContent = `
+        We received your request we will contact you soon.
+
+        Best regards,
+        Dr. Lakshminadh Sivaraju
+      `;
       await emailjs.send(
         'service_l920egs',
-        'template_iremp8a',
+        'template_3ib2kwp',
         {
           name: formData.fullName,
-          title: formData.message,
-          email: formData.email
+          email: formData.email,
+          subject: "We've received your message",
+          content: emailContent,
         },
         '2pSuAO6tF3T-sejH-'
       );
       console.log('EmailJS sent');
 
       console.log('Sending WhatsApp to user...');
-      await sendWhatsAppNotification(
-        `+91${formData.phone}`,
-        'form_submission_confirmation',
-        [{ name: 'fullName', value: formData.fullName }]
-      );
+      sendWhatsAppNotification(`+91${formData.phone}`, 'form_submission_confirmation', [
+        { name: 'fullName', value: formData.fullName },
+      ]);
       console.log('WhatsApp to user sent');
 
       console.log('Sending WhatsApp to doctor...');
-      await sendWhatsAppNotification(
-        '+918688423659',
-        'new_enquiry_notification',
-        [
-          { name: 'fullName', value: formData.fullName },
-          { name: 'email', value: formData.email },
-          { name: 'phone', value: `+91${formData.phone}` },
-          { name: 'message', value: formData.message },
-        ]
-      );
+      sendWhatsAppNotification('+918688423659', 'new_enquiry_notification', [
+        { name: 'fullName', value: formData.fullName },
+        { name: 'email', value: formData.email },
+        { name: 'phone', value: `+91${formData.phone}` },
+        { name: 'message', value: formData.message },
+      ]);
       console.log('WhatsApp to doctor sent');
 
       setShowSuccess(true);
@@ -209,13 +198,13 @@ function ContactMe() {
           email: '',
           phone: '',
           message: '',
-          timestamp: null
+          timestamp: null,
         });
         setErrors({
           fullName: '',
           email: '',
           phone: '',
-          message: ''
+          message: '',
         });
       }, 3000);
     } catch (error) {
@@ -254,7 +243,7 @@ function ContactMe() {
                   style={{
                     backgroundColor: currentTheme.background,
                     borderColor: errors.fullName ? 'red' : currentTheme.border,
-                    color: currentTheme.text.primary
+                    color: currentTheme.text.primary,
                   }}
                   className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
                   required
@@ -274,7 +263,7 @@ function ContactMe() {
                   style={{
                     backgroundColor: currentTheme.background,
                     borderColor: errors.email ? 'red' : currentTheme.border,
-                    color: currentTheme.text.primary
+                    color: currentTheme.text.primary,
                   }}
                   className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
                   required
@@ -293,7 +282,7 @@ function ContactMe() {
                   style={{
                     backgroundColor: currentTheme.background,
                     borderColor: errors.phone ? 'red' : currentTheme.border,
-                    color: currentTheme.text.primary
+                    color: currentTheme.text.primary,
                   }}
                   className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
                   required
@@ -313,7 +302,7 @@ function ContactMe() {
                   style={{
                     backgroundColor: currentTheme.background,
                     borderColor: errors.message ? 'red' : currentTheme.border,
-                    color: currentTheme.text.primary
+                    color: currentTheme.text.primary,
                   }}
                   className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
                   required
@@ -327,7 +316,7 @@ function ContactMe() {
                 type="submit"
                 style={{ backgroundColor: currentTheme.primary }}
                 className="w-32 py-3 text-white rounded-lg font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transform hover:scale-105 transition-all duration-300 mx-auto flex items-center justify-center shadow-md"
-                disabled={Object.values(errors).some(error => error)}
+                disabled={Object.values(errors).some((error) => error)}
               >
                 Send
               </button>
@@ -408,10 +397,7 @@ function ContactMe() {
       </div>
       {showSuccess && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div
-            className="p-6 rounded-lg text-center"
-            style={{ backgroundColor: currentTheme.surface }}
-          >
+          <div className="p-6 rounded-lg text-center" style={{ backgroundColor: currentTheme.surface }}>
             <h3 className="text-xl font-semibold mb-2">Message Sent Successfully!</h3>
             <p style={{ color: currentTheme.text.secondary }}>Thank you for contacting us.</p>
           </div>

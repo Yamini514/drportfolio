@@ -18,6 +18,8 @@ function Publications() {
           id: doc.id,
           ...doc.data()
         }));
+        // Sort by publishedYear in ascending order
+        publicationsList.sort((a, b) => a.publishedYear - b.publishedYear);
         setPublications(publicationsList);
       } catch (error) {
         console.error("Error fetching publications:", error);
@@ -67,7 +69,7 @@ function Publications() {
               >
                 <div className="flex-grow">
                   <p className="text-base md:text-lg">
-                    {publication.title}
+                    {publication.title} <span style={{ color: currentTheme.text.secondary }}>({publication.publishedYear})</span>
                   </p>
                 </div>
                 <ExternalLink 

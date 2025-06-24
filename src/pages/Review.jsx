@@ -185,6 +185,7 @@ function Review() {
   };
 
   return (
+    <section id="reviews">
     <div
       className="min-h-screen pt-5 px-4 pb-10 md:px-15 lg:px-20"
       style={{ backgroundColor: currentTheme.background }}
@@ -481,6 +482,7 @@ function Review() {
         )}
       </div>
     </div>
+    </section>
   );
 }
 

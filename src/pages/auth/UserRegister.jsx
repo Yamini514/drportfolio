@@ -21,6 +21,7 @@ import {
 import CustomButton from '../../components/CustomButton';
 import CustomInput from '../../components/CustomInput';
 import emailjs from '@emailjs/browser';
+import bcrypt from 'bcryptjs';
 
 // Constants
 const INITIAL_FORM_DATA = {
@@ -214,6 +215,10 @@ const UserRegister = () => {
       const generatedPid = await generatePID();
       setPid(generatedPid);
 
+      // Hash the password
+      const salt = bcrypt.genSaltSync(10);
+      const hashedPassword = bcrypt.hashSync(formData.password, salt);
+
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         authEmail,
@@ -225,6 +230,7 @@ const UserRegister = () => {
         email: formData.email || null,
         phone: formData.phone,
         pid: generatedPid,
+        password: hashedPassword, // Store hashed password
         createdAt: new Date().toISOString(),
         registrationDate: new Date().toISOString(),
         role: 'user',
