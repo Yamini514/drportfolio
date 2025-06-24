@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { db, auth } from "../firebase/config";
-import { collection, getDocs, addDoc, doc, setDoc, getDoc, query, where } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, getDoc, query, where } from "firebase/firestore";
 import CustomInput from "../components/CustomInput";
 import CustomButton from "../components/CustomButton";
 import CustomSelect from "../components/CustomSelect";
@@ -64,8 +64,8 @@ function BookAppointment() {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (!user) {
         setBookingMessage("Authentication required. Please log in to book an appointment.");
-        localStorage.setItem('redirectAfterLogin', '/bookappointment');
-        navigate('/login', { state: { redirectTo: '/bookappointment' } });
+        localStorage.setItem("redirectAfterLogin", "/bookappointment");
+        navigate("/login", { state: { redirectTo: "/bookappointment" } });
       }
     });
     return () => unsubscribe();
@@ -117,9 +117,9 @@ function BookAppointment() {
         name: doc.data().location,
         docId: doc.id,
       }));
-      const uniqueLocations = [...new Set(locationList.map(loc => loc.name))].map(name => ({
+      const uniqueLocations = [...new Set(locationList.map((loc) => loc.name))].map((name) => ({
         name,
-        docId: locationList.find(loc => loc.name === name).docId
+        docId: locationList.find((loc) => loc.name === name).docId,
       }));
       if (uniqueLocations.length === 0) {
         setBookingMessage("No locations available. Please try again later or contact support.");
@@ -203,7 +203,7 @@ function BookAppointment() {
   }, []);
 
   const handlePhoneInput = (e, isOther = false) => {
-    const value = e.target.value.replace(/[^0-9+]/g, '');
+    const value = e.target.value.replace(/[^0-9+]/g, "");
     if (value.length > 11) {
       setErrors((prev) => ({ ...prev, phone: "Phone number cannot exceed 11 digits." }));
       return;
@@ -284,12 +284,14 @@ function BookAppointment() {
       if (querySnapshot.empty) {
         setTimeSlots([]);
         setDaySchedule({ isOpen: false });
-        setLocationMismatch(true);
+        setLocationmismatch(true);
         setBookingMessage(`There are no active slots available on this date at ${selectedLocation}. Please select another date or location.`);
         return;
       }
       const docData = querySnapshot.docs[0].data();
-      const storedSlots = Array.isArray(docData.timeSlots) ? docData.timeSlots.map(slot => slot.replace(/["']/g, "").trim()) : [];
+      const storedSlots = Array.isArray(docData.timeSlots)
+        ? docData.timeSlots.map((slot) => slot.replace(/["']/g, "").trim())
+        : [];
       const currentTime = getCurrentTimeInIST();
       const selectedDateObj = new Date(date);
       const now = new Date();
@@ -301,7 +303,9 @@ function BookAppointment() {
         if (period === "AM" && slotHour === 12) slotHour24 = 0;
         const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
         const [currentHour, currentMinute, currentPeriod] = currentTime.split(/[:\s]/).map((part, index) => (index < 2 ? Number(part) : part));
-        const currentTimeInMinutes = (currentPeriod === "PM" && currentHour !== 12 ? currentHour + 12 : currentHour === 12 && currentPeriod === "AM" ? 0 : currentHour) * 60 + currentMinute;
+        const currentTimeInMinutes =
+          (currentPeriod === "PM" && currentHour !== 12 ? currentHour + 12 : currentHour === 12 && currentPeriod === "AM" ? 0 : currentHour) * 60 +
+          currentMinute;
         const endHour24 = 17;
         const endMinute = 0;
         const endTimeInMinutes = endHour24 * 60 + endMinute;
@@ -313,7 +317,7 @@ function BookAppointment() {
       const sortedSlots = availableSlots.sort((a, b) => {
         const timeA = parse(a, "h:mm a", new Date());
         const timeB = parse(b, "h:mm a", new Date());
-        return timeA - timeB;
+        return timeACommon.js
       });
       setTimeSlots(sortedSlots);
       setDaySchedule({ isOpen: sortedSlots.length > 0 });
@@ -478,7 +482,10 @@ function BookAppointment() {
 
       if (formData.phone) {
         const phoneNumber = formData.phone.startsWith("+") ? formData.phone : `+91${formData.phone}`;
-        const message = `Dear ${formData.name}, your appointment is confirmed for ${format(new Date(selectedDate), "MMMM d, yyyy")} at ${selectedSlot} at ${selectedLocation}. Appointment Type: ${formData.appointmentType}. PID: ${formData.pid}.`;
+        const message = `Dear ${formData.name}, your appointment is confirmed for ${format(
+          new Date(selectedDate),
+          "MMMM d, yyyy"
+        )} at ${selectedSlot} at ${selectedLocation}. Appointment Type: ${formData.appointmentType}. PID: ${formData.pid}.`;
         window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
       }
 
@@ -519,7 +526,7 @@ function BookAppointment() {
         setFormData({
           name: formData.name,
           email: formData.email,
-          pid: formData.pid,
+          pid: "",
           phone: "",
           dob: "",
           age: "",
@@ -542,7 +549,12 @@ function BookAppointment() {
 
   const getCurrentTimeInIST = () => {
     const now = new Date();
-    const formatter = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true });
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
     const parts = formatter.formatToParts(now);
     const hour = parts.find((part) => part.type === "hour").value;
     const minute = parts.find((part) => part.type === "minute").value;
@@ -586,7 +598,7 @@ function BookAppointment() {
 
   const isDateAvailable = (date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    return availableDates.some(d => d.date === dateStr && d.location.toLowerCase() === selectedLocation.toLowerCase()) && !isDateUnavailable(dateStr);
+    return availableDates.some((d) => d.date === dateStr && d.location.toLowerCase() === selectedLocation.toLowerCase()) && !isDateUnavailable(dateStr);
   };
 
   const filterUnavailableDates = (date) => {
@@ -625,7 +637,9 @@ function BookAppointment() {
           const key = `${date}|${location}`;
           counts[key] = (counts[key] || 0) + 1;
         });
-        const fullyBooked = Object.entries(counts).filter(([key, count]) => count >= 10).map(([key]) => key.split("|")[0]);
+        const fullyBooked = Object.entries(counts)
+          .filter(([key, count]) => count >= 10)
+          .map(([key]) => key.split("|")[0]);
         setBookedDates(fullyBooked);
       } catch (error) {
         console.error("Error fetching booked dates:", error.message);
@@ -657,163 +671,148 @@ function BookAppointment() {
   }, []);
 
   return (
-    <div className="min-h-[calc(100vh-200px)] flex items-center justify-center p-4 sm:p-6">
-      <div className="p-6 sm:p-8 rounded-lg shadow-lg w-full max-w-5xl" style={{ backgroundColor: currentTheme.background, borderColor: currentTheme.border, borderWidth: "1px" }}>
-        <div className="flex justify-center items-center mb-4 sm:mb-6">
-          <h2 className="text-xl sm:text-2xl font-semibold text-center" style={{ color: currentTheme.text.primary }}>Book Your Appointment</h2>
-        </div>
+    <>
+      <section
+        className="min-h-[calc(100vh-200px)] flex items-center justify-center p-4 sm:p-6"
+        style={{ backgroundColor: currentTheme.background, borderColor: currentTheme.border, borderWidth: "1px" }}
+      >
+        <h2 className="text-xl sm:text-2xl font-semibold text-center mb-4 sm:mb-6" style={{ color: currentTheme.text.primary }}>
+          Book Your Appointment
+        </h2>
 
         {showSuccess && (
-          <div className="mb-4 p-3 sm:p-4 rounded-lg bg-green-100 text-green-800 sm:mb-6 text-sm sm:text-base">
-            <p>Appointment booked successfully! A confirmation has been sent.</p>
-          </div>
+          <p className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg bg-green-100 text-green-800 text-sm sm:text-base">
+            Appointment booked successfully! A confirmation has been sent.
+          </p>
         )}
 
         {bookingMessage && (
-          <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg bg-red-100 text-red-800 text-sm sm:text-base">
+          <p className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg bg-red-100 text-red-800 text-sm sm:text-base">
             {bookingMessage}
-          </div>
+          </p>
         )}
 
-        <div className="space-y-4 sm:space-y-6">
-          <div className="flex flex-col items-center gap-4 sm:gap-6">
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-6">
-              <div className="flex flex-row items-center gap-2 w-auto">
-                <label htmlFor="location" className="text-sm sm:text-base font-medium whitespace-nowrap" style={{ color: currentTheme.text.primary }}>
-                  Select Location<span className="text-red-500 ml-1">*</span>
-                </label>
-                <CustomSelect
-                  id="location-select"
-                  value={selectedLocation}
-                  onChange={handleLocationChange}
-                  options={[{ value: "", label: "Select your location", disabled: true }, ...locations.map(loc => ({ value: loc.name, label: loc.name }))]}
-                  required
-                  className="w-60 sm:w-60 p-2 rounded-md border text-sm sm:text-base"
-                  style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
-                />
-              </div>
-              <div className="flex flex-row items-center gap-2 w-auto">
-                <label htmlFor="date-input" className="text-sm sm:text-base font-medium whitespace-nowrap" style={{ color: currentTheme.text.primary }}>
-                  Select Date<span className="text-red-500 ml-1">*</span>
-                </label>
-                <DatePicker
-                  selected={selectedDate ? new Date(selectedDate) : null}
-                  onChange={handleDateChange}
-                  minDate={new Date(today)}
-                  maxDate={new Date(new Date().setFullYear(new Date().getFullYear() + 1))}
-                  dayClassName={(date) => (isDateAvailable(date) && isValid(date) ? "bg-green-100 text-green-800 font-semibold" : isDateUnavailable(format(date, "yyyy-MM-dd")) ? "cursor-not-allowed text-gray-400" : "")}
-                  filterDate={filterUnavailableDates}
-                  required
-                  className="w-45 sm:w-45 p-2 rounded-md border text-sm sm:text-base"
-                  style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
-                  disabled={!selectedLocation || !hasAvailableDates}
-                  placeholderText="Select Date"
-                  showPopperArrow={false}
-                  dateFormat="dd-MM-yyyy"
-                  onKeyDown={(e) => e.preventDefault()}
-                />
-              </div>
-            </div>
-            {selectedDate && selectedDayName && !isLoading && (
-              <div className="text-center">
-                <p className="text-sm sm:text-base font-medium" style={{ color: currentTheme.text.primary }}>
-                  Selected Date: {format(new Date(selectedDate), "MMMM d, yyyy")} at {selectedLocation} | Day: {selectedDayName}
-                </p>
-              </div>
-            )}
-          </div>
+        <label htmlFor="location" className="text-sm sm:text-base font-medium whitespace-nowrap" style={{ color: currentTheme.text.primary }}>
+          Select Location<span className="text-red-500 ml-1">*</span>
+        </label>
+        <CustomSelect
+          id="location-select"
+          value={selectedLocation}
+          onChange={handleLocationChange}
+          options={[{ value: "", label: "Select your location", disabled: true }, ...locations.map((loc) => ({ value: loc.name, label: loc.name }))]}
+          required
+          className="w-60 sm:w-60 p-2 rounded-md border text-sm sm:text-base"
+          style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
+        />
 
-          {isLoading && (
-            <div className="flex justify-center py-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: currentTheme.primary }}></div>
-            </div>
-          )}
+        <label htmlFor="date-input" className="text-sm sm:text-base font-medium whitespace-nowrap" style={{ color: currentTheme.text.primary }}>
+          Select Date<span className="text-red-500 ml-1">*</span>
+        </label>
+        <DatePicker
+          selected={selectedDate ? new Date(selectedDate) : null}
+          onChange={handleDateChange}
+          minDate={new Date(today)}
+          maxDate={new Date(new Date().setFullYear(new Date().getFullYear() + 1))}
+          dayClassName={(date) =>
+            isDateAvailable(date) && isValid(date) ? "bg-green-100 text-green-800 font-semibold" : isDateUnavailable(format(date, "yyyy-MM-dd")) ? "cursor-not-allowed text-gray-400" : ""
+          }
+          filterDate={filterUnavailableDates}
+          required
+          className="w-45 sm:w-45 p-2 rounded-md border text-sm sm:text-base"
+          style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
+          disabled={!selectedLocation || !hasAvailableDates}
+          placeholderText="Select Date"
+          showPopperArrow={false}
+          dateFormat="dd-MM-yyyy"
+          onKeyDown={(e) => e.preventDefault()}
+        />
 
-          {selectedDate && timeSlots.length > 0 && !isLoading && !locationMismatch && (
-            <div className="mt-4 sm:mt-6">
-              <label className="block text-sm sm:text-base font-medium mb-2 sm:mb-3 text-center" style={{ color: currentTheme.text.primary }}>
-                Available Time Slots
-              </label>
-              <div className="flex justify-center">
-                <div className="flex flex-wrap justify-center gap-2 sm:gap-3 max-w-3xl">
-                  {timeSlots.map((slot) => {
-                    const [time, period] = slot.split(" ");
-                    const isBooked = bookedSlots[`${selectedDate}|${selectedLocation}`]?.includes(slot);
-                    return (
-                      <CustomButton
-                        key={slot}
-                        variant={selectedSlot === slot ? "primary" : isBooked ? "disabled" : "secondary"}
-                        onClick={() => !isBooked && handleSlotSelect(slot)}
-                        className={`w-28 sm:w-32 h-10 text-xs sm:text-sm py-2 px-3 flex items-center justify-center ${isBooked ? 'cursor-not-allowed bg-red-500 text-white opacity-75 hover:bg-red-600' : ''}`}
-                        disabled={isBooked}
-                      >
-                        <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                          <Clock className="w-4 h-4" />
-                          <span>{time}</span>
-                          <span>{period}</span>
-                        </div>
-                      </CustomButton>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
+        {selectedDate && selectedDayName && !isLoading && (
+          <p className="text-sm sm:text-base font-medium text-center" style={{ color: currentTheme.text.primary }}>
+            Selected Date: {format(new Date(selectedDate), "MMMM d, yyyy")} at {selectedLocation} | Day: {selectedDayName}
+          </p>
+        )}
 
-          {showConfirmation && (
-            <div className="p-6 rounded-lg shadow-md border w-full mt-6 sm:mt-8" style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}>
-              <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center" style={{ color: currentTheme.text.primary }}>
-                Booking Confirmation
-              </h3>
-              <p className="text-sm sm:text-base mb-4 text-center" style={{ color: currentTheme.text.primary }}>
-                Are you booking this appointment for yourself or someone else?
-              </p>
-              <div className="flex justify-center gap-4 mb-6">
+        {isLoading && (
+          <span className="animate-spin rounded-full h-8 w-8 border-b-2 block mx-auto py-4" style={{ borderColor: currentTheme.primary }}></span>
+        )}
+
+        {selectedDate && timeSlots.length > 0 && !isLoading && !locationMismatch && (
+          <>
+            <label className="block text-sm sm:text-base font-medium mb-2 sm:mb-3 text-center" style={{ color: currentTheme.text.primary }}>
+              Available Time Slots
+            </label>
+            {timeSlots.map((slot) => {
+              const [time, period] = slot.split(" ");
+              const isBooked = bookedSlots[`${selectedDate}|${selectedLocation}`]?.includes(slot);
+              return (
                 <CustomButton
-                  variant={bookingFor === "self" ? "primary" : "secondary"}
-                  onClick={(e) => handleConfirmation(e, "self")}
-                  className="w-max py-2 px-4"
+                  key={slot}
+                  variant={selectedSlot === slot ? "primary" : isBooked ? "disabled" : "secondary"}
+                  onClick={() => !isBooked && handleSlotSelect(slot)}
+                  className={`w-28 sm:w-32 h-10 text-xs sm:text-sm py-2 px-3 flex items-center justify-center ${isBooked ? "cursor-not-allowed bg-red-500 text-white opacity-75 hover:bg-red-600" : ""}`}
+                  disabled={isBooked}
                 >
-                  For Myself
+                  <Clock className="w-4 h-4" />
+                  <span>{time}</span>
+                  <span>{period}</span>
                 </CustomButton>
-                <CustomButton
-                  variant={bookingFor === "other" ? "primary" : "secondary"}
-                  onClick={(e) => handleConfirmation(e, "other")}
-                  className="w-max py-2 px-4"
-                >
-                  For Someone Else
-                </CustomButton>
-              </div>
-            </div>
-          )}
+              );
+            })}
+          </>
+        )}
 
-          {showForm && bookingFor === "self" && (
-            <SelfBookingForm
-              formData={formData}
-              setFormData={setFormData}
-              errors={errors}
-              setErrors={setErrors}
-              handleSubmit={handleSubmit}
-              handleCancel={handleCancel}
-              isLoading={isLoading}
-            />
-          )}
+        {showConfirmation && (
+          <section className="p-6 rounded-lg shadow-md border w-full mt-6 sm:mt-8" style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}>
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center" style={{ color: currentTheme.text.primary }}>
+              Booking Confirmation
+            </h3>
+            <p className="text-sm sm:text-base mb-4 text-center" style={{ color: currentTheme.text.primary }}>
+              Are you booking this appointment for yourself or someone else?
+            </p>
+            <CustomButton
+              variant={bookingFor === "self" ? "primary" : "secondary"}
+              onClick={(e) => handleConfirmation(e, "self")}
+              className="w-max py-2 px-4 mr-4"
+            >
+              For Myself
+            </CustomButton>
+            <CustomButton
+              variant={bookingFor === "other" ? "primary" : "secondary"}
+              onClick={(e) => handleConfirmation(e, "other")}
+              className="w-max py-2 px-4"
+            >
+              For Someone Else
+            </CustomButton>
+          </section>
+        )}
 
-          {showForm && bookingFor === "other" && (
-            <OtherPatientForm
-              otherPatientData={otherPatientData}
-              setOtherPatientData={setOtherPatientData}
-              otherPatientErrors={otherPatientErrors}
-              setOtherPatientErrors={setOtherPatientErrors}
-              setFormData={setFormData}
-              handleOtherPatientSubmit={handleOtherPatientSubmit}
-              handleCancel={handleCancel}
-              isLoading={isLoading}
-            />
-          )}
-        </div>
-      </div>
-    </div>
+        {showForm && bookingFor === "self" && (
+          <SelfBookingForm
+            formData={formData}
+            setFormData={setFormData}
+            errors={errors}
+            setErrors={setErrors}
+            handleSubmit={handleSubmit}
+            handleCancel={handleCancel}
+            isLoading={isLoading}
+          />
+        )}
+
+        {showForm && bookingFor === "other" && (
+          <OtherPatientForm
+            otherPatientData={otherPatientData}
+            setOtherPatientData={setOtherPatientData}
+            otherPatientErrors={otherPatientErrors}
+            setOtherPatientErrors={setOtherPatientErrors}
+            setFormData={setFormData}
+            handleOtherPatientSubmit={handleOtherPatientSubmit}
+            handleCancel={handleCancel}
+            isLoading={isLoading}
+          />
+        )}
+      </section>
+    </>
   );
 }
 
