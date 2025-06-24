@@ -16,7 +16,7 @@ function PublicationsContent() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
-    url: ''
+    publishedYear: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState({
@@ -29,12 +29,17 @@ function PublicationsContent() {
       try {
         const publicationsCollection = collection(db, 'publications');
         const publicationsSnapshot = await getDocs(publicationsCollection);
-        const publicationsList = publicationsSnapshot.docs.map((doc, index) => ({
+        const publicationsList = publicationsSnapshot.docs.map((doc) => ({
           id: doc.id,
-          publicationId: `${String(index + 1).padStart(3, '')}`,
           ...doc.data()
         }));
-        setPublications(publicationsList);
+        // Sort by publishedYear in ascending order and assign sequential IDs
+        publicationsList.sort((a, b) => a.publishedYear - b.publishedYear);
+        const sortedListWithIds = publicationsList.map((pub, index) => ({
+          ...pub,
+          publicationId: `${String(index + 1).padStart(3, '0')}`
+        }));
+        setPublications(sortedListWithIds);
       } catch (error) {
         console.error("Error fetching publications:", error);
       }
@@ -61,23 +66,31 @@ function PublicationsContent() {
             pub.id === editingPublication 
               ? { ...pub, ...formData }
               : pub
-          )
+          ).sort((a, b) => a.publishedYear - b.publishedYear)
+          .map((pub, index) => ({
+            ...pub,
+            publicationId: `${String(index + 1).padStart(3, '0')}`
+          }))
         );
       } else {
         const publicationsCollection = collection(db, 'publications');
         const docRef = await addDoc(publicationsCollection, formData);
         const newPublication = {
           id: docRef.id,
-          publicationId: `${String(publications.length + 1).padStart(3, '')}`,
+          publicationId: `${String(publications.length + 1).padStart(3, '0')}`,
           ...formData
         };
-        setPublications(prev => [...prev, newPublication]);
+        setPublications(prev => [...prev, newPublication].sort((a, b) => a.publishedYear - b.publishedYear)
+          .map((pub, index) => ({
+            ...pub,
+            publicationId: `${String(index + 1).padStart(3, '0')}`
+          })));
       }
       
       setEditingPublication(null);
       setFormData({
         title: '',
-        url: ''
+        publishedYear: ''
       });
       setShowForm(false);
     } catch (error) {
@@ -89,7 +102,12 @@ function PublicationsContent() {
   const handleDelete = async (id) => {
     try {
       await deleteDoc(doc(db, 'publications', id));
-      setPublications(prev => prev.filter(pub => pub.id !== id));
+      setPublications(prev => prev.filter(pub => pub.id !== id)
+        .sort((a, b) => a.publishedYear - b.publishedYear)
+        .map((pub, index) => ({
+          ...pub,
+          publicationId: `${String(index + 1).padStart(3, '0')}`
+        })));
       setDeleteConfirmation({ isOpen: false, publicationId: null });
     } catch (error) {
       console.error("Error deleting publication:", error);
@@ -100,7 +118,7 @@ function PublicationsContent() {
     setEditingPublication(publication.id);
     setFormData({
       title: publication.title,
-      url: publication.url
+      publishedYear: publication.publishedYear || ''
     });
     setShowForm(true);
   };
@@ -110,25 +128,22 @@ function PublicationsContent() {
       header: 'Title',
       accessor: 'title',
       cell: (row) => (
-        <div className="whitespace-normal" style={{ color: currentTheme.text.primary }}>{row.title}</div>
-      )
-    },
-    {
-      header: 'URL',
-      accessor: 'url',
-      cell: (row) => (
         <a 
           href={row.url} 
           target="_blank" 
           rel="noopener noreferrer"
-          
           style={{ color: currentTheme.primary }}
-          className="hover:opacity-80"
-          title='View'
-          
+          className="hover:opacity-80 whitespace-normal"
         >
-          View
+          {row.title}
         </a>
+      )
+    },
+    {
+      header: 'Published Year',
+      accessor: 'publishedYear',
+      cell: (row) => (
+        <div style={{ color: currentTheme.text.primary }}>{row.publishedYear || 'N/A'}</div>
       )
     },
     {
@@ -195,7 +210,7 @@ function PublicationsContent() {
               setEditingPublication(null);
               setFormData({
                 title: '',
-                url: ''
+                publishedYear: ''
               });
               setShowForm(true);
             }}
@@ -207,7 +222,7 @@ function PublicationsContent() {
 
       {!showForm ? (
         <CustomTable
-          headers={['ID', 'Title', 'Actions']}
+          headers={['ID', 'Title', 'Published Year', 'Actions']}
           data={filteredPublications}
         >
           {filteredPublications.map((publication) => (
@@ -216,7 +231,18 @@ function PublicationsContent() {
                 <div className="text-left pl-6">{publication.publicationId}</div>
               </td>
               <td style={{ color: currentTheme.text.primary }}>
-                <div className="whitespace-normal">{publication.title}</div>
+                <a 
+                  href={publication.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ color: currentTheme.primary }}
+                  className="hover:opacity-80 whitespace-normal"
+                >
+                  {publication.title}
+                </a>
+              </td>
+              <td style={{ color: currentTheme.text.primary }}>
+                <div>{publication.publishedYear || 'N/A'}</div>
               </td>
               <td>
                 <div className="flex justify-center space-x-1 sm:space-x-2">
@@ -262,20 +288,22 @@ function PublicationsContent() {
               required
             />
             <CustomInput
-              label="URL"
-              name="url"
-              value={formData.url}
+              label="Published Year"
+              name="publishedYear"
+              value={formData.publishedYear}
               onChange={handleFormChange}
+              type="number"
+              placeholder="YYYY"
               required
             />
             <div className="flex gap-2 justify-center">
-            <CustomButton
+              <CustomButton
                 variant="secondary"
                 type="button"
                 onClick={() => {
                   setShowForm(false);
                   setEditingPublication(null);
-                  setFormData({ title: '', url: '' });
+                  setFormData({ title: '', publishedYear: '' });
                 }}
               >
                 Cancel
@@ -283,7 +311,6 @@ function PublicationsContent() {
               <CustomButton type="submit" variant="primary">
                 {editingPublication ? 'Update' : 'Save'}
               </CustomButton>
-             
             </div>
           </form>
         </div>

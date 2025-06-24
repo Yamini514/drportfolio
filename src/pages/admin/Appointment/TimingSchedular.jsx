@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { collection, doc, setDoc, getDoc, addDoc, getDocs, query, where, deleteDoc } from "firebase/firestore";
 import { db } from "../../../firebase/config";
@@ -76,6 +77,7 @@ const TimingSchedular = () => {
     periodId: null,
     locationIndex: null,
     scheduleId: null,
+    bookedSlotsCount: 0,
   });
   const [showAddScheduleForm, setShowAddScheduleForm] = useState(false);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -274,7 +276,6 @@ const TimingSchedular = () => {
 
       const updatedLocations = [...schedule.locations, scheduleData];
 
-      // Update Firebase
       await setDoc(doc(db, "settings", "schedule"), {
         locations: updatedLocations,
         defaultTimes: {
@@ -284,7 +285,6 @@ const TimingSchedular = () => {
         updatedAt: new Date().toISOString(),
       });
 
-      // Generate schedule documents in Firebase
       await generateScheduleDocuments(scheduleData);
 
       setSchedule((prev) => ({
@@ -353,14 +353,12 @@ const TimingSchedular = () => {
         idx === editingIndex ? updatedSchedule : loc
       );
 
-      // Update Firebase
       await setDoc(doc(db, "settings", "schedule"), {
         locations: updatedLocations,
         defaultTimes: schedule.defaultTimes,
         updatedAt: new Date().toISOString(),
       });
 
-      // Generate schedule documents in Firebase
       await generateScheduleDocuments(updatedSchedule);
 
       setSchedule((prev) => ({
@@ -399,13 +397,28 @@ const TimingSchedular = () => {
     }
   };
 
-  const handleDeleteClick = (index) => {
-    setDeleteConfirmation({
-      show: true,
-      periodId: null,
-      locationIndex: index,
-      scheduleId: null,
-    });
+  const handleDeleteClick = async (index) => {
+    try {
+      setLoading(true);
+      const locationToDelete = schedule.locations[index];
+      const scheduleRef = collection(db, "appointments", "data", "schedule");
+      const q = query(scheduleRef, where("location", "==", locationToDelete.name));
+      const querySnapshot = await getDocs(q);
+      const bookedSlotsCount = querySnapshot.docs.filter(doc => doc.data().isBooked).length;
+
+      setDeleteConfirmation({
+        show: true,
+        periodId: null,
+        locationIndex: index,
+        scheduleId: null,
+        bookedSlotsCount,
+      });
+    } catch (error) {
+      console.error("Error fetching booked slots count:", error);
+      showNotification("Error checking booked slots: " + error.message, "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -417,21 +430,18 @@ const TimingSchedular = () => {
 
       const locationToDelete = schedule.locations[locationIndex];
 
-      // Update the settings/schedule document
       const updatedLocations = schedule.locations.filter((_, i) => i !== locationIndex);
       await setDoc(doc(db, "settings", "schedule"), {
         ...schedule,
         locations: updatedLocations,
       });
 
-      // Delete all schedule documents in appointments/data/schedule with matching location
       const scheduleRef = collection(db, "appointments", "data", "schedule");
       const q = query(scheduleRef, where("location", "==", locationToDelete.name));
       const querySnapshot = await getDocs(q);
-      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+      const deletePromises = querySnapshot.docs.map((doc) => deleteDoc(doc.ref));
       await Promise.all(deletePromises);
 
-      // Delete the specific document in appointments/schedule if it exists
       try {
         await deleteDoc(doc(db, "appointments", "schedule", locationToDelete.id));
       } catch (error) {
@@ -448,6 +458,7 @@ const TimingSchedular = () => {
         periodId: null,
         locationIndex: null,
         scheduleId: null,
+        bookedSlotsCount: 0,
       });
 
       showNotification("Schedule deleted successfully");
@@ -544,6 +555,7 @@ const TimingSchedular = () => {
       periodId: id,
       locationIndex: null,
       scheduleId: null,
+      bookedSlotsCount: 0,
     });
   };
 
@@ -563,6 +575,7 @@ const TimingSchedular = () => {
         periodId: null,
         locationIndex: null,
         scheduleId: null,
+        bookedSlotsCount: 0,
       });
       showNotification("Blocked period removed successfully");
     } catch (error) {
@@ -579,14 +592,22 @@ const TimingSchedular = () => {
       }
 
       const slots = [];
-      const [startHour] = location.startTime.split(":");
-      const [endHour] = location.endTime.split(":");
+      const [startHour, startMinute] = location.startTime.split(":").map(Number);
+      const [endHour, endMinute] = location.endTime.split(":").map(Number);
 
-      for (let hour = parseInt(startHour); hour < parseInt(endHour); hour++) {
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const period = hour >= 12 ? "PM" : "AM";
-        slots.push(`${displayHour}:00 ${period}`);
-        slots.push(`${displayHour}:30 ${period}`);
+      let currentHour = startHour;
+      let currentMinute = startMinute;
+
+      while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
+        const displayHour = currentHour > 12 ? currentHour - 12 : currentHour === 0 ? 12 : currentHour;
+        const period = currentHour >= 12 ? "PM" : "AM";
+        slots.push(`${displayHour}:${currentMinute.toString().padStart(2, "0")} ${period}`);
+
+        currentMinute += 30;
+        if (currentMinute >= 60) {
+          currentHour += 1;
+          currentMinute = 0;
+        }
       }
 
       return slots;
@@ -604,7 +625,7 @@ const TimingSchedular = () => {
       const dataDoc = await getDoc(dataDocRef);
       if (!dataDoc.exists()) {
         await setDoc(dataDocRef, {
-          created: new Date(),
+          createdAt: new Date(),
           description: "Container for appointment data",
         });
       }
@@ -615,7 +636,7 @@ const TimingSchedular = () => {
       currentDate.setHours(0, 0, 0, 0);
 
       if (!location.startDate) {
-        console.warn(`Skipping location "${location.name}" due to missing dates`);
+        console.warn(`Skipping location "${location.name}" due to missing start date`);
         return false;
       }
 
@@ -638,9 +659,7 @@ const TimingSchedular = () => {
         currentDate.setDate(currentDate.getDate() + 1)
       ) {
         const dateString = currentDate.toISOString().split("T")[0];
-        const dayName = currentDate
-          .toLocaleDateString("en-US", { weekday: "long" })
-          .toLowerCase();
+        const dayName = currentDate.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
 
         if (dayName === "sunday") continue;
 
@@ -665,6 +684,7 @@ const TimingSchedular = () => {
             location: location.name,
             timeSlots: timeSlots,
             isOpen: true,
+            isBooked: false,
             createdAt: new Date(),
           });
         }
@@ -749,11 +769,11 @@ const TimingSchedular = () => {
               <label className="font-medium" style={{ color: currentTheme.text.primary }}>
                 Available Days
               </label>
-              <div className="flex gap-2 mt-1 text-black">
+              <div className="flex gap-2 mt-1">
                 {Object.entries(schedule.days).map(([day, isAvailable]) => (
                   <span
                     key={day}
-                    className={`px-2 py-1 rounded`}
+                    className="px-2 py-1 rounded"
                     style={{
                       backgroundColor: isAvailable
                         ? currentTheme.success.light
@@ -853,6 +873,7 @@ const TimingSchedular = () => {
             periodId: null,
             locationIndex: null,
             scheduleId: null,
+            bookedSlotsCount: 0,
           })
         }
         onConfirm={
@@ -862,7 +883,7 @@ const TimingSchedular = () => {
         message={
           deleteConfirmation.periodId
             ? "Are you sure you want to remove this blocked period? This action cannot be undone."
-            : "Are you sure you want to remove this schedule? This action cannot be undone."
+            : `This schedule has ${deleteConfirmation.bookedSlotsCount} booked slot(s). Are you sure you want to remove it? This action cannot be undone.`
         }
       />
 
@@ -1013,7 +1034,7 @@ const TimingSchedular = () => {
                                 isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
                               }`}
                             >
-                              {day.charAt(0).toUpperCase()}
+                              {day.charAt(0).toUpperCase() + day.slice(1)}
                             </span>
                           ))}
                         </div>
@@ -1107,7 +1128,7 @@ const TimingSchedular = () => {
               </div>
               <div className="mt-4">
                 <label className="block mb-2" style={{ color: currentTheme.text.primary }}>
-                  Available Days (Required if no end date is selected, for a recurring schedule)
+                  Available Days (Optional if end date is selected)
                 </label>
                 <div className="flex flex-wrap gap-3">
                   {Object.entries(newSchedule.days).map(([day, isSelected]) => (
@@ -1189,7 +1210,6 @@ const TimingSchedular = () => {
                 label="Start Date"
                 type="date"
                 value={newBlock.startDate}
-                className="w-full sm:w-auto"
                 onChange={(e) => handleNewBlockChange("startDate", e.target.value)}
                 min={getTodayString()}
                 max={getMaxDateString()}
@@ -1200,7 +1220,6 @@ const TimingSchedular = () => {
                   label="End Date"
                   type="date"
                   value={newBlock.endDate}
-                  className="w-full sm:w-auto"
                   onChange={(e) => handleNewBlockChange("endDate", e.target.value)}
                   min={newBlock.startDate || getTodayString()}
                   max={getMaxDateString()}

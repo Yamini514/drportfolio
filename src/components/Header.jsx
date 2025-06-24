@@ -24,7 +24,7 @@ function Header() {
     { name: 'Home', href: '' },
     { name: 'About', href: '', sectionId: 'about' },
     { name: 'Services', href: '', sectionId: 'services' },
-    { name: 'Testimonials', href: '', sectionId: 'review' },
+    { name: 'Testimonials', href: 'review'},
     { name: 'Gallery', href: '', sectionId:'gallery'},
     {name: 'Video', href: '', sectionId:'Video'},
     { name: 'Contact', href: '', sectionId: 'contactme' },

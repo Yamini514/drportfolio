@@ -56,7 +56,7 @@ function Testimonials() {
 
   // Update the testimonial display in the Swiper
   return (
-    <div id='review' className="pb-5 px-5 md:px-15 md:pb-5 lg:px-20" style={{ backgroundColor: currentTheme.background }}>
+    <div  className="pb-5 px-5 md:px-15 md:pb-5 lg:px-20" style={{ backgroundColor: currentTheme.background }}>
       {/* <div className="container mx-auto max-w-4xl"> */}
         {/* Header Section */}
         <div className="text-center mb-12">

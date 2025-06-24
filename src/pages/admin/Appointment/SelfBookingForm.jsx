@@ -1,24 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import CustomInput from '../../../components/CustomInput';
 import CustomSelect from '../../../components/CustomSelect';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { useTheme } from '../../../context/ThemeContext';
-
-// Try to import Firebase hooks with a fallback
-let useAuthState;
-let auth;
-let db;
-let doc;
-let getDoc;
-try {
-  const firebaseHooks = require('react-firebase-hooks/auth');
-  useAuthState = firebaseHooks.useAuthState;
-  ({ auth, db, doc, getDoc } = require('../../../firebase')); // Adjust path
-} catch (e) {
-  console.warn('Firebase hooks or config not available, using fallback PID generation:', e);
-  useAuthState = () => [null]; // Fallback to no user
-}
 
 const SelfBookingForm = ({
   formData = {
@@ -40,50 +25,14 @@ const SelfBookingForm = ({
   handleCancel,
   isLoading = false,
 }) => {
-  const { currentTheme } =
-    useTheme() || {
-      currentTheme: { surface: '#fff', border: '#ccc', inputBackground: '#f9f9f9', text: { primary: '#000' } },
-    };
-  const [user] = useAuthState ? useAuthState(auth) : [null];
-
-  // Fetch PID from Firestore or generate fallback
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (user && useAuthState) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setFormData((prev) => ({
-              ...prev,
-              pid: userData.pid || `PID${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
-              name: userData.name || '',
-              email: userData.email || '',
-              phone: userData.phone || '',
-            }));
-          } else {
-            setFormData((prev) => ({
-              ...prev,
-              pid: `PID${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
-            }));
-          }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          setFormData((prev) => ({
-            ...prev,
-            pid: `PID${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
-          }));
-        }
-      } else {
-        // Fallback for non-authenticated users or failed hook
-        setFormData((prev) => ({
-          ...prev,
-          pid: `PID${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
-        }));
-      }
-    };
-    fetchUserData();
-  }, [user, setFormData, useAuthState]);
+  const { currentTheme } = useTheme() || {
+    currentTheme: {
+      surface: '#fff',
+      border: '#ccc',
+      inputBackground: '#f9f9f9',
+      text: { primary: '#000' },
+    },
+  };
 
   // Event Handlers
   const handleInputChange = (e) => {
@@ -113,7 +62,10 @@ const SelfBookingForm = ({
 
     if (name === 'medicalHistoryMessage') {
       if (value.length > 200) {
-        setErrors((prev) => ({ ...prev, medicalHistoryMessage: 'Summary must be 200 characters or less' }));
+        setErrors((prev) => ({
+          ...prev,
+          medicalHistoryMessage: 'Summary must be 200 characters or less',
+        }));
       } else {
         setErrors((prev) => ({ ...prev, medicalHistoryMessage: '' }));
       }
@@ -129,7 +81,10 @@ const SelfBookingForm = ({
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       ];
       if (!validTypes.includes(file.type)) {
-        setErrors((prev) => ({ ...prev, medicalHistory: 'Please upload a PDF or DOC/DOCX file' }));
+        setErrors((prev) => ({
+          ...prev,
+          medicalHistory: 'Please upload a PDF or DOC/DOCX file',
+        }));
         setFormData((prev) => ({ ...prev, medicalHistory: null }));
       } else if (file.size > 5 * 1024 * 1024) {
         setErrors((prev) => ({ ...prev, medicalHistory: 'File size must be less than 5MB' }));
@@ -183,34 +138,31 @@ const SelfBookingForm = ({
     <div className="space-y-6 mt-8">
       <div
         className="p-6 rounded-lg shadow-md border"
-        style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border || '#ccc' }}
+        style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}
       >
-        <h3
-          className="text-lg font-semibold mb-4"
-          style={{ color: currentTheme.text.primary || '#000' }}
-        >
+        <h3 className="text-lg font-semibold mb-4" style={{ color: currentTheme.text.primary }}>
           Personal Information
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               Name<span className="text-red-500 ml-1">*</span>
             </label>
             <div className="flex-1">
               <CustomInput
                 name="name"
-                value={formData.name || ''}
+                value={formData.name}
                 onChange={handleInputChange}
                 required
                 maxLength={25}
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: errors.name ? 'rgb(239, 68, 68)' : currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: errors.name ? 'rgb(239, 68, 68)' : currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
               />
               {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
@@ -219,7 +171,7 @@ const SelfBookingForm = ({
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               Email
             </label>
@@ -227,13 +179,13 @@ const SelfBookingForm = ({
               <CustomInput
                 type="email"
                 name="email"
-                value={formData.email || ''}
+                value={formData.email}
                 onChange={handleInputChange}
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: errors.email ? 'rgb(239, 68, 68)' : currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: errors.email ? 'rgb(239, 68, 68)' : currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
               />
               {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
@@ -242,22 +194,23 @@ const SelfBookingForm = ({
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               PID<span className="text-red-500 ml-1">*</span>
             </label>
             <div className="flex-1">
               <CustomInput
                 name="pid"
-                defaultValue={formData.pid || ''} // Pre-filled and read-only
+                value={formData.pid} // Use value instead of defaultValue for controlled input
                 readOnly
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: errors.pid ? 'rgb(239, 68, 68)' : currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
               />
+              {errors.pid && <p className="text-red-500 text-xs mt-1">{errors.pid}</p>}
             </div>
           </div>
         </div>
@@ -265,7 +218,7 @@ const SelfBookingForm = ({
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               Phone<span className="text-red-500 ml-1">*</span>
             </label>
@@ -273,7 +226,7 @@ const SelfBookingForm = ({
               <CustomInput
                 type="tel"
                 name="phone"
-                value={formData.phone || ''}
+                value={formData.phone}
                 onChange={(e) => {
                   const value = e.target.value.replace(/[^0-9+]/g, '');
                   if (value.length <= 12) {
@@ -282,7 +235,10 @@ const SelfBookingForm = ({
                   if (!value) {
                     setErrors((prev) => ({ ...prev, phone: 'Phone is required' }));
                   } else if (!/^\+?[0-9]{10,12}$/.test(value)) {
-                    setErrors((prev) => ({ ...prev, phone: 'Please enter a valid phone number (10-12 digits)' }));
+                    setErrors((prev) => ({
+                      ...prev,
+                      phone: 'Please enter a valid phone number (10-12 digits)',
+                    }));
                   } else {
                     setErrors((prev) => ({ ...prev, phone: '' }));
                   }
@@ -290,9 +246,9 @@ const SelfBookingForm = ({
                 required
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: errors.phone ? 'rgb(239, 68, 68)' : currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: errors.phone ? 'rgb(239, 68, 68)' : currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
               />
               {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
@@ -301,7 +257,7 @@ const SelfBookingForm = ({
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               Date of Birth<span className="text-red-500 ml-1">*</span>
             </label>
@@ -316,9 +272,9 @@ const SelfBookingForm = ({
                 placeholderText="Select Date of Birth"
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: errors.dob ? 'rgb(239, 68, 68)' : currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: errors.dob ? 'rgb(239, 68, 68)' : currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
                 required
                 dateFormat="dd-MM-yyyy"
@@ -330,20 +286,20 @@ const SelfBookingForm = ({
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               Age
             </label>
             <div className="flex-1">
               <CustomInput
                 name="age"
-                defaultValue={formData.age || ''} // Read-only
+                value={formData.age}
                 readOnly
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
               />
             </div>
@@ -353,14 +309,14 @@ const SelfBookingForm = ({
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               Appointment Type
             </label>
             <div className="flex-1">
               <CustomSelect
                 name="appointmentType"
-                value={formData.appointmentType || 'Consultation'}
+                value={formData.appointmentType}
                 onChange={handleInputChange}
                 options={[
                   { value: 'Consultation', label: 'Consultation' },
@@ -369,9 +325,9 @@ const SelfBookingForm = ({
                 ]}
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
               />
             </div>
@@ -379,21 +335,21 @@ const SelfBookingForm = ({
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               Purpose of Visit
             </label>
             <div className="flex-1">
               <CustomInput
                 name="reasonForVisit"
-                value={formData.reasonForVisit || ''}
+                value={formData.reasonForVisit}
                 onChange={handleInputChange}
                 maxLength={100}
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
               />
               <p className="text-sm text-gray-500 mt-1">
@@ -406,34 +362,29 @@ const SelfBookingForm = ({
 
       <div
         className="p-6 rounded-lg shadow-md border"
-        style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border || '#ccc' }}
+        style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}
       >
-        <h3
-          className="text-lg font-semibold mb-4"
-          style={{ color: currentTheme.text.primary || '#000' }}
-        >
+        <h3 className="text-lg font-semibold mb-4" style={{ color: currentTheme.text.primary }}>
           Medical History
         </h3>
         <div className="grid sm:grid-cols-1 gap-6">
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               Medical History Summary
             </label>
             <div className="flex-1">
               <textarea
                 name="medicalHistoryMessage"
-                value={formData.medicalHistoryMessage || ''}
+                value={formData.medicalHistoryMessage}
                 onChange={handleInputChange}
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: errors.medicalHistoryMessage
-                    ? 'rgb(239, 68, 68)'
-                    : currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: errors.medicalHistoryMessage ? 'rgb(239, 68, 68)' : currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
                 rows="3"
                 maxLength="200"
@@ -449,7 +400,7 @@ const SelfBookingForm = ({
           <div className="flex flex-row items-center gap-2">
             <label
               className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary || '#000' }}
+              style={{ color: currentTheme.text.primary }}
             >
               Medical History (Optional)
             </label>
@@ -461,11 +412,9 @@ const SelfBookingForm = ({
                 accept=".pdf,.doc,.docx"
                 className="w-full p-2 rounded-md border"
                 style={{
-                  borderColor: errors.medicalHistory
-                    ? 'rgb(239, 68, 68)'
-                    : currentTheme.border || '#ccc',
-                  backgroundColor: currentTheme.inputBackground || '#f9f9f9',
-                  color: currentTheme.text.primary || '#000',
+                  borderColor: errors.medicalHistory ? 'rgb(239, 68, 68)' : currentTheme.border,
+                  backgroundColor: currentTheme.inputBackground,
+                  color: currentTheme.text.primary,
                 }}
               />
               {errors.medicalHistory && (
