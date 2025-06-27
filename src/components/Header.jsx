@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from '../context/ThemeContext';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
@@ -12,7 +12,7 @@ function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
-  const [pid, setPid] = useState(null);
+  const [pid, setPid] = useState(null); // Updated to use 'pid' based on Firestore
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -24,68 +24,103 @@ function Header() {
     { name: 'Home', href: '' },
     { name: 'About', href: '', sectionId: 'about' },
     { name: 'Services', href: '', sectionId: 'services' },
-    { name: 'Testimonials', href: 'review' },
-    { name: 'Gallery', href: '', sectionId: 'gallery' },
-    { name: 'Video', href: '', sectionId: 'Video' },
+    { name: 'Testimonials', href: 'review'},
+    { name: 'Gallery', href: '', sectionId:'gallery'},
+    {name: 'Video', href: '', sectionId:'Video'},
     { name: 'Contact', href: '', sectionId: 'contactme' },
     {
       name: 'Research',
       dropdownItems: [
         { name: 'Publications', href: 'publications' },
-        { name: 'Articles', href: 'articles' },
-      ],
+        { name: 'Articles', href: 'articles' }
+      ]
     },
   ];
 
   const getTextColor = useCallback(() => {
-    return isHomePage && !isScrolled && !isMenuOpen
+    const color = isHomePage && !isScrolled && !isMenuOpen
       ? currentTheme.textContrast || '#ffffff'
       : currentTheme.text || (theme === 'light' ? '#000000' : '#e5e7eb');
+    return color;
   }, [isHomePage, isScrolled, isMenuOpen, theme, currentTheme]);
 
-  const handleClickOutside = useCallback((event) => {
-    if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
-      setIsUserMenuOpen(false);
+  const getResearchTextColor = useCallback(() => {
+    if (theme === 'dark' || (isHomePage && !isScrolled && !isMenuOpen)) {
+      return '#ffffff';
     }
+    return '#000000';
+  }, [theme, isHomePage, isScrolled, isMenuOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [handleClickOutside]);
-
-  useEffect(() => {
+    let currentUid = null;
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+      if (currentUser && currentUid && currentUser.uid !== currentUid) {
+        return;
+      }
       setUser(currentUser);
       if (currentUser) {
-        try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const role = userDoc.data().role || 'user';
-            const pidValue = userDoc.data().pid || `PID-${currentUser.uid.slice(0, 6)}`;
-            setUserRole(role);
-            setPid(pidValue);
-            localStorage.setItem('userRole', role);
-            localStorage.setItem('pid', pidValue);
+        currentUid = currentUser.uid;
+        const userRoleFromStorage = localStorage.getItem('userRole');
+        const pidFromStorage = localStorage.getItem(`pid_${currentUser.uid}`);
+        if (userRoleFromStorage && pidFromStorage) {
+          setUserRole(userRoleFromStorage);
+          setPid(pidFromStorage);
+        } else {
+          const cachedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
+          const cachedPid = localStorage.getItem(`pid_${currentUser.uid}`);
+          if (cachedRole && cachedPid) {
+            setUserRole(cachedRole);
+            setPid(cachedPid);
           } else {
-            setUserRole('user');
-            setPid(`PID-${currentUser.uid.slice(0, 6)}`);
-            localStorage.setItem('userRole', 'user');
-            localStorage.setItem('pid', `PID-${currentUser.uid.slice(0, 6)}`);
+            try {
+              const userDocRef = doc(db, 'users', currentUser.uid);
+              const userDoc = await getDoc(userDocRef);
+              if (userDoc.exists()) {
+                const role = userDoc.data().role || 'user';
+                const pidValue = userDoc.data().pid || `PID-${currentUser.uid.slice(0, 6)}`; // Fallback PID
+                setUserRole(role);
+                setPid(pidValue);
+                localStorage.setItem(`userRole_${currentUser.uid}`, role);
+                localStorage.setItem('userRole', role);
+                localStorage.setItem(`pid_${currentUser.uid}`, pidValue);
+                localStorage.setItem('pid', pidValue);
+              } else {
+                setUserRole('user');
+                setPid(`PID-${currentUser.uid.slice(0, 6)}`);
+                localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
+                localStorage.setItem('userRole', 'user');
+                localStorage.setItem(`pid_${currentUser.uid}`, `PID-${currentUser.uid.slice(0, 6)}`);
+                localStorage.setItem('pid', `PID-${currentUser.uid.slice(0, 6)}`);
+              }
+            } catch (error) {
+              console.error('Error fetching user data:', error);
+              setUserRole('user');
+              setPid(`PID-${currentUser.uid.slice(0, 6)}`);
+              localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
+              localStorage.setItem('userRole', 'user');
+              localStorage.setItem(`pid_${currentUser.uid}`, `PID-${currentUser.uid.slice(0, 6)}`);
+              localStorage.setItem('pid', `PID-${currentUser.uid.slice(0, 6)}`);
+            }
           }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          setUserRole('user');
-          setPid(`PID-${currentUser.uid.slice(0, 6)}`);
-          localStorage.setItem('userRole', 'user');
-          localStorage.setItem('pid', `PID-${currentUser.uid.slice(0, 6)}`);
         }
       } else {
         setUserRole(null);
         setPid(null);
         localStorage.removeItem('userRole');
+        localStorage.removeItem(`userRole_${currentUid}`);
         localStorage.removeItem('pid');
+        localStorage.removeItem(`pid_${currentUid}`);
+        currentUid = null;
       }
     });
     return () => unsubscribe();
@@ -102,15 +137,12 @@ function Header() {
   useEffect(() => {
     if (isHomePage && location.state?.scrollTo) {
       const sectionId = location.state.scrollTo;
-      const maxAttempts = 10;
-      let attempts = 0;
       const scrollToSection = () => {
         const section = document.getElementById(sectionId);
-        if (section && attempts < maxAttempts) {
+        if (section) {
           const sectionTop = section.getBoundingClientRect().top + window.scrollY;
           window.scrollTo({ top: sectionTop - 75, behavior: 'smooth' });
-        } else if (attempts < maxAttempts) {
-          attempts++;
+        } else {
           setTimeout(scrollToSection, 100);
         }
       };
@@ -124,6 +156,7 @@ function Header() {
     if (sectionId) e.preventDefault();
     setIsMenuOpen(false);
     if (sectionId) {
+      const headerHeight = document.querySelector('header')?.offsetHeight || 0;
       if (!isHomePage) {
         navigate('/', { state: { scrollTo: sectionId } });
         return;
@@ -132,8 +165,8 @@ function Header() {
       if (section) {
         const sectionTop = section.getBoundingClientRect().top + window.scrollY;
         window.scrollTo({ top: sectionTop - 75, behavior: 'smooth' });
+        return;
       }
-      return;
     }
     window.scrollTo(0, 0);
     navigate(`/${href}`);
@@ -152,10 +185,6 @@ function Header() {
       setUserRole(null);
       setPid(null);
       setIsUserMenuOpen(false);
-      localStorage.removeItem('isUserLoggedIn');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('pid');
-      navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -177,23 +206,24 @@ function Header() {
       <button
         onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
         className="flex items-center gap-2 font-medium transition-colors duration-300"
-        style={{ color: getTextColor() }}
-        aria-label="User menu"
+        style={{ color: `${isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor()} !important` }}
       >
         <User className="w-5 h-5" />
-        <span>{pid ? `PID: ${pid}` : 'User'}</span>
+        <span>U</span>
       </button>
       {isUserMenuOpen && (
         <div
-          className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu animate-fadeIn"
+          className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu"
           style={{
             backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
             borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb'),
-            color: theme === 'dark' ? '#ffffff' : '#000000',
+            color: theme === 'dark' ? '#ffffff' : '#000000'
           }}
         >
           <div className="py-1">
-            <div className="px-4 py-2">PID: {pid || 'Not Available'}</div>
+            <div className="px-4 py-2">
+              PID: {pid || 'Not Available'}
+            </div>
             {userRole !== 'admin' && (
               <Link
                 to="/my-appointments"
@@ -206,7 +236,6 @@ function Header() {
             <button
               onClick={handleLogout}
               className="w-full px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-left"
-              aria-label="Logout"
             >
               Logout
             </button>
@@ -218,13 +247,11 @@ function Header() {
     <Link
       to="/login"
       className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline login-link"
-      style={{ color: getTextColor() }}
+      style={{ color: isTransparentHeader && theme === 'light' ? '#000000' : getTextColor() }}
       onClick={() => setIsMenuOpen(false)}
       title="Login"
-      aria-label="Login"
     >
       <UserCircle className="w-5 h-5" />
-      <span>Login</span>
     </Link>
   );
 
@@ -245,7 +272,7 @@ function Header() {
           backdrop-filter: blur(10px);
           z-index: 50;
         }
-        header a, header svg, header p, header button {
+        header a, header svg, header p {
           color: ${getTextColor()} !important;
         }
         header .group:hover > button {
@@ -261,10 +288,13 @@ function Header() {
           transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
           transform: translateY(-10px);
         }
-        .group:hover .dropdown-menu, .dropdown-menu.animate-fadeIn {
+        .group:hover .dropdown-menu {
           opacity: 1 !important;
           visibility: visible !important;
           transform: translateY(0);
+        }
+        .research-button {
+          color: ${getResearchTextColor()} !important;
         }
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }
@@ -279,7 +309,7 @@ function Header() {
         className={`px-4 md:px-8 py-4 fixed w-full top-0 ${isTransparentHeader ? 'home-header-transparent' : 'header-colored'}`}
         style={{
           backgroundColor: isTransparentHeader ? 'transparent' : (currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff')),
-          transition: 'all 0.3s ease',
+          transition: 'all 0.3s ease'
         }}
       >
         <div className="flex items-center justify-between">
@@ -287,7 +317,6 @@ function Header() {
             to="/"
             className="text-xl md:text-2xl font-bold"
             onClick={handleNameClick}
-            aria-label="Home"
           >
             Dr. Laxminadh Sivaraju
           </Link>
@@ -296,10 +325,7 @@ function Header() {
               link.dropdownItems ? (
                 <div key={link.name} className="relative group">
                   <button
-                    className="font-medium transition-colors duration-300 flex items-center gap-1"
-                    style={{ color: getTextColor() }}
-                    aria-haspopup="true"
-                    aria-expanded={isUserMenuOpen}
+                    className={`font-medium transition-colors duration-300 flex items-center gap-1 ${link.name === 'Research' ? 'research-button' : ''}`}
                   >
                     {link.name}
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -310,7 +336,7 @@ function Header() {
                     className="absolute left-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu"
                     style={{
                       backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
-                      borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb'),
+                      borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')
                     }}
                   >
                     {link.dropdownItems.map((item) => (
@@ -334,14 +360,13 @@ function Header() {
                   to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
                   className="relative font-medium transition-colors duration-300 pb-1"
                   onClick={(e) => handleNavClick(link.href, link.sectionId, e)}
-                  style={{ color: getTextColor() }}
                 >
                   {link.name}
                   <span
                     className="absolute inset-x-0 bottom-0 h-0.5 transform transition-transform duration-300 scale-x-0 group-hover:scale-x-100"
                     style={{
                       backgroundColor: currentTheme.primary || '#7c3aed',
-                      transform: location.pathname === `/${link.href}` ? 'scaleX(1)' : 'scaleX(0)',
+                      transform: location.pathname === `/${link.href}` ? 'scaleX(1)' : 'scaleX(0)'
                     }}
                   ></span>
                 </Link>
@@ -349,34 +374,33 @@ function Header() {
             ))}
             <CustomButton
               variant="primary"
+
+
               onClick={handleBookAppointmentClick}
-              aria-label="Book Appointment"
             >
               Book Appointment
             </CustomButton>
             {userMenu}
-            <button
+            <span
               onClick={toggleTheme}
               className="cursor-pointer p-2"
               style={{ color: getTextColor() }}
-              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
+            </span>
           </nav>
           <div className="flex items-center gap-4 md:hidden">
-            <button
+            <span
               onClick={toggleTheme}
               className="cursor-pointer p-2"
               style={{ color: getTextColor() }}
-              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
+            </span>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="p-2"
-              aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-label="Toggle menu"
             >
               <svg
                 className="w-6 h-6"
@@ -397,10 +421,7 @@ function Header() {
           </div>
         </div>
         {isMenuOpen && (
-          <nav
-            className="md:hidden pt-4 pb-2"
-            style={{ backgroundColor: currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff') }}
-          >
+          <nav className="md:hidden pt-4 pb-2" style={{ backgroundColor: currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff') }}>
             {navLinks.map((link) => (
               link.dropdownItems ? (
                 <div key={link.name}>
@@ -451,7 +472,6 @@ function Header() {
                   onClick={handleLogout}
                   className="w-full py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-left"
                   style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
-                  aria-label="Logout"
                 >
                   Logout
                 </button>
@@ -462,7 +482,6 @@ function Header() {
                 className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
                 style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                 onClick={() => setIsMenuOpen(false)}
-                aria-label="Login"
               >
                 <UserCircle className="w-4 h-4" />
                 Login
@@ -472,7 +491,6 @@ function Header() {
               variant="primary"
               onClick={handleBookAppointmentClick}
               className="block w-auto justify-center mt-2 mx-4"
-              aria-label="Book Appointment"
             >
               Book Appointment
             </CustomButton>
