@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useTheme } from "../../../context/ThemeContext";
-import { db, auth } from "../../../firebase/config";
+import { db } from "../../../firebase/config";
 import { collection, getDocs, addDoc, doc, getDoc, query, where } from "firebase/firestore";
 import CustomInput from "../../../components/CustomInput";
 import CustomButton from "../../../components/CustomButton";
@@ -29,7 +29,7 @@ const Card = ({ title, children }) => {
   );
 };
 
-function BookAppointment() {
+function AddAppointment() {
   const { currentTheme } = useTheme();
   const navigate = useNavigate();
   const [locations, setLocations] = useState([]);
@@ -74,50 +74,6 @@ function BookAppointment() {
   });
   const [otherPatientErrors, setOtherPatientErrors] = useState({});
   const [hasAvailableDates, setHasAvailableDates] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (!user) {
-        setBookingMessage("Authentication required. Please log in to book an appointment.");
-        localStorage.setItem("redirectAfterLogin", "/bookappointment");
-        navigate("/login", { state: { redirectTo: "/bookappointment" } });
-      }
-    });
-    return () => unsubscribe();
-  }, [navigate]);
-
-  useEffect(() => {
-    const fetchUserData = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      try {
-        setIsLoading(true);
-        const userRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setFormData((prev) => ({
-            ...prev,
-            pid: userData.pid || "",
-            name: userData.name || "",
-            email: userData.email || user.email || "",
-            phone: userData.phone || "",
-          }));
-          if (!userData.pid) {
-            setBookingMessage("User PID not found. Please update your profile or contact support.");
-          }
-        } else {
-          setBookingMessage("User profile not found. Please complete your profile setup.");
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error.message);
-        setBookingMessage(`Failed to load user data: ${error.message}. Please try again later.`);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchUserData();
-  }, []);
 
   useEffect(() => {
     emailjs.init("2pSuAO6tF3T-sejH-");
@@ -428,9 +384,9 @@ function BookAppointment() {
     });
     setOtherPatientErrors({});
     setFormData({
-      name: formData.name,
-      email: formData.email,
-      pid: formData.pid,
+      name: "",
+      email: "",
+      pid: "",
       phone: "",
       dob: "",
       age: "",
@@ -486,7 +442,7 @@ function BookAppointment() {
         appointmentType: formData.appointmentType,
         medicalHistory: formData.medicalHistory ? formData.medicalHistory.name : "",
         medicalHistoryMessage: formData.medicalHistoryMessage,
-        bookedBy: auth.currentUser.uid,
+        bookedBy: "anonymous",
         bookedFor: bookingFor,
         status: "pending",
         createdAt: new Date().toISOString(),
@@ -536,8 +492,8 @@ function BookAppointment() {
         setOtherPatientData({ name: "", email: "", phone: "", dob: "" });
         setOtherPatientErrors({});
         setFormData({
-          name: formData.name,
-          email: formData.email,
+          name: "",
+          email: "",
           pid: "",
           phone: "",
           dob: "",
@@ -642,7 +598,9 @@ function BookAppointment() {
   useEffect(() => {
     const fetchBookedDates = async () => {
       try {
-        const snapshot = await getDocs(collection(db, "appointments/data/bookings"));
+        const snapshot = await
+
+        getDocs(collection(db, "appointments/data/bookings"));
         const counts = {};
         snapshot.forEach((doc) => {
           const { date, location } = doc.data();
@@ -826,4 +784,4 @@ function BookAppointment() {
   );
 }
 
-export default BookAppointment;
+export default AddAppointment;
