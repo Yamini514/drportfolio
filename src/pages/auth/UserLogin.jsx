@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../../firebase/config';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
@@ -7,7 +6,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
-import bcrypt from 'bcryptjs';
 
 const UserLogin = () => {
   const location = useLocation();
@@ -16,9 +14,8 @@ const UserLogin = () => {
   const [errors, setErrors] = useState({ loginId: '', password: '', general: '' });
   const [loading, setLoading] = useState(false);
   const { currentTheme } = useTheme();
-
   const timeoutRef = useRef(null);
-  const SESSION_TIMEOUT = 2 * 60 * 1000;
+  const SESSION_TIMEOUT = 10 * 60 * 1000; // 30 minutes
 
   const resetTimeout = () => {
     if (timeoutRef.current) {
@@ -57,10 +54,9 @@ const UserLogin = () => {
 
   useEffect(() => {
     if (!auth || !db) {
-      console.error('Firebase auth or Firestore is not initialized.');
       setErrors((prev) => ({
         ...prev,
-        general: 'Authentication or database service is not available.',
+        general: 'Authentication or database service is not available. Please try again later.',
       }));
       return;
     }
@@ -72,21 +68,22 @@ const UserLogin = () => {
           const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
           if (userDoc.exists()) {
             const role = userDoc.data().role;
-            const from = location.state?.from || location.state?.redirectTo;
+            if (role !== 'user') {
+              throw new Error('Invalid user role');
+            }
             const restrictedPaths = ['/login', '/userregister', '/userforgotpassword'];
-            let destination;
-            if (typeof from === 'string' && !restrictedPaths.includes(from)) {
-              destination = from;
-            } else if (from?.pathname && !restrictedPaths.includes(from.pathname)) {
-              destination = from.pathname;
-            } else {
-              destination = localStorage.getItem('redirectAfterLogin') || '/';
+            let destination = '/';
+            if (location.state?.from && !restrictedPaths.includes(location.state.from)) {
+              destination = typeof location.state.from === 'string' ? location.state.from : location.state.from.pathname;
+            } else if (location.state?.redirectTo && !restrictedPaths.includes(location.state.redirectTo)) {
+              destination = location.state.redirectTo;
+            } else if (localStorage.getItem('redirectAfterLogin')) {
+              destination = localStorage.getItem('redirectAfterLogin');
               localStorage.removeItem('redirectAfterLogin');
             }
             setupSessionTimeout();
             navigate(destination, { replace: true });
           } else {
-            console.error('User data not found in Firestore');
             await signOut(auth);
             localStorage.removeItem('isUserLoggedIn');
             localStorage.removeItem('userRole');
@@ -97,14 +94,14 @@ const UserLogin = () => {
           await signOut(auth);
           localStorage.removeItem('isUserLoggedIn');
           localStorage.removeItem('userRole');
-          navigate('/login', { state: { error: 'Failed to verify user.' } });
+          navigate('/login', { state: { error: error.message === 'Invalid user role' ? 'Invalid user role. Please contact support.' : 'Failed to verify user.' } });
         }
       };
       checkUserRole();
     }
 
     return () => clearSessionTimeout();
-  }, [navigate, location.state?.from, location.state?.redirectTo]);
+  }, [navigate, location.state]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -118,14 +115,6 @@ const UserLogin = () => {
 
   const isPID = (input) => {
     return /^PID\d{4}-\d{5}$/.test(input.trim());
-  };
-
-  const standardizePhoneNumber = (phone) => {
-    let cleaned = phone.replace(/[\s\-\(\)]/g, '');
-    if (!cleaned.startsWith('+')) {
-      cleaned = `+91${cleaned}`;
-    }
-    return cleaned;
   };
 
   const validateForm = () => {
@@ -162,16 +151,16 @@ const UserLogin = () => {
       case 'auth/user-not-found':
       case 'auth/wrong-password':
         return {
-          loginId: 'Invalid email, phone number, PID, or password',
-          password: 'Invalid email, phone number, PID, or password',
-          general: 'Please check your credentials and try again.',
+          loginId: 'Invalid credentials',
+          password: 'Invalid credentials',
+          general: 'Please check your email, phone number, PID, or password and try again.',
         };
       case 'auth/too-many-requests':
         return { general: 'Too many login attempts. Please try again later.' };
       case 'auth/network-request-failed':
-        return { general: 'Network error. Please check your connection.' };
+        return { general: 'Network error. Please check your connection and try again.' };
       case 'auth/user-disabled':
-        return { general: 'This account has been disabled.' };
+        return { general: 'This account has been disabled. Please contact support.' };
       default:
         return { general: 'Failed to login. Please try again.' };
     }
@@ -188,83 +177,56 @@ const UserLogin = () => {
     setErrors({ loginId: '', password: '', general: '' });
 
     try {
-      let userCredential;
-      let userDoc;
       let email;
-
       if (isPhoneNumber(formData.loginId) || isPID(formData.loginId)) {
         const field = isPhoneNumber(formData.loginId) ? 'phone' : 'pid';
         const value = isPhoneNumber(formData.loginId)
           ? formData.loginId.replace(/[\s\-\(\)]/g, '')
           : formData.loginId.trim();
-        console.log(`Querying Firestore for ${field}:`, value);
         const q = query(collection(db, 'users'), where(field, '==', value));
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) {
-          console.log(`No user found for ${field}:`, value);
-          throw new Error(`No user found with this ${field === 'phone' ? 'phone number' : 'PID'}. Please check or register.`);
+          throw new Error(`No user found with this ${field === 'phone' ? 'phone number' : 'PID'}.`);
         }
-
-        userDoc = querySnapshot.docs[0];
-        const userId = userDoc.id;
-        const userData = userDoc.data();
-
-        // Verify password
-        const isValidPassword = bcrypt.compareSync(formData.password, userData.password);
-        if (!isValidPassword) {
-          throw new Error('Invalid password.');
+        const userDoc = querySnapshot.docs[0];
+        email = userDoc.data().email;
+        if (!email) {
+          throw new Error('User email not found in Firestore.');
         }
-
-        email = userData.email || `${userData.phone}@example.com`;
-        userCredential = await signInWithEmailAndPassword(auth, email, formData.password);
       } else {
         email = formData.loginId.trim();
-        userCredential = await signInWithEmailAndPassword(auth, email, formData.password);
-        const userDocRef = doc(db, 'users', userCredential.user.uid);
-        userDoc = await getDoc(userDocRef);
-        if (!userDoc.exists()) {
-          throw new Error('User data not found in Firestore');
-        }
-        const userData = userDoc.data();
-        const isValidPassword = bcrypt.compareSync(formData.password, userData.password);
-        if (!isValidPassword) {
-          throw new Error('Invalid password.');
-        }
       }
 
-      const user = userCredential.user;
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDocData = await getDoc(userDocRef);
-      if (!userDocData.exists()) {
-        const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+      const userCredential = await signInWithEmailAndPassword(auth, email, formData.password);
+      const userDocRef = doc(db, 'users', userCredential.user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        const adminDoc = await getDoc(doc(db, 'admins', userCredential.user.uid));
         if (adminDoc.exists()) {
           throw new Error('Please use the admin login page.');
         }
-        throw new Error('User data not found in Firestore');
+        throw new Error('User data not found in Firestore.');
       }
-      if (userDocData.data().role !== 'user') {
-        throw new Error('Invalid user role');
+
+      const userData = userDoc.data();
+      if (userData.role !== 'user') {
+        throw new Error('Invalid user role.');
       }
 
       localStorage.setItem('isUserLoggedIn', 'true');
       localStorage.setItem('userRole', 'user');
       setupSessionTimeout();
 
+      const restrictedPaths = ['/login', '/userregister', '/forgot-password'];
       let destination = '/';
-      const storedRedirect = localStorage.getItem('redirectAfterLogin');
-      if (storedRedirect) {
-        destination = storedRedirect;
-        localStorage.removeItem('redirectAfterLogin');
-      } else if (location.state?.redirectTo) {
+      if (location.state?.redirectTo && !restrictedPaths.includes(location.state.redirectTo)) {
         destination = location.state.redirectTo;
-      } else if (location.state?.from) {
-        const from = location.state.from;
-        const restrictedPaths = ['/login', '/userregister', '/forgot-password'];
-        if (typeof from === 'string' && !restrictedPaths.includes(from)) {
-          destination = from;
-        } else if (from?.pathname && !restrictedPaths.includes(from.pathname)) {
-          destination = from.pathname;
-        }
+      } else if (location.state?.from && !restrictedPaths.includes(location.state.from)) {
+        destination = typeof location.state.from === 'string' ? location.state.from : location.state.from.pathname;
+      } else if (localStorage.getItem('redirectAfterLogin')) {
+        destination = localStorage.getItem('redirectAfterLogin');
+        localStorage.removeItem('redirectAfterLogin');
       }
 
       navigate(destination, { replace: true });
@@ -273,14 +235,12 @@ const UserLogin = () => {
       await signOut(auth).catch((err) => console.error('Sign out error:', err));
       localStorage.removeItem('isUserLoggedIn');
       localStorage.removeItem('userRole');
-      if (error.message.includes('No user found')) {
+      if (error.message.includes('No user found') || error.message.includes('User email not found')) {
         setErrors({ general: error.message });
-      } else if (error.message === 'Invalid user role') {
+      } else if (error.message === 'Invalid user role.') {
         setErrors({ general: 'Invalid user role. Please contact support.' });
       } else if (error.message === 'Please use the admin login page.') {
         setErrors({ general: 'Please use the admin login page.' });
-      } else if (error.message === 'Invalid password.') {
-        setErrors({ password: 'Invalid password', general: 'Please check your password and try again.' });
       } else {
         setErrors(handleFirebaseError(error));
       }
@@ -292,12 +252,12 @@ const UserLogin = () => {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4 sm:p-6"
-      style={{ backgroundColor: currentTheme.background.primary }}
+      style={{ backgroundColor: currentTheme.background.primary || '#f3f4f6' }}
     >
       <div
         className="w-full max-w-md space-y-8 p-8 sm:p-10 rounded-2xl shadow-xl border-2"
         style={{
-          backgroundColor: currentTheme.background.primary,
+          backgroundColor: currentTheme.background.primary || '#ffffff',
           borderColor: currentTheme.primary || '#8B5CF6',
           boxShadow: '0 6px 12px rgba(0, 0, 0, 0.2)',
         }}
@@ -305,7 +265,7 @@ const UserLogin = () => {
         <div className="text-center">
           <h2
             className="text-3xl font-bold mb-6"
-            style={{ color: currentTheme.text.primary }}
+            style={{ color: currentTheme.text.primary || '#1f2937' }}
           >
             User Login
           </h2>
@@ -377,9 +337,10 @@ const UserLogin = () => {
               disabled={loading}
               className="w-full justify-center py-3 text-lg font-medium transition-colors duration-200 hover:bg-opacity-90"
               style={{
-                backgroundColor: loading ? currentTheme.disabled : currentTheme.primary,
-                color: currentTheme.text.button,
+                backgroundColor: loading ? currentTheme.disabled || '#d1d5db' : currentTheme.primary || '#8B5CF6',
+                color: currentTheme.text.button || '#ffffff',
               }}
+              aria-label={loading ? 'Logging in' : 'Sign In'}
             >
               {loading ? 'Logging in...' : 'Sign In'}
             </CustomButton>
