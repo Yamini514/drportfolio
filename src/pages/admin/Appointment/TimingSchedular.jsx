@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { collection, doc, setDoc, getDoc, addDoc, getDocs, query, where, deleteDoc } from "firebase/firestore";
 import { db } from "../../../firebase/config";
@@ -17,6 +16,17 @@ import {
   Pencil,
 } from "lucide-react";
 import { getAuth } from "firebase/auth";
+
+// Define fixed order of days
+const dayOrder = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
 
 const TimingSchedular = () => {
   const { currentTheme } = useTheme();
@@ -103,6 +113,11 @@ const TimingSchedular = () => {
     });
   };
 
+  const parseTimeToMinutes = (time) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+
   const checkScheduleConflicts = () => {
     const startDate = new Date(newSchedule.startDate);
     const hasSelectedDays = Object.values(newSchedule.days).some((day) => day);
@@ -116,8 +131,12 @@ const TimingSchedular = () => {
       endDate = startDate;
     }
 
+    const newStartTime = parseTimeToMinutes(newSchedule.startTime);
+    const newEndTime = parseTimeToMinutes(newSchedule.endTime);
+
     for (const loc of schedule.locations) {
       if (editingIndex !== null && schedule.locations[editingIndex] === loc) continue;
+      if (loc.name !== newSchedule.name) continue; // Only check same location
 
       const locStartDate = new Date(loc.startDate);
       const locEndDate = new Date(loc.endDate || loc.startDate);
@@ -126,8 +145,10 @@ const TimingSchedular = () => {
       const dateRangeOverlap = startDate <= locEndDate && endDate >= locStartDate;
       if (!dateRangeOverlap) continue;
 
-      const timeOverlap = newSchedule.startTime <= loc.endTime && newSchedule.endTime >= loc.startTime;
-      if (!timeOverlap) continue;
+      const locStartTime = parseTimeToMinutes(loc.startTime);
+      const locEndTime = parseTimeToMinutes(loc.endTime);
+
+      const timeOverlap = newStartTime < locEndTime && newEndTime > locStartTime;
 
       if (hasSelectedDays || locHasSelectedDays) {
         for (
@@ -238,7 +259,7 @@ const TimingSchedular = () => {
     const conflicts = checkScheduleConflicts();
     if (conflicts.length > 0) {
       const firstConflict = conflicts[0];
-      const conflictMsg = `There is an active schedule at ${firstConflict.location} on ${firstConflict.day}, ${formatDate(firstConflict.date)}. Adjust the date or time to resolve.`;
+      const conflictMsg = `There is an overlapping schedule at ${firstConflict.location} on ${firstConflict.day}, ${formatDate(firstConflict.date)} from ${firstConflict.startTime} to ${firstConflict.endTime}. Adjust the time to resolve.`;
       errors.scheduleConflict = conflictMsg;
     }
 
@@ -617,6 +638,57 @@ const TimingSchedular = () => {
     }
   };
 
+  const mergeTimeSlots = (schedules) => {
+    const timeSlots = [];
+    schedules.forEach((schedule) => {
+      const slots = createTimeSlots(schedule);
+      timeSlots.push(...slots.map(slot => ({ slot, schedule })));
+    });
+
+    // Sort slots by time
+    timeSlots.sort((a, b) => {
+      const timeA = parseTimeToMinutes(a.slot.replace(/ (AM|PM)/, ""));
+      const timeB = parseTimeToMinutes(b.slot.replace(/ (AM|PM)/, ""));
+      const periodA = a.slot.includes("PM") ? 1 : 0;
+      const periodB = b.slot.includes("PM") ? 1 : 0;
+      return (timeA + periodA * 12 * 60) - (timeB + periodB * 12 * 60);
+    });
+
+    // Merge overlapping or adjacent slots
+    const mergedSlots = [];
+    let currentStart = null;
+    let currentEnd = null;
+
+    timeSlots.forEach(({ slot, schedule }, index) => {
+      const [time, period] = slot.split(" ");
+      const minutes = parseTimeToMinutes(time) + (period === "PM" && time !== "12:00" ? 12 * 60 : 0);
+      
+      if (!currentStart) {
+        currentStart = schedule.startTime;
+        currentEnd = schedule.endTime;
+        mergedSlots.push({ startTime: currentStart, endTime: currentEnd });
+      } else {
+        const prevEndMinutes = parseTimeToMinutes(currentEnd) + (currentEnd.includes("PM") && currentEnd !== "12:00" ? 12 * 60 : 0);
+        if (minutes <= prevEndMinutes + 30) {
+          // Adjacent or overlapping, extend the end time
+          const [endHour, endMinute] = schedule.endTime.split(":").map(Number);
+          const endMinutes = endHour * 60 + endMinute + (schedule.endTime.includes("PM") && endHour !== 12 ? 12 * 60 : 0);
+          if (endMinutes > prevEndMinutes) {
+            mergedSlots[mergedSlots.length - 1].endTime = schedule.endTime;
+            currentEnd = schedule.endTime;
+          }
+        } else {
+          // New slot range
+          currentStart = schedule.startTime;
+          currentEnd = schedule.endTime;
+          mergedSlots.push({ startTime: currentStart, endTime: currentEnd });
+        }
+      }
+    });
+
+    return mergedSlots;
+  };
+
   const generateScheduleDocuments = async (location) => {
     try {
       setLoading(true);
@@ -653,6 +725,14 @@ const TimingSchedular = () => {
         return false;
       }
 
+      // Fetch existing schedules for the same location and date range
+      const existingSchedules = schedule.locations.filter(
+        (loc) =>
+          loc.name === location.name &&
+          new Date(loc.startDate) <= endDate &&
+          new Date(loc.endDate || loc.startDate) >= startDate
+      );
+
       for (
         let currentDate = new Date(startDate);
         currentDate <= endDate;
@@ -666,8 +746,6 @@ const TimingSchedular = () => {
         const hasSelectedDays = Object.values(location.days).some((day) => day);
         if (hasSelectedDays && !location.days[dayName]) continue;
 
-        const timeSlots = createTimeSlots(location);
-
         const isBlocked = blockedPeriods.some((period) => {
           const blockStart = new Date(period.startDate);
           if (period.type === "day") {
@@ -677,12 +755,52 @@ const TimingSchedular = () => {
           return currentDate >= blockStart && currentDate <= blockEnd;
         });
 
-        if (!isBlocked && timeSlots.length > 0) {
+        if (isBlocked) continue;
+
+        // Get all schedules for this location and date
+        const relevantSchedules = existingSchedules.filter((loc) => {
+          const locStart = new Date(loc.startDate);
+          const locEnd = new Date(loc.endDate || loc.startDate);
+          const locHasDays = Object.values(loc.days).some((day) => day);
+          if (locHasDays) {
+            return (
+              currentDate >= locStart &&
+              currentDate <= locEnd &&
+              (loc.days[dayName] || !locHasDays)
+            );
+          }
+          return currentDate >= locStart && currentDate <= locEnd;
+        });
+
+        // Include the new schedule
+        relevantSchedules.push(location);
+
+        // Merge time slots
+        const mergedSlots = mergeTimeSlots(relevantSchedules);
+
+        // Delete existing schedule documents for this location and date
+        const q = query(
+          scheduleRef,
+          where("location", "==", location.name),
+          where("date", "==", dateString)
+        );
+        const querySnapshot = await getDocs(q);
+        const deletePromises = querySnapshot.docs.map((doc) => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+
+        // Create a single document with merged slots
+        const timeSlots = [];
+        mergedSlots.forEach(({ startTime, endTime }) => {
+          const slots = createTimeSlots({ startTime, endTime });
+          timeSlots.push(...slots);
+        });
+
+        if (timeSlots.length > 0) {
           await addDoc(scheduleRef, {
             date: dateString,
             dayName: dayName,
             location: location.name,
-            timeSlots: timeSlots,
+            timeSlots: [...new Set(timeSlots)], // Remove duplicates
             isOpen: true,
             isBooked: false,
             createdAt: new Date(),
@@ -770,15 +888,15 @@ const TimingSchedular = () => {
                 Available Days
               </label>
               <div className="flex gap-2 mt-1">
-                {Object.entries(schedule.days).map(([day, isAvailable]) => (
+                {dayOrder.map((day) => (
                   <span
                     key={day}
                     className="px-2 py-1 rounded"
                     style={{
-                      backgroundColor: isAvailable
+                      backgroundColor: schedule.days[day]
                         ? currentTheme.success.light
                         : currentTheme.error.light,
-                      color: isAvailable ? currentTheme.success.dark : currentTheme.error.dark,
+                      color: schedule.days[day] ? currentTheme.success.dark : currentTheme.error.dark,
                     }}
                   >
                     {day.charAt(0).toUpperCase() + day.slice(1)}
@@ -803,7 +921,7 @@ const TimingSchedular = () => {
         const scheduleDoc = await getDoc(doc(db, "settings", "schedule"));
         if (scheduleDoc.exists()) {
           const data = scheduleDoc.data();
-          setSchedule(data);
+          setSchedule(data || { locations: [], defaultTimes: { startTime: "09:00", endTime: "17:00" } });
 
           if (data.defaultTimes) {
             setNewSchedule((prev) => ({
@@ -974,77 +1092,69 @@ const TimingSchedular = () => {
           </div>
 
           {!showAddScheduleForm && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-              {schedule.locations
-                .slice()
-                .sort((a, b) => {
-                  const dateA = new Date(a.startDate);
-                  const dateB = new Date(b.startDate);
-                  if (dateA.getTime() === dateB.getTime()) {
-                    return new Date(a.createdAt) - new Date(b.createdAt);
-                  }
-                  return dateA - dateB;
-                })
-                .map((location, index) => {
-                  const hasSelectedDays = Object.values(location.days).some((day) => day);
-                  return (
-                    <div
-                      key={index}
-                      className="rounded-lg p-6 shadow-md"
-                      style={{ backgroundColor: currentTheme.surface }}
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <h3 className="text-xl font-semibold" style={{ color: currentTheme.text.primary }}>
-                          {location.name}
-                        </h3>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEditLocation(index)}
-                            className="p-2 rounded-full hover:bg-gray-100"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(index)}
-                            className="p-2 rounded-full hover:bg-gray-100 text-red-500"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <p style={{ color: currentTheme.text.secondary }}>
-                          <Clock size={16} className="inline mr-2" />
-                          {location.startTime} - {location.endTime}
-                        </p>
-                        <p style={{ color: currentTheme.text.secondary }}>
-                          <Calendar size={16} className="inline mr-2" />
-                          {hasSelectedDays && !location.isEndDateUserDefined
-                            ? `${formatDate(location.startDate)} (Weekly for 3 months)`
-                            : `${formatDate(location.startDate)} - ${formatDate(location.endDate)}`}
-                          {hasSelectedDays && location.isEndDateUserDefined && location.isMultipleDays && " (Recurring on selected days)"}
-                        </p>
-                      </div>
-                      <div className="mt-4">
-                        <div className="flex flex-wrap gap-2">
-                          {Object.entries(location.days).map(([day, isAvailable]) => (
-                            <span
-                              key={day}
-                              className={`px-2 py-1 text-sm rounded ${
-                                isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {day.charAt(0).toUpperCase() + day.slice(1)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+    {schedule.locations
+      .slice()
+      .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+      .map((location, index) => {
+        const hasSelectedDays = Object.values(location.days).some((day) => day);
+        return (
+          <div
+            key={location.id || index}
+            className="rounded-lg p-6 shadow-md"
+            style={{ backgroundColor: currentTheme.surface }}
+          >
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-semibold" style={{ color: currentTheme.text.primary }}>
+                {location.name}
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleEditLocation(index)}
+                  className="p-2 rounded-full hover:bg-gray-100"
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  onClick={() => handleDeleteClick(index)}
+                  className="p-2 rounded-full hover:bg-gray-100 text-red-500"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
-          )}
-
+            <div className="space-y-2">
+              <p style={{ color: currentTheme.text.secondary }}>
+                <Clock size={16} className="inline mr-2" />
+                {location.startTime} - {location.endTime}
+              </p>
+              <p style={{ color: currentTheme.text.secondary }}>
+                <Calendar size={16} className="inline mr-2" />
+                {hasSelectedDays && !location.isEndDateUserDefined
+                  ? `${formatDate(location.startDate)} (Weekly for 3 months)`
+                  : `${formatDate(location.startDate)} - ${formatDate(location.endDate)}`}
+                {hasSelectedDays && location.isEndDateUserDefined && location.isMultipleDays && " (Recurring on selected days)"}
+              </p>
+            </div>
+            <div className="mt-4">
+              <div className="flex flex-wrap gap-2">
+                {dayOrder.map((day) => (
+                  <span
+                    key={day}
+                    className={`px-2 py-1 text-sm rounded ${
+                      location.days[day] ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {day.charAt(0).toUpperCase() + day.slice(1)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+  </div>
+)}
           {showAddScheduleForm && (
             <div className="bg-white rounded-lg p-6 mb-6" style={{ backgroundColor: currentTheme.surface }}>
               {formErrors.scheduleConflict && (
@@ -1131,19 +1241,19 @@ const TimingSchedular = () => {
                   Available Days (Optional if end date is selected)
                 </label>
                 <div className="flex flex-wrap gap-3">
-                  {Object.entries(newSchedule.days).map(([day, isSelected]) => (
+                  {dayOrder.map((day) => (
                     <button
                       key={day}
                       onClick={() =>
                         setNewSchedule({
                           ...newSchedule,
-                          days: { ...newSchedule.days, [day]: !isSelected },
+                          days: { ...newSchedule.days, [day]: !newSchedule.days[day] },
                         })
                       }
                       className={`px-3 py-1 rounded-full ${
-                        isSelected ? "bg-primary text-white" : "bg-gray-200 text-black"
+                        newSchedule.days[day] ? "bg-primary text-white" : "bg-gray-200 text-black"
                       }`}
-                      style={isSelected ? { backgroundColor: currentTheme.primary } : {}}
+                      style={newSchedule.days[day] ? { backgroundColor: currentTheme.primary } : {}}
                     >
                       {day.charAt(0).toUpperCase() + day.slice(1)}
                     </button>
