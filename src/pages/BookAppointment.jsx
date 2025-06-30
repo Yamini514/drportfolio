@@ -118,8 +118,8 @@ function BookAppointment() {
           setBookingMessage("User profile not found. Please complete your profile setup.");
         }
       } catch (error) {
-        console.error("Error fetching user data:", error.message);
-        setBookingMessage(`Failed to load user data: ${error.message}. Please try again later.`);
+        console.error("Error fetching user data:", error.message || "Unknown error");
+        setBookingMessage("Failed to load user data. Please try again later.");
       } finally {
         setIsLoading(false);
       }
@@ -129,6 +129,24 @@ function BookAppointment() {
 
   useEffect(() => {
     emailjs.init("2pSuAO6tF3T-sejH-");
+    // Test EmailJS initialization
+    const testEmailJS = async () => {
+      try {
+        await emailjs.send("service_l920egs", "template_iremp8a", {
+          name: "Test User",
+          email: "test@example.com",
+          date: "June 30, 2025",
+          time: "10:00 AM",
+          location: "Test Location",
+          appointment_type: "Consultation",
+          pid: "TEST123",
+        });
+        console.log("EmailJS test successful");
+      } catch (error) {
+        console.error("EmailJS test failed:", error);
+      }
+    };
+    testEmailJS();
   }, []);
 
   const handleLocation = async () => {
@@ -149,9 +167,9 @@ function BookAppointment() {
       }
       setLocations(uniqueLocations);
     } catch (error) {
-      console.error("Error fetching locations:", error.message);
+      console.error("Error fetching locations:", error.message || "Unknown error");
       setLocations([]);
-      setBookingMessage(`Failed to load locations: ${error.message}. Please try again later.`);
+      setBookingMessage("Failed to load locations. Please try again later.");
     } finally {
       setIsLoading(false);
     }
@@ -212,8 +230,8 @@ function BookAppointment() {
         setBookingMessage("");
       }
     } catch (error) {
-      console.error("Error checking date availability for location:", error.message);
-      setBookingMessage(`Failed to check date availability: ${error.message}. Please try again.`);
+      console.error("Error checking date availability for location:", error.message || "Unknown error");
+      setBookingMessage("Failed to check date availability. Please try again.");
       setHasAvailableDates(false);
     } finally {
       setIsLoading(false);
@@ -302,7 +320,6 @@ function BookAppointment() {
       const storedSlots = Array.isArray(docData.timeSlots)
         ? docData.timeSlots.map((slot) => slot.replace(/["']/g, "").trim())
         : [];
-      // Check booked slots
       const bookingsRef = collection(db, "appointments/data/bookings");
       const bookingsQuery = query(
         bookingsRef,
@@ -345,8 +362,12 @@ function BookAppointment() {
         setBookingMessage("");
       }
     } catch (error) {
-      console.error("Error fetching time slots:", error.message);
-      setBookingMessage(`Failed to load time slots: ${error.message}. Please try again later.`);
+      console.error("Error fetching time slots:", error.message || error);
+      if (error.code === "failed-precondition" && error.message?.includes("index")) {
+        setBookingMessage("Database index is being created. Please try again in a few minutes.");
+      } else {
+        setBookingMessage("Failed to load time slots. Please try again later.");
+      }
       setTimeSlots([]);
       setDaySchedule(null);
     } finally {
@@ -362,7 +383,7 @@ function BookAppointment() {
         where("date", "==", date),
         where("time", "==", slot),
         where("location", "==", selectedLocation),
-        where("status", "!=", "deleted") // Exclude deleted appointments
+        where("status", "!=", "deleted")
       );
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
@@ -371,8 +392,12 @@ function BookAppointment() {
       }
       return true;
     } catch (error) {
-      console.error("Error checking slot availability:", error.message);
-      setBookingMessage(`Failed to check slot availability: ${error.message}. Please try again.`);
+      console.error("Error checking slot availability:", error.message || error);
+      if (error.code === "failed-precondition" && error.message?.includes("index")) {
+        setBookingMessage("Database index is being created. Please try again in a few minutes.");
+      } else {
+        setBookingMessage("Failed to check slot availability. Please try again.");
+      }
       return false;
     }
   };
@@ -433,7 +458,7 @@ function BookAppointment() {
     if (formData.reasonForVisit && formData.reasonForVisit.length > 100) {
       newErrors.reasonForVisit = "Purpose of visit must be 100 characters or less.";
     }
-    if (formData.médicalHistoryMessage && formData.medicalHistoryMessage.length > 200) {
+    if (formData.medicalHistoryMessage && formData.medicalHistoryMessage.length > 200) {
       newErrors.medicalHistoryMessage = "Medical history summary must be 200 characters or less.";
     }
     setErrors(newErrors);
@@ -470,13 +495,13 @@ function BookAppointment() {
         appointmentType: formData.appointmentType,
         medicalHistory: formData.medicalHistory ? formData.medicalHistory.name : "",
         medicalHistoryMessage: formData.medicalHistoryMessage,
-        bookedBy: auth.currentUser.uid,
+        bookedBy: auth.currentUser?.uid || null,
         bookedFor: "self",
         status: "pending",
         createdAt: new Date().toISOString(),
       });
 
-      if (formData.phone) {
+      if (formData.phone && /^\+?[0-9]{10,12}$/.test(formData.phone)) {
         const phoneNumber = formData.phone.startsWith("+") ? formData.phone : `+91${formData.phone}`;
         const message = `Dear ${formData.name}, your appointment is confirmed for ${format(
           new Date(selectedDate),
@@ -495,7 +520,7 @@ function BookAppointment() {
           appointment_type: formData.appointmentType,
           pid: formData.pid,
         };
-        await emailjs.send("service_dkv3rib", "template_iremp8a", emailParams);
+        await emailjs.send("service_l920egs", "template_iremp8a", emailParams);
 
         const autoReplyParams = {
           name: formData.name,
@@ -505,7 +530,7 @@ function BookAppointment() {
           from_name: "noreply@gmail.com",
           reply_to: "yamini.b@srinistha.com",
         };
-        await emailjs.send("service_dkv3rib", "template_auto_reply", autoReplyParams);
+        await emailjs.send("service_l920egs", "template_iremp8a", autoReplyParams);
       }
 
       setShowSuccess(true);
@@ -531,8 +556,15 @@ function BookAppointment() {
         setDaySchedule(null);
       }, 3000);
     } catch (error) {
-      console.error("Error booking appointment:", error.message);
-      setBookingMessage(`Failed to book appointment: ${error.message}. Please try again later.`);
+      console.error("Error booking appointment:", error);
+      const errorMessage = error.text || error.message || JSON.stringify(error) || "Unknown error occurred";
+      if (error.status === 400 && error.text?.includes("template ID not found")) {
+        setBookingMessage("Email template configuration error. Please check your templates at https://dashboard.emailjs.com/admin/templates and try again.");
+      } else if (error.status === 400) {
+        setBookingMessage(`Email sending failed: ${errorMessage}. Please ensure the template and service are correctly configured.`);
+      } else {
+        setBookingMessage(`Failed to book appointment: ${errorMessage}. Please try again later.`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -575,8 +607,8 @@ function BookAppointment() {
       }
       return { blocked: false, reason: "" };
     } catch (error) {
-      console.error("Error checking blocked date:", error.message);
-      setBookingMessage(`Failed to check date availability: ${error.message}. Please try again.`);
+      console.error("Error checking blocked date:", error.message || "Unknown error");
+      setBookingMessage("Failed to check date availability. Please try again.");
       return { blocked: false, reason: "" };
     }
   };
@@ -611,8 +643,8 @@ function BookAppointment() {
         }
         setAvailableDates(dates);
       } catch (error) {
-        console.error("Error fetching available dates:", error.message);
-        setBookingMessage(`Failed to load available dates: ${error.message}. Please try again later.`);
+        console.error("Error fetching available dates:", error.message || "Unknown error");
+        setBookingMessage("Failed to load available dates. Please try again later.");
       }
     };
     fetchAvailableDates();
@@ -635,8 +667,8 @@ function BookAppointment() {
           .map(([key]) => key.split("|")[0]);
         setBookedDates(fullyBooked);
       } catch (error) {
-        console.error("Error fetching booked dates:", error.message);
-        setBookingMessage(`Failed to load booked dates: ${error.message}. Please try again.`);
+        console.error("Error fetching booked dates:", error.message || "Unknown error");
+        setBookingMessage("Failed to load booked dates. Please try again.");
       }
     };
     fetchBookedDates();
@@ -658,14 +690,13 @@ function BookAppointment() {
         });
         setBookedSlots(slots);
       } catch (error) {
-        console.error("Error fetching booked slots:", error.message);
-        setBookingMessage(`Failed to load booked slots: ${error.message}. Please try again.`);
+        console.error("Error fetching booked slots:", error.message || "Unknown error");
+        setBookingMessage("Failed to load booked slots. Please try again.");
       }
     };
     fetchBookedSlots();
   }, []);
 
-  // Real-time listener for booking changes
   useEffect(() => {
     if (!selectedDate || !selectedLocation) return;
     const bookingsRef = collection(db, "appointments/data/bookings");
@@ -678,11 +709,11 @@ function BookAppointment() {
     const unsubscribe = onSnapshot(
       q,
       () => {
-        fetchTimeSlots(selectedDate, selectedDayName); // Refresh slots on change
+        fetchTimeSlots(selectedDate, selectedDayName);
       },
       (error) => {
-        console.error("Error in real-time bookings listener:", error.message);
-        setBookingMessage(`Failed to update available slots: ${error.message}`);
+        console.error("Error in real-time bookings listener:", error.message || "Unknown error");
+        setBookingMessage("Failed to update available slots. Please try again.");
       }
     );
     return () => unsubscribe();
