@@ -1,17 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useTheme } from '../context/ThemeContext';
-import { auth, db } from '../firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
-import { User, UserCircle } from 'lucide-react';
-import CustomButton from './CustomButton';
+import { useTheme } from "../context/ThemeContext";
+import { auth, db } from "../firebase/config";
+import { doc, getDoc } from "firebase/firestore";
+import { User, UserCircle } from "lucide-react";
+import CustomButton from "./CustomButton";
 
 function Header() {
   const { theme, currentTheme, toggleTheme } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [user, setUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
   const [pid, setPid] = useState(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
@@ -19,34 +18,34 @@ function Header() {
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
 
-  const isHomePage = location.pathname === '/' || location.pathname === '';
+  const isHomePage = location.pathname === "/" || location.pathname === "";
 
   const navLinks = [
-    { name: 'Home', href: '/', sectionId: null },
-    { name: 'About', href: '/', sectionId: 'about' },
-    { name: 'Services', href: '/', sectionId: 'services' },
-    { name: 'Testimonials', href: '/review', sectionId: null },
-    { name: 'Gallery', href: '/', sectionId: 'gallery' },
-    { name: 'Contact', href: '/', sectionId: 'contact' },
+    { name: "Home", href: "/", sectionId: null },
+    { name: "About", href: "/", sectionId: "about" },
+    { name: "Services", href: "/", sectionId: "services" },
+    { name: "Testimonials", href: "/review", sectionId: null },
+    { name: "Gallery", href: "/", sectionId: "gallery" },
+    { name: "Contact", href: "/", sectionId: "contact" },
     {
-      name: 'Research',
+      name: "Research",
       dropdownItems: [
-        { name: 'Publications', href: '/publications', sectionId: null },
-        { name: 'Articles', href: '/articles', sectionId: null }
-      ]
+        { name: "Publications", href: "/publications", sectionId: null },
+        { name: "Articles", href: "/articles", sectionId: null },
+      ],
     },
   ];
 
   const getTextColor = useCallback(() => {
     return isHomePage && !isScrolled && !isMenuOpen
-      ? currentTheme.textContrast || '#ffffff'
-      : currentTheme.text || (theme === 'light' ? '#000000' : '#e5e7eb');
+      ? currentTheme.textContrast || "#ffffff"
+      : currentTheme.text || (theme === "light" ? "#000000" : "#e5e7eb");
   }, [isHomePage, isScrolled, isMenuOpen, theme, currentTheme]);
 
   const getResearchTextColor = useCallback(() => {
-    return (theme === 'dark' || (isHomePage && !isScrolled && !isMenuOpen))
-      ? '#ffffff'
-      : '#000000';
+    return theme === "dark" || (isHomePage && !isScrolled && !isMenuOpen)
+      ? "#ffffff"
+      : "#000000";
   }, [theme, isHomePage, isScrolled, isMenuOpen]);
 
   useEffect(() => {
@@ -55,8 +54,8 @@ function Header() {
         setIsUserMenuOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -66,56 +65,19 @@ function Header() {
       setUser(currentUser);
       if (currentUser) {
         currentUid = currentUser.uid;
-        const userRoleFromStorage = localStorage.getItem('userRole');
-        const pidFromStorage = localStorage.getItem(`pid_${currentUser.uid}`);
-        if (userRoleFromStorage && pidFromStorage) {
-          setUserRole(userRoleFromStorage);
-          setPid(pidFromStorage);
-        } else {
-          const cachedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
-          const cachedPid = localStorage.getItem(`pid_${currentUser.uid}`);
-          if (cachedRole && cachedPid) {
-            setUserRole(cachedRole);
-            setPid(cachedPid);
-          } else {
-            try {
-              const userDocRef = doc(db, 'users', currentUser.uid);
-              const userDoc = await getDoc(userDocRef);
-              if (userDoc.exists()) {
-                const role = userDoc.data().role || 'user';
-                const pidValue = userDoc.data().pid || `PID-${currentUser.uid.slice(0, 6)}`;
-                setUserRole(role);
-                setPid(pidValue);
-                localStorage.setItem(`userRole_${currentUser.uid}`, role);
-                localStorage.setItem('userRole', role);
-                localStorage.setItem(`pid_${currentUser.uid}`, pidValue);
-                localStorage.setItem('pid', pidValue);
-              } else {
-                setUserRole('user');
-                setPid(`PID-${currentUser.uid.slice(0, 6)}`);
-                localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
-                localStorage.setItem('userRole', 'user');
-                localStorage.setItem(`pid_${currentUser.uid}`, `PID-${currentUser.uid.slice(0, 6)}`);
-                localStorage.setItem('pid', `PID-${currentUser.uid.slice(0, 6)}`);
-              }
-            } catch (error) {
-              console.error('Error fetching user data:', error);
-              setUserRole('user');
-              setPid(`PID-${currentUser.uid.slice(0, 6)}`);
-              localStorage.setItem(`userRole_${currentUser.uid}`, 'user');
-              localStorage.setItem('userRole', 'user');
-              localStorage.setItem(`pid_${currentUser.uid}`, `PID-${currentUser.uid.slice(0, 6)}`);
-              localStorage.setItem('pid', `PID-${currentUser.uid.slice(0, 6)}`);
-            }
+        try {
+          const userDocRef = doc(db, "users", currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const userPid = userDoc.data().pid || null;
+            setPid(userPid);
           }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
         }
       } else {
-        setUserRole(null);
+        setUser(null);
         setPid(null);
-        localStorage.removeItem('userRole');
-        localStorage.removeItem(`userRole_${currentUid}`);
-        localStorage.removeItem('pid');
-        localStorage.removeItem(`pid_${currentUid}`);
         currentUid = null;
       }
     });
@@ -126,15 +88,15 @@ function Header() {
     const handleScroll = () => setIsScrolled(window.scrollY > 0);
     setIsScrolled(window.scrollY > 0);
     if (!isHomePage) setIsScrolled(true);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, [isHomePage]);
 
   const scrollToSection = (sectionId) => {
     const section = document.getElementById(sectionId);
     if (section) {
       const sectionTop = section.getBoundingClientRect().top + window.scrollY - 75;
-      window.scrollTo({ top: sectionTop, behavior: 'smooth' });
+      window.scrollTo({ top: sectionTop, behavior: "smooth" });
       return true;
     }
     return false;
@@ -156,7 +118,7 @@ function Header() {
     setIsMenuOpen(false);
     if (sectionId) {
       if (!isHomePage) {
-        navigate('/', { state: { scrollTo: sectionId } });
+        navigate("/", { state: { scrollTo: sectionId } });
       } else {
         scrollToSection(sectionId);
       }
@@ -168,7 +130,7 @@ function Header() {
 
   const handleNameClick = () => {
     setIsMenuOpen(false);
-    navigate('/');
+    navigate("/");
     window.scrollTo(0, 0);
   };
 
@@ -176,26 +138,25 @@ function Header() {
     try {
       await auth.signOut();
       setUser(null);
-      setUserRole(null);
       setPid(null);
       setIsUserMenuOpen(false);
       setShowLogoutSuccess(true);
       setTimeout(() => {
         setShowLogoutSuccess(false);
-        navigate('/', { replace: true });
+        navigate("/", { replace: true });
         window.scrollTo(0, 0);
       }, 2000);
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     }
   };
 
   const handleBookAppointmentClick = () => {
     if (!user) {
-      localStorage.setItem('redirectAfterLogin', '/bookappointment');
-      navigate('/login', { state: { redirectTo: '/bookappointment' } });
+      localStorage.setItem("redirectAfterLogin", "/bookappointment");
+      navigate("/login", { state: { redirectTo: "/bookappointment" } });
     } else {
-      navigate('/bookappointment');
+      navigate("/bookappointment");
     }
     window.scrollTo(0, 0);
     setIsMenuOpen(false);
@@ -208,7 +169,7 @@ function Header() {
       <button
         onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
         className="flex items-center gap-2 font-medium transition-colors duration-300 text-sm sm:text-base"
-        style={{ color: isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor() }}
+        style={{ color: isTransparentHeader && theme === "dark" ? "#000000" : getTextColor() }}
       >
         <User className="w-4 h-4 sm:w-5 h-5" />
       </button>
@@ -216,24 +177,20 @@ function Header() {
         <div
           className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu z-50 animate-fadeIn"
           style={{
-            backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
-            borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb'),
-            color: theme === 'dark' ? '#ffffff' : '#000000'
+            backgroundColor: currentTheme.surface || (theme === "dark" ? "#2d2d2d" : "#ffffff"),
+            borderColor: currentTheme.border || (theme === "dark" ? "#444444" : "#e5e7eb"),
+            color: theme === "dark" ? "#ffffff" : "#000000",
           }}
         >
           <div className="py-1">
-            <div className="px-4 py-2 text-sm">
-              PID: {pid || 'Not Available'}
-            </div>
-            {userRole !== 'admin' && (
-              <Link
-                to="/my-appointments"
-                className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-sm"
-                onClick={() => setIsUserMenuOpen(false)}
-              >
-                My Appointments
-              </Link>
-            )}
+            <div className="px-4 py-2 text-sm">PID: {pid || "Not Available"}</div>
+            <Link
+              to="/my-appointments"
+              className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-sm"
+              onClick={() => setIsUserMenuOpen(false)}
+            >
+              My Appointments
+            </Link>
             <button
               onClick={handleLogout}
               className="w-full px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-left text-sm"
@@ -248,7 +205,7 @@ function Header() {
     <Link
       to="/login"
       className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline text-sm sm:text-base"
-      style={{ color: isTransparentHeader && theme === 'light' ? '#000000' : getTextColor() }}
+      style={{ color: isTransparentHeader && theme === "light" ? "#000000" : getTextColor() }}
       onClick={() => setIsMenuOpen(false)}
     >
       <UserCircle className="w-4 sm:w-5 h-5" />
@@ -257,7 +214,7 @@ function Header() {
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         .home-header-transparent {
           background-color: transparent !important;
           border: none !important;
@@ -266,8 +223,8 @@ function Header() {
           z-index: 50 !important;
         }
         .header-colored {
-          background-color: ${currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff')} !important;
-          border-bottom: 1px solid ${currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')};
+          background-color: ${currentTheme.background || (theme === "dark" ? "#1a1a1a" : "#ffffff")} !important;
+          border-bottom: 1px solid ${currentTheme.border || (theme === "dark" ? "#444444" : "#e5e7eb")};
           backdrop-filter: blur(10px);
           z-index: 50;
         }
@@ -278,7 +235,7 @@ function Header() {
           color: ${getTextColor()} !important;
         }
         header .group .absolute a {
-          color: ${theme === 'light' ? '#000000' : '#e5e7eb'} !important;
+          color: ${theme === "light" ? "#000000" : "#e5e7eb"} !important;
         }
         .dropdown-menu {
           z-index: 100 !important;
@@ -320,10 +277,10 @@ function Header() {
       `}</style>
       <header
         key={theme}
-        className={`px-4 sm:px-6 md:px-8 py-3 sm:py-4 fixed w-full top-0 ${isTransparentHeader ? 'home-header-transparent' : 'header-colored'}`}
+        className={`px-4 sm:px-6 md:px-8 py-3 sm:py-4 fixed w-full top-0 ${isTransparentHeader ? "home-header-transparent" : "header-colored"}`}
         style={{
-          backgroundColor: isTransparentHeader ? 'transparent' : (currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff')),
-          transition: 'all 0.3s ease'
+          backgroundColor: isTransparentHeader ? "transparent" : (currentTheme.background || (theme === "dark" ? "#1a1a1a" : "#ffffff")),
+          transition: "all 0.3s ease",
         }}
       >
         <div className="flex items-center justify-between">
@@ -339,7 +296,7 @@ function Header() {
               link.dropdownItems ? (
                 <div key={link.name} className="relative group">
                   <button
-                    className={`font-medium transition-colors duration-300 flex items-center gap-1 text-sm lg:text-base ${link.name === 'Research' ? 'research-button' : ''}`}
+                    className={`font-medium transition-colors duration-300 flex items-center gap-1 text-sm lg:text-base ${link.name === "Research" ? "research-button" : ""}`}
                   >
                     {link.name}
                     <svg className="w-3 lg:w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -349,8 +306,8 @@ function Header() {
                   <div
                     className="absolute left-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu z-50 animate-fadeIn"
                     style={{
-                      backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
-                      borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')
+                      backgroundColor: currentTheme.surface || (theme === "dark" ? "#2d2d2d" : "#ffffff"),
+                      borderColor: currentTheme.border || (theme === "dark" ? "#444444" : "#e5e7eb"),
                     }}
                   >
                     {link.dropdownItems.map((item) => (
@@ -376,8 +333,8 @@ function Header() {
                   <span
                     className="absolute inset-x-0 bottom-0 h-0.5 transform transition-transform duration-300 scale-x-0 group-hover:scale-x-100"
                     style={{
-                      backgroundColor: currentTheme.primary || '#7c3aed',
-                      transform: location.pathname === link.href ? 'scaleX(1)' : 'scaleX(0)'
+                      backgroundColor: currentTheme.primary || "#7c3aed",
+                      transform: location.pathname === link.href ? "scaleX(1)" : "scaleX(0)",
                     }}
                   ></span>
                 </Link>
@@ -396,7 +353,7 @@ function Header() {
               className="cursor-pointer p-2 text-sm lg:text-base"
               style={{ color: getTextColor() }}
             >
-              {theme === 'dark' ? '☀️' : '🌙'}
+              {theme === "dark" ? "☀️" : "🌙"}
             </span>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4 md:hidden">
@@ -405,7 +362,7 @@ function Header() {
               className="cursor-pointer p-1 sm:p-2 text-sm sm:text-base"
               style={{ color: getTextColor() }}
             >
-              {theme === 'dark' ? '☀️' : '🌙'}
+              {theme === "dark" ? "☀️" : "🌙"}
             </span>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -431,11 +388,11 @@ function Header() {
           </div>
         </div>
         {isMenuOpen && (
-          <nav className="md:hidden pt-4 pb-2" style={{ backgroundColor: currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff') }}>
+          <nav className="md:hidden pt-4 pb-2" style={{ backgroundColor: currentTheme.background || (theme === "dark" ? "#1a1a1a" : "#ffffff") }}>
             {navLinks.map((link) => (
               link.dropdownItems ? (
                 <div key={link.name}>
-                  <div className="px-4 py-2 font-medium text-sm sm:text-base" style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}>
+                  <div className="px-4 py-2 font-medium text-sm sm:text-base" style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}>
                     {link.name}
                   </div>
                   {link.dropdownItems.map((item) => (
@@ -443,7 +400,7 @@ function Header() {
                       key={item.name}
                       to={item.href}
                       className="block py-2 px-8 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
-                      style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
+                      style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
                       onClick={(e) => handleNavClick(item.href, item.sectionId, e)}
                     >
                       {item.name}
@@ -455,7 +412,7 @@ function Header() {
                   key={link.name}
                   to={link.href}
                   className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
-                  style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
+                  style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
                   onClick={(e) => handleNavClick(link.href, link.sectionId, e)}
                 >
                   {link.name}
@@ -464,20 +421,21 @@ function Header() {
             ))}
             {user ? (
               <div className="px-4 py-2">
-                {userRole !== 'admin' && (
-                  <Link
-                    to="/my-appointments"
-                    className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
-                    style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    My Appointments
-                  </Link>
-                )}
+                <div className="px-4 py-2 text-sm" style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}>
+                  PID: {pid || "Not Available"}
+                </div>
+                <Link
+                  to="/my-appointments"
+                  className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
+                  style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  My Appointments
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="w-full py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-left text-sm sm:text-base"
-                  style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
+                  style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
                 >
                   Logout
                 </button>
@@ -486,7 +444,7 @@ function Header() {
               <Link
                 to="/login"
                 className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
-                style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
+                style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
                 onClick={() => setIsMenuOpen(false)}
               >
                 <UserCircle className="w-4 sm:w-5 h-5" />
@@ -504,7 +462,7 @@ function Header() {
         )}
         {showLogoutSuccess && (
           <div className="logout-toast">
-            Successfully logged out!
+            esg
           </div>
         )}
       </header>
