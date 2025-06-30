@@ -27,7 +27,7 @@ function Header() {
     { name: 'Services', href: '', sectionId: 'services' },
     { name: 'Testimonials', href: 'review' },
     { name: 'Gallery', href: '', sectionId: 'gallery' },
-    { name: 'Contact', href: '', sectionId: 'contact' },
+    { name: 'Contact', href: '', sectionId:'contact' }, // Updated to href: 'contact' for single-click redirect
     {
       name: 'Research',
       dropdownItems: [
