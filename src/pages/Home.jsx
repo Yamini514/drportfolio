@@ -7,6 +7,7 @@ import Testimonials from './Testimonials';
 import Services from './Services';
 import About from './About';
 import Stats from '../components/Stats';
+import ContactMe from './ContactMe';
 
 function Home() {
   return (
@@ -18,6 +19,7 @@ function Home() {
         <Testimonials id="review"/> {/* Ensure id matches sectionId in navLinks */}
         <Gallery id="gallery"/>
         <Video id="video"/>
+        <ContactMe id="contact"/>
         <BookAppointment/>
       </div>
     </>

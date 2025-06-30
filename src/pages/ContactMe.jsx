@@ -219,7 +219,7 @@ function ContactMe() {
   };
 
   return (
-    <section id="contactme">
+    <section id="contact">
       <div className="px-5 md:px-15 pb-12 mt-5 md:pb-10 lg:px-20 p-8" style={{ backgroundColor: currentTheme.background }}>
         <div className="container mx-auto">
           {showSuccess && (
