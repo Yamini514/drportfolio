@@ -18,7 +18,7 @@ const AdminLogin = () => {
   const [rememberMe, setRememberMe] = useState(false);
 
   // Session expiration time (30 minutes in milliseconds)
-  const SESSION_TIMEOUT = 60 * 1000;
+  const SESSION_TIMEOUT = 3*60 * 1000;
 
   useEffect(() => {
     // Check for saved email and session validity when component mounts
