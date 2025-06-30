@@ -5,7 +5,7 @@ import CustomButton from '../../../components/CustomButton';
 import CustomTable from '../../../components/CustomTable';
 import CustomSelect from '../../../components/CustomSelect';
 import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmation';
-import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -45,7 +45,6 @@ function AppointmentsContent() {
   const formatDate = useCallback((dateStr) => {
     try {
       const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
       return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
     } catch (error) {
       console.error('Error formatting date:', error);
@@ -121,37 +120,43 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Delete blocked schedule
-  const deleteBlockedSchedule = useCallback(async (date) => {
+  // Automate deletion for blocked dates
+  const automateBlockedDateDeletion = useCallback(async () => {
     try {
-      const scheduleRef = collection(db, 'appointments/data/schedule');
-      const q = query(scheduleRef, where('date', '==', date));
+      const appointmentsRef = collection(db, 'appointments/data/bookings');
+      const q = query(appointmentsRef, where('status', '!=', 'deleted'));
       const snapshot = await getDocs(q);
-      const deletePromises = snapshot.docs.map(async (docSnap) => {
-        await deleteDoc(doc(db, 'appointments/data/schedule', docSnap.id));
-        console.log(`Deleted blocked schedule for date: ${date}, docId: ${docSnap.id}`);
-      });
-      await Promise.all(deletePromises);
-      setNotification({ message: `Deleted schedule for blocked date: ${formatDate(date)}`, type: 'success' });
-      setTimeout(() => setNotification(null), 5000);
+      const appointmentsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      const uniqueDates = [...new Set(appointmentsList.map(app => app.date))];
+      for (const date of uniqueDates) {
+        const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
+        const { blocked } = await checkIfDateIsBlocked(date, dayName);
+        if (blocked) {
+          const appointmentsToDelete = appointmentsList.filter(app => app.date === date);
+          const deletePromises = appointmentsToDelete.map(async (app) => {
+            await updateDoc(doc(db, 'appointments/data/bookings', app.id), { status: 'deleted', deletedAt: new Date().toISOString() });
+            console.log(`Deleted appointment for blocked date: ${date}, appId: ${app.id}`);
+          });
+          await Promise.all(deletePromises);
+          setNotification({ message: `Deleted appointments for blocked date: ${formatDate(date)}`, type: 'success' });
+          setTimeout(() => setNotification(null), 5000);
+        }
+      }
     } catch (error) {
-      console.error('Error deleting blocked schedule:', error);
-      setNotification({ message: `Failed to delete blocked schedule: ${error.message}`, type: 'error' });
+      console.error('Error automating blocked date deletion:', error);
+      setNotification({ message: `Failed to automate blocked date deletion: ${error.message}`, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [formatDate]);
+  }, [formatDate, checkIfDateIsBlocked]);
 
   // Simulate sending phone notification
   const sendPhoneNotification = useCallback((appointment, action) => {
     const message = action === 'confirmed'
       ? `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been confirmed.`
       : `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been deleted and the slot is now available.`;
-    
     console.log(`Sending SMS to ${appointment.phone || 'unknown phone'}: ${message}`);
-    setNotification({
-      message: `Notified patient: ${message}`,
-      type: 'success'
-    });
+    setNotification({ message: `Notified patient: ${message}`, type: 'success' });
     setTimeout(() => setNotification(null), 5000);
   }, [formatDate]);
 
@@ -160,7 +165,6 @@ function AppointmentsContent() {
     const pidData = appointmentsList.reduce((acc, app) => {
       if (app.status === 'deleted') return acc;
       const pid = app.pid || 'Unknown';
-      if (!app.pid) console.warn('Missing PID for appointment:', app.id);
       if (!acc[pid]) {
         acc[pid] = {
           pid,
@@ -206,49 +210,25 @@ function AppointmentsContent() {
         const appointmentsRef = collection(db, 'appointments/data/bookings');
         const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
-        const appointmentsList = snapshot.docs.map(doc => {
-          const data = doc.data();
-          if (!data.pid) console.warn('Missing PID for booking:', doc.id);
-          if (!data.location) console.warn('Missing location for booking:', doc.id);
-          return {
-            id: doc.id,
-            clientName: data.name || 'Unknown',
-            status: data.status || 'pending',
-            pid: data.pid || 'Unknown',
-            date: data.date || '',
-            time: data.time || '',
-            appointmentType: data.appointmentType || 'Consultation',
-            phone: data.phone || 'Unknown',
-            email: data.email || '',
-            age: data.age || '',
-            medicalHistory: data.medicalHistory || '',
-            medicalHistoryMessage: data.medicalHistoryMessage || '',
-            location: data.location || 'Unknown',
-          };
-        });
-        // Check for duplicate bookings
-        const duplicates = appointmentsList.reduce((acc, app, index, arr) => {
-          if (app.status === 'deleted') return acc;
-          const key = `${app.date}|${app.time}|${app.location}`;
-          if (arr.some((other, i) => i !== index && other.status !== 'deleted' && `${other.date}|${other.time}|${other.location}` === key)) {
-            acc.push(key);
-          }
-          return acc;
-        }, []);
-        if (duplicates.length > 0) {
-          console.warn('Duplicate bookings detected:', duplicates);
-          setNotification({ message: 'Warning: Duplicate bookings detected.', type: 'error' });
-          setTimeout(() => setNotification(null), 5000);
-        }
+        const appointmentsList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          clientName: doc.data().name || 'Unknown',
+          status: doc.data().status || 'pending',
+          pid: doc.data().pid || 'Unknown',
+          date: doc.data().date || '',
+          time: doc.data().time || '',
+          appointmentType: doc.data().appointmentType || 'Consultation',
+          phone: doc.data().phone || 'Unknown',
+          email: doc.data().email || '',
+          age: doc.data().age || '',
+          medicalHistory: doc.data().medicalHistory || '',
+          medicalHistoryMessage: doc.data().medicalHistoryMessage || '',
+          location: doc.data().location || 'Unknown',
+        }));
         setAppointments(calculatePidData(appointmentsList));
       } catch (error) {
         console.error('Error fetching appointments:', error);
-        const errorMessage = error.code === 'permission-denied'
-          ? 'Permission denied: Please check your authentication.'
-          : error.code === 'unavailable'
-          ? 'Network error: Please check your internet connection.'
-          : `Failed to fetch appointments: ${error.message}`;
-        setNotification({ message: errorMessage, type: 'error' });
+        setNotification({ message: `Failed to fetch appointments: ${error.message}`, type: 'error' });
       } finally {
         setLoading(false);
       }
@@ -263,26 +243,21 @@ function AppointmentsContent() {
     let hasInitialized = false;
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const appointmentsList = snapshot.docs.map(doc => {
-        const data = doc.data();
-        if (!data.pid) console.warn('Missing PID for booking:', doc.id);
-        if (!data.location) console.warn('Missing location for booking:', doc.id);
-        return {
-          id: doc.id,
-          clientName: data.name || 'Unknown',
-          status: data.status || 'pending',
-          pid: data.pid || 'Unknown',
-          date: data.date || '',
-          time: data.time || '',
-          appointmentType: data.appointmentType || 'Consultation',
-          phone: data.phone || 'Unknown',
-          email: data.email || '',
-          age: data.age || '',
-          medicalHistory: data.medicalHistory || '',
-          medicalHistoryMessage: data.medicalHistoryMessage || '',
-          location: data.location || 'Unknown',
-        };
-      });
+      const appointmentsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        clientName: doc.data().name || 'Unknown',
+        status: doc.data().status || 'pending',
+        pid: doc.data().pid || 'Unknown',
+        date: doc.data().date || '',
+        time: doc.data().time || '',
+        appointmentType: doc.data().appointmentType || 'Consultation',
+        phone: doc.data().phone || 'Unknown',
+        email: doc.data().email || '',
+        age: doc.data().age || '',
+        medicalHistory: doc.data().medicalHistory || '',
+        medicalHistoryMessage: doc.data().medicalHistoryMessage || '',
+        location: doc.data().location || 'Unknown',
+      }));
 
       setAppointments(calculatePidData(appointmentsList));
 
@@ -291,22 +266,13 @@ function AppointmentsContent() {
         return;
       }
 
-      // Check for blocked dates and delete schedules
-      const uniqueDates = [...new Set(appointmentsList.map(app => app.date))];
-      for (const date of uniqueDates) {
-        const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
-        const { blocked } = await checkIfDateIsBlocked(date, dayName);
-        if (blocked) {
-          await deleteBlockedSchedule(date);
-        }
-      }
+      // Automate blocked date deletion
+      await automateBlockedDateDeletion();
 
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added' && change.doc.data().status !== 'deleted') {
           const newAppointment = change.doc.data();
-          if (notificationSound) {
-            notificationSound.play().catch(error => console.warn('Notification sound error:', error));
-          }
+          if (notificationSound) notificationSound.play().catch(error => console.warn('Notification sound error:', error));
           setNotification({
             message: `New appointment booked by ${newAppointment.name || 'Unknown'} for ${formatDate(newAppointment.date)}`,
             type: 'success'
@@ -316,44 +282,28 @@ function AppointmentsContent() {
       });
     }, (error) => {
       console.error('Error in real-time listener:', error);
-      const errorMessage = error.code === 'permission-denied'
-        ? 'Permission denied: Please check your authentication.'
-        : error.code === 'unavailable'
-        ? 'Network error: Please check your internet connection.'
-        : `Error receiving real-time updates: ${error.message}`;
-      setNotification({ message: errorMessage, type: 'error' });
-      setTimeout(() => setNotification(null), 5000);
+      setNotification({ message: `Error receiving real-time updates: ${error.message}`, type: 'error' });
     });
 
     return () => unsubscribe();
-  }, [calculatePidData, formatDate, notificationSound, checkIfDateIsBlocked, deleteBlockedSchedule]);
+  }, [calculatePidData, formatDate, notificationSound, automateBlockedDateDeletion]);
 
   // Handle status update
   const handleStatusUpdate = useCallback(async (appointmentId, newStatus) => {
     try {
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
       await updateDoc(appointmentRef, { status: newStatus });
-      setAppointments(prev => calculatePidData(
-        prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: newStatus } : app)
-      ));
+      const updatedAppointments = appointments.flatMap(data => data.appointments).map(app =>
+        app.id === appointmentId ? { ...app, status: newStatus } : app
+      );
+      setAppointments(calculatePidData(updatedAppointments));
       if (newStatus === 'confirmed') {
         const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
-        if (!appointment) {
-          setNotification({ message: 'Appointment not found.', type: 'error' });
-          setTimeout(() => setNotification(null), 5000);
-          return;
-        }
         sendPhoneNotification(appointment, 'confirmed');
       }
     } catch (error) {
       console.error('Error updating appointment status:', error);
-      const errorMessage = error.code === 'permission-denied'
-        ? 'Permission denied: Please check your authentication.'
-        : error.code === 'unavailable'
-        ? 'Network error: Please check your internet connection.'
-        : `Failed to update appointment status: ${error.message}`;
-      setNotification({ message: errorMessage, type: 'error' });
-      setTimeout(() => setNotification(null), 5000);
+      setNotification({ message: `Failed to update appointment status: ${error.message}`, type: 'error' });
     }
   }, [appointments, calculatePidData, sendPhoneNotification]);
 
@@ -361,12 +311,7 @@ function AppointmentsContent() {
   const handleDelete = useCallback(async (appointmentId) => {
     try {
       const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
-      if (!appointment) {
-        setNotification({ message: 'Appointment not found.', type: 'error' });
-        setTimeout(() => setNotification(null), 5000);
-        return;
-      }
-      if (!isFutureAppointment(appointment)) {
+      if (!appointment || !isFutureAppointment(appointment)) {
         setNotification({ message: 'Cannot delete past appointments.', type: 'error' });
         setTimeout(() => setNotification(null), 5000);
         return;
@@ -374,9 +319,10 @@ function AppointmentsContent() {
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
       await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
       const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
-      setAppointments(prev => calculatePidData(
-        prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: 'deleted' } : app)
-      ));
+      const updatedAppointments = appointments.flatMap(data => data.appointments).map(app =>
+        app.id === appointmentId ? { ...app, status: 'deleted' } : app
+      );
+      setAppointments(calculatePidData(updatedAppointments));
       sendPhoneNotification(appointment, 'deleted');
       if (isSlotAvailable) {
         setNotification({
@@ -385,20 +331,12 @@ function AppointmentsContent() {
         });
         setTimeout(() => setNotification(null), 5000);
       }
-      if (selectedPid === appointment.pid) setSelectedPid(null);
-      if (selectedPatientDetails && selectedPatientDetails.pid === appointment.pid) setSelectedPatientDetails(null);
       setDeleteConfirmation({ isOpen: false, appointmentId: null });
     } catch (error) {
       console.error('Error marking appointment as deleted:', error);
-      const errorMessage = error.code === 'permission-denied'
-        ? 'Permission denied: Please check your authentication.'
-        : error.code === 'unavailable'
-        ? 'Network error: Please check your internet connection.'
-        : `Failed to delete appointment: ${error.message}`;
-      setNotification({ message: errorMessage, type: 'error' });
-      setTimeout(() => setNotification(null), 5000);
+      setNotification({ message: `Failed to delete appointment: ${error.message}`, type: 'error' });
     }
-  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate]);
+  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification, checkSlotAvailability, formatDate]);
 
   // Handle bulk delete
   const handleBulkDelete = useCallback(async (ids) => {
@@ -413,51 +351,39 @@ function AppointmentsContent() {
         setTimeout(() => setNotification(null), 5000);
         return;
       }
-      const deletedSlots = [];
       await Promise.all(futureAppointmentIds.map(async id => {
         const appointment = allAppointments.find(app => app.id === id);
-        if (!appointment) return;
         await updateDoc(doc(db, 'appointments/data/bookings', id), { status: 'deleted', deletedAt: new Date().toISOString() });
-        const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
-        if (isSlotAvailable) {
-          deletedSlots.push(`${appointment.time} on ${formatDate(appointment.date)}`);
-        }
         sendPhoneNotification(appointment, 'deleted');
       }));
-      setAppointments(prev => calculatePidData(
-        prev.flatMap(data => data.appointments).map(app => futureAppointmentIds.includes(app.id) ? { ...app, status: 'deleted' } : app)
-      ));
+      const updatedAppointments = appointments.flatMap(data => data.appointments).map(app =>
+        futureAppointmentIds.includes(app.id) ? { ...app, status: 'deleted' } : app
+      );
+      setAppointments(calculatePidData(updatedAppointments));
       setDeleteConfirmation({ isOpen: false, appointmentId: null });
-      setNotification({
-        message: `Successfully marked ${futureAppointmentIds.length} appointment(s) as deleted. ${deletedSlots.length > 0 ? `Slots ${deletedSlots.join(', ')} are now available.` : ''}`,
-        type: 'success'
-      });
+      setNotification({ message: `Successfully marked ${futureAppointmentIds.length} appointment(s) as deleted.`, type: 'success' });
       setTimeout(() => setNotification(null), 5000);
     } catch (error) {
       console.error('Error marking appointments as deleted:', error);
-      const errorMessage = error.code === 'permission-denied'
-        ? 'Permission denied: Please check your authentication.'
-        : error.code === 'unavailable'
-        ? 'Network error: Please check your internet connection.'
-        : `Failed to delete appointments: ${error.message}`;
-      setNotification({ message: errorMessage, type: 'error' });
-      setTimeout(() => setNotification(null), 5000);
+      setNotification({ message: `Failed to delete appointments: ${error.message}`, type: 'error' });
     }
-  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification, checkSlotAvailability, formatDate]);
+  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification]);
 
   // Handle view details and patient details
   const handleViewDetails = useCallback((pid) => {
     if (pid === 'Unknown') return;
     setSelectedPid(pid);
   }, []);
+
   const handleViewPatientDetails = useCallback((pid) => {
     if (pid === 'Unknown') return;
     const patientData = appointments.find(data => data.pid === pid);
     if (patientData) {
       setSelectedPatientDetails(patientData);
-      setSelectedPid(null); // Clear PID view to prioritize patient details view
+      setSelectedPid(null);
     }
   }, [appointments]);
+
   const handleBackToList = useCallback(() => {
     setSelectedPid(null);
     setSelectedPatientDetails(null);
@@ -514,56 +440,62 @@ function AppointmentsContent() {
     </span>
   );
 
-  // Reusable ActionButtons component
-  const ActionButtons = ({ appointment, isDetailView = false }) => (
-    <div className="flex justify-center space-x-2">
-      {!isDetailView && (
+  // Reusable ActionButtons component with conditional view
+  const ActionButtons = ({ appointment, isDetailView = false }) => {
+    const hasConsultationData = appointment.medicalHistory || appointment.medicalHistoryMessage;
+    const viewAction = hasConsultationData ? handleViewPatientDetails : handleViewDetails;
+    const viewTitle = hasConsultationData ? 'View Patient Data' : 'View Appointments';
+    const viewAriaLabel = hasConsultationData ? 'View patient data' : 'View appointments';
+
+    return (
+      <div className="flex justify-center space-x-2">
+        {!isDetailView && (
+          <button
+            onClick={() => handleViewDetails(appointment.pid)}
+            className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+            title="View PID Appointments"
+            aria-label="View PID Appointments"
+            disabled={!appointment.pid || appointment.pid === 'Unknown'}
+          >
+            <Eye size={20} />
+          </button>
+        )}
         <button
-          onClick={() => handleViewDetails(appointment.pid)}
-          className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
-          title="View PID Appointments"
-          aria-label="View PID Appointments"
+          onClick={() => viewAction(appointment.pid)}
+          className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+          title={viewTitle}
+          aria-label={viewAriaLabel}
           disabled={!appointment.pid || appointment.pid === 'Unknown'}
         >
           <Eye size={20} />
         </button>
-      )}
-      <button
-        onClick={() => handleViewPatientDetails(appointment.pid)}
-        className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
-        title="View Patient Details"
-        aria-label="View Patient Details"
-        disabled={!appointment.pid || appointment.pid === 'Unknown'}
-      >
-        <Eye size={20} />
-      </button>
-      <button
-        onClick={() => handleStatusUpdate(appointment.id, 'confirmed')}
-        className="p-1 text-green-600 hover:opacity-80 transition-opacity"
-        title="Approve Appointment"
-        aria-label="Approve Appointment"
-        disabled={appointment.status === 'deleted'}
-      >
-        <ThumbsUp size={20} />
-      </button>
-      {isFutureAppointment(appointment) && appointment.status !== 'deleted' && (
         <button
-          onClick={() => setDeleteConfirmation({ isOpen: true, appointmentId: appointment.id })}
-          className="p-1 hover:opacity-80 transition-opacity"
-          title="Delete Appointment"
-          aria-label="Delete Appointment"
-          style={{ color: currentTheme.destructive }}
+          onClick={() => handleStatusUpdate(appointment.id, 'confirmed')}
+          className="p-1 text-green-600 hover:opacity-80 transition-opacity"
+          title="Approve Appointment"
+          aria-label="Approve Appointment"
+          disabled={appointment.status === 'deleted'}
         >
-          <Trash2 size={20} />
+          <ThumbsUp size={20} />
         </button>
-      )}
-    </div>
-  );
+        {isFutureAppointment(appointment) && appointment.status !== 'deleted' && (
+          <button
+            onClick={() => setDeleteConfirmation({ isOpen: true, appointmentId: appointment.id })}
+            className="p-1 hover:opacity-80 transition-opacity"
+            title="Delete Appointment"
+            aria-label="Delete Appointment"
+            style={{ color: currentTheme.destructive }}
+          >
+            <Trash2 size={20} />
+          </button>
+        )}
+      </div>
+    );
+  };
 
   // Patient Details View
   const PatientDetailsView = useMemo(() => {
     if (!selectedPatientDetails) return null;
-
     return (
       <div className="rounded-lg shadow-sm overflow-hidden" style={{ backgroundColor: currentTheme.surface, border: `1px solid ${currentTheme.border}` }}>
         <div className="px-4 py-3 border-b" style={{ backgroundColor: currentTheme.secondary, borderColor: currentTheme.border }}>
@@ -580,11 +512,7 @@ function AppointmentsContent() {
                 Patient Details for PID: {selectedPatientDetails.pid}
               </h3>
             </div>
-            <CustomButton
-              onClick={handleBackToList}
-              variant="secondary"
-              aria-label="Close patient details"
-            >
+            <CustomButton onClick={handleBackToList} variant="secondary" aria-label="Close patient details">
               Close
             </CustomButton>
           </div>
@@ -594,44 +522,18 @@ function AppointmentsContent() {
             <div>
               <h4 className="text-sm font-medium mb-2" style={{ color: currentTheme.text.secondary }}>Patient Information</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>PID: </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.pid}</span>
-                </div>
-                <div>
-                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Client Name(s): </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.clientNames}</span>
-                </div>
-                <div>
-                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Phone: </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phones}</span>
-                </div>
-                <div>
-                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Email: </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.emails}</span>
-                </div>
-                <div>
-                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Age: </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.ages}</span>
-                </div>
-                <div>
-                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Total Consultations: </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.consultationCount}</span>
-                </div>
-                <div className="sm:col-span-2">
-                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History: </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistories}</span>
-                </div>
-                <div className="sm:col-span-2">
-                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History Notes: </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistoryMessages}</span>
-                </div>
+                <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>PID: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.pid}</span></div>
+                <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Client Name(s): </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.clientNames}</span></div>
+                <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Phone: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phones}</span></div>
+                <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Email: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.emails}</span></div>
+                <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Age: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.ages}</span></div>
+                <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Total Consultations: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.consultationCount}</span></div>
+                <div className="sm:col-span-2"><span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistories}</span></div>
+                <div className="sm:col-span-2"><span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History Notes: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistoryMessages}</span></div>
               </div>
             </div>
             <div>
-              <h4 className="text-sm font-medium mb-2" style={{ color: currentTheme.text.secondary }}>
-                Appointment History
-              </h4>
+              <h4 className="text-sm font-medium mb-2" style={{ color: currentTheme.text.secondary }}>Appointment History</h4>
               <div className="overflow-x-auto">
                 <table className="w-full" style={{ color: currentTheme.text.primary }}>
                   <thead>
@@ -647,19 +549,10 @@ function AppointmentsContent() {
                     {selectedPatientDetails.appointments.map(appointment => (
                       <tr key={appointment.id} className="border-b" style={{ borderColor: currentTheme.border }}>
                         <td className="px-4 py-2">{appointment.clientName}</td>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            <Calendar size={16} style={{ color: currentTheme.text.secondary }} />
-                            <span>{appointment.formattedDate} {appointment.time}</span>
-                          </div>
-                        </td>
+                        <td className="px-4 py-2"><div className="flex items-center gap-2"><Calendar size={16} style={{ color: currentTheme.text.secondary }} /><span>{appointment.formattedDate} {appointment.time}</span></div></td>
                         <td className="px-4 py-2">{appointment.appointmentType || 'Consultation'}</td>
-                        <td className="px-4 py-2">
-                          <StatusBadge status={appointment.status} />
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <ActionButtons appointment={appointment} isDetailView={true} />
-                        </td>
+                        <td className="px-4 py-2"><StatusBadge status={appointment.status} /></td>
+                        <td className="px-4 py-2 text-center"><ActionButtons appointment={appointment} isDetailView={true} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -670,13 +563,12 @@ function AppointmentsContent() {
         </div>
       </div>
     );
-  }, [selectedPatientDetails, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete, handleViewPatientDetails]);
+  }, [selectedPatientDetails, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete]);
 
   // PID Detail View
   const PidDetailView = useMemo(() => {
     const pidAppointments = getPidAppointments(selectedPid);
     if (!selectedPid || !pidAppointments.length) return null;
-
     return (
       <div className="rounded-lg shadow-sm overflow-hidden" style={{ backgroundColor: currentTheme.surface, border: `1px solid ${currentTheme.border}` }}>
         <div className="px-4 py-3 border-b" style={{ backgroundColor: currentTheme.secondary, borderColor: currentTheme.border }}>
@@ -693,11 +585,7 @@ function AppointmentsContent() {
                 Appointments for PID: {selectedPid}
               </h3>
             </div>
-            <CustomButton
-              onClick={handleBackToList}
-              variant="secondary"
-              aria-label="Close PID details"
-            >
+            <CustomButton onClick={handleBackToList} variant="secondary" aria-label="Close PID details">
               Close
             </CustomButton>
           </div>
@@ -722,19 +610,10 @@ function AppointmentsContent() {
                   {pidAppointments.map(appointment => (
                     <tr key={appointment.id} className="border-b" style={{ borderColor: currentTheme.border }}>
                       <td className="px-4 py-2">{appointment.clientName}</td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={16} style={{ color: currentTheme.text.secondary }} />
-                          <span>{appointment.formattedDate} {appointment.time}</span>
-                        </div>
-                      </td>
+                      <td className="px-4 py-2"><div className="flex items-center gap-2"><Calendar size={16} style={{ color: currentTheme.text.secondary }} /><span>{appointment.formattedDate} {appointment.time}</span></div></td>
                       <td className="px-4 py-2">{appointment.appointmentType || 'Consultation'}</td>
-                      <td className="px-4 py-2">
-                        <StatusBadge status={appointment.status} />
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <ActionButtons appointment={appointment} isDetailView={true} />
-                      </td>
+                      <td className="px-4 py-2"><StatusBadge status={appointment.status} /></td>
+                      <td className="px-4 py-2 text-center"><ActionButtons appointment={appointment} isDetailView={true} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -744,7 +623,7 @@ function AppointmentsContent() {
         </div>
       </div>
     );
-  }, [selectedPid, getPidAppointments, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete, handleViewPatientDetails]);
+  }, [selectedPid, getPidAppointments, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete]);
 
   return (
     <div className="p-0 sm:p-0 w-full max-w-[1400px] mx-auto" style={{ color: currentTheme.text.primary }}>
@@ -757,21 +636,14 @@ function AppointmentsContent() {
       />
 
       {notification && (
-        <div
-          className="fixed top-2 right-2 sm:top-4 sm:right-4 p-3 sm:p-4 rounded-lg shadow-lg z-50"
-          style={{
-            minWidth: '280px',
-            maxWidth: '90vw',
-            animation: 'slideIn 0.5s ease-out',
-            backgroundColor: notification.type === 'success' ? currentTheme.success.light : currentTheme.error.light,
-            color: notification.type === 'success' ? currentTheme.success.dark : currentTheme.error.dark,
-            border: `2px solid ${notification.type === 'success' ? currentTheme.success.dark : currentTheme.error.dark}`
-          }}
-        >
+        <div className="fixed top-2 right-2 sm:top-4 sm:right-4 p-3 sm:p-4 rounded-lg shadow-lg z-50" style={{
+          minWidth: '280px', maxWidth: '90vw', animation: 'slideIn 0.5s ease-out',
+          backgroundColor: notification.type === 'success' ? currentTheme.success.light : currentTheme.error.light,
+          color: notification.type === 'success' ? currentTheme.success.dark : currentTheme.error.dark,
+          border: `2px solid ${notification.type === 'success' ? currentTheme.success.dark : currentTheme.error.dark}`
+        }}>
           <div className="flex items-center">
-            <div className="mr-2 text-base sm:text-lg">
-              {notification.type === 'success' ? '🔔' : '⚠️'}
-            </div>
+            <div className="mr-2 text-base sm:text-lg">{notification.type === 'success' ? '🔔' : '⚠️'}</div>
             <div className="font-medium text-sm sm:text-base">{notification.message}</div>
           </div>
         </div>
@@ -840,13 +712,13 @@ function AppointmentsContent() {
               <div className="overflow-hidden rounded-lg shadow">
                 <CustomTable
                   headers={[
-                    'Client Name(s)',
-                    'PID',
-                    'Consultation Count',
-                    'Latest Appointment',
-                    'Consultation Type',
-                    'Status',
-                    'Actions'
+                    { key: 'clientNames', label: 'Client Name(s)', className: 'text-left' },
+                    { key: 'pid', label: 'PID', className: 'text-left' },
+                    { key: 'consultationCount', label: 'Consultation Count', className: 'text-left' },
+                    { key: 'latestAppointment', label: 'Latest Appointment', className: 'text-left' },
+                    { key: 'appointmentType', label: 'Consultation Type', className: 'text-left' },
+                    { key: 'status', label: 'Status', className: 'text-left' },
+                    { key: 'actions', label: 'Actions', className: 'text-center' }
                   ]}
                   onBulkDelete={handleBulkDelete}
                 >
@@ -854,12 +726,8 @@ function AppointmentsContent() {
                     const latestAppointment = appointmentData.appointments[0];
                     return (
                       <tr key={appointmentData.pid} id={appointmentData.pid}>
-                        <td>
-                          <div className="flex items-center gap-2">
-                            <span>{appointmentData.clientNames || 'Unknown'}</span>
-                          </div>
-                        </td>
-                        <td>
+                        <td className="px-4 py-2">{appointmentData.clientNames || 'Unknown'}</td>
+                        <td className="px-4 py-2">
                           <button
                             onClick={() => handleViewPatientDetails(appointmentData.pid)}
                             className="text-blue-600 hover:underline"
@@ -869,24 +737,16 @@ function AppointmentsContent() {
                             {appointmentData.pid || '-'}
                           </button>
                         </td>
-                        <td>
-                          <span>{appointmentData.consultationCount}</span>
-                        </td>
-                        <td>
+                        <td className="px-4 py-2">{appointmentData.consultationCount}</td>
+                        <td className="px-4 py-2">
                           <div className="flex items-center gap-2">
                             <Calendar size={16} style={{ color: currentTheme.text.secondary }} />
                             <span>{latestAppointment ? `${latestAppointment.formattedDate} ${latestAppointment.time}` : '-'}</span>
                           </div>
                         </td>
-                        <td>
-                          <span>{latestAppointment ? latestAppointment.appointmentType : 'Consultation'}</span>
-                        </td>
-                        <td>
-                          <StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} />
-                        </td>
-                        <td className="py-3 text-center">
-                          <ActionButtons appointment={latestAppointment} />
-                        </td>
+                        <td className="px-4 py-2">{latestAppointment ? latestAppointment.appointmentType : 'Consultation'}</td>
+                        <td className="px-4 py-2"><StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} /></td>
+                        <td className="px-4 py-2 text-center"><ActionButtons appointment={latestAppointment} /></td>
                       </tr>
                     );
                   })}
@@ -904,14 +764,8 @@ function AppointmentsContent() {
       )}
       <style>{`
         @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
         }
         table {
           border-collapse: collapse;
@@ -920,6 +774,17 @@ function AppointmentsContent() {
         th, td {
           text-align: left;
           padding: 8px;
+        }
+        th {
+          ${Object.entries({
+            'Client Name(s)': 'text-left',
+            'PID': 'text-left',
+            'Consultation Count': 'text-left',
+            'Latest Appointment': 'text-left',
+            'Consultation Type': 'text-left',
+            'Status': 'text-left',
+            'Actions': 'text-center'
+          }).map(([key, align]) => `th:contains("${key}") { text-align: ${align}; }`).join('\n')}
         }
       `}</style>
     </div>
