@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from '../context/ThemeContext';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
-import { User, LogOut, Calendar, UserCircle } from 'lucide-react';
+import { User, UserCircle } from 'lucide-react';
 import CustomButton from './CustomButton';
 
 function Header() {
@@ -22,33 +22,31 @@ function Header() {
   const isHomePage = location.pathname === '/' || location.pathname === '';
 
   const navLinks = [
-    { name: 'Home', href: '' },
-    { name: 'About', href: '', sectionId: 'about' },
-    { name: 'Services', href: '', sectionId: 'services' },
-    { name: 'Testimonials', href: 'review' },
-    { name: 'Gallery', href: '', sectionId: 'gallery' },
-    { name: 'Contact', href: '', sectionId:'contact' }, // Updated to href: 'contact' for single-click redirect
+    { name: 'Home', href: '/', sectionId: null },
+    { name: 'About', href: '/', sectionId: 'about' },
+    { name: 'Services', href: '/', sectionId: 'services' },
+    { name: 'Testimonials', href: '/review', sectionId: null },
+    { name: 'Gallery', href: '/', sectionId: 'gallery' },
+    { name: 'Contact', href: '/', sectionId: 'contact' },
     {
       name: 'Research',
       dropdownItems: [
-        { name: 'Publications', href: 'publications' },
-        { name: 'Articles', href: 'articles' }
+        { name: 'Publications', href: '/publications', sectionId: null },
+        { name: 'Articles', href: '/articles', sectionId: null }
       ]
     },
   ];
 
   const getTextColor = useCallback(() => {
-    const color = isHomePage && !isScrolled && !isMenuOpen
+    return isHomePage && !isScrolled && !isMenuOpen
       ? currentTheme.textContrast || '#ffffff'
       : currentTheme.text || (theme === 'light' ? '#000000' : '#e5e7eb');
-    return color;
   }, [isHomePage, isScrolled, isMenuOpen, theme, currentTheme]);
 
   const getResearchTextColor = useCallback(() => {
-    if (theme === 'dark' || (isHomePage && !isScrolled && !isMenuOpen)) {
-      return '#ffffff';
-    }
-    return '#000000';
+    return (theme === 'dark' || (isHomePage && !isScrolled && !isMenuOpen))
+      ? '#ffffff'
+      : '#000000';
   }, [theme, isHomePage, isScrolled, isMenuOpen]);
 
   useEffect(() => {
@@ -64,9 +62,7 @@ function Header() {
   useEffect(() => {
     let currentUid = null;
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
-      if (currentUser && currentUid && currentUser.uid !== currentUid) {
-        return;
-      }
+      if (currentUser && currentUid && currentUser.uid !== currentUid) return;
       setUser(currentUser);
       if (currentUser) {
         currentUid = currentUser.uid;
@@ -118,7 +114,7 @@ function Header() {
         setPid(null);
         localStorage.removeItem('userRole');
         localStorage.removeItem(`userRole_${currentUid}`);
-        localStorage.removeItem('pid allotted');
+        localStorage.removeItem('pid');
         localStorage.removeItem(`pid_${currentUid}`);
         currentUid = null;
       }
@@ -134,47 +130,45 @@ function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isHomePage]);
 
+  const scrollToSection = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    if (section) {
+      const sectionTop = section.getBoundingClientRect().top + window.scrollY - 75;
+      window.scrollTo({ top: sectionTop, behavior: 'smooth' });
+      return true;
+    }
+    return false;
+  };
+
   useEffect(() => {
     if (isHomePage && location.state?.scrollTo) {
-      const sectionId = location.state.scrollTo;
-      const scrollToSection = () => {
-        const section = document.getElementById(sectionId);
-        if (section) {
-          const sectionTop = section.getBoundingClientRect().top + window.scrollY;
-          window.scrollTo({ top: sectionTop - 75, behavior: 'smooth' });
-        } else {
-          setTimeout(scrollToSection, 100);
+      const scrollTo = () => {
+        if (!scrollToSection(location.state.scrollTo)) {
+          setTimeout(scrollTo, 100);
         }
       };
-      scrollToSection();
+      setTimeout(scrollTo, 100);
     }
   }, [location.pathname, location.state, isHomePage]);
 
-  const isTransparentHeader = isHomePage && !isScrolled && !isMenuOpen;
-
   const handleNavClick = (href, sectionId, e) => {
-    if (sectionId) e.preventDefault();
+    e.preventDefault();
     setIsMenuOpen(false);
     if (sectionId) {
-      const headerHeight = document.querySelector('header')?.offsetHeight || 0;
       if (!isHomePage) {
         navigate('/', { state: { scrollTo: sectionId } });
-        return;
+      } else {
+        scrollToSection(sectionId);
       }
-      const section = document.getElementById(sectionId);
-      if (section) {
-        const sectionTop = section.getBoundingClientRect().top + window.scrollY;
-        window.scrollTo({ top: sectionTop - 75, behavior: 'smooth' });
-        return;
-      }
+    } else {
+      navigate(href);
+      window.scrollTo(0, 0);
     }
-    window.scrollTo(0, 0);
-    navigate(`/${href}`);
   };
 
   const handleNameClick = () => {
     setIsMenuOpen(false);
-    if (!isHomePage) navigate('/');
+    navigate('/');
     window.scrollTo(0, 0);
   };
 
@@ -188,9 +182,9 @@ function Header() {
       setShowLogoutSuccess(true);
       setTimeout(() => {
         setShowLogoutSuccess(false);
-        navigate('/', { replace: true }); // Direct redirect to home page
+        navigate('/', { replace: true });
         window.scrollTo(0, 0);
-      }, 2000); // Show success message for 2 seconds before redirect
+      }, 2000);
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -207,18 +201,20 @@ function Header() {
     setIsMenuOpen(false);
   };
 
+  const isTransparentHeader = isHomePage && !isScrolled && !isMenuOpen;
+
   const userMenu = user ? (
     <div className="relative group" ref={userMenuRef}>
       <button
         onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
         className="flex items-center gap-2 font-medium transition-colors duration-300 text-sm sm:text-base"
-        style={{ color: `${isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor()} !important` }}
+        style={{ color: isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor() }}
       >
         <User className="w-4 h-4 sm:w-5 h-5" />
       </button>
       {isUserMenuOpen && (
         <div
-          className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu z-50"
+          className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu z-50 animate-fadeIn"
           style={{
             backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
             borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb'),
@@ -251,7 +247,7 @@ function Header() {
   ) : (
     <Link
       to="/login"
-      className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline login-link text-sm sm:text-base"
+      className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline text-sm sm:text-base"
       style={{ color: isTransparentHeader && theme === 'light' ? '#000000' : getTextColor() }}
       onClick={() => setIsMenuOpen(false)}
     >
@@ -261,14 +257,13 @@ function Header() {
 
   return (
     <>
-      <style jsx="true">{`
+      <style jsx>{`
         .home-header-transparent {
           background-color: transparent !important;
           border: none !important;
           box-shadow: none !important;
           backdrop-filter: none !important;
           z-index: 50 !important;
-          pointer-events: auto !important;
         }
         .header-colored {
           background-color: ${currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff')} !important;
@@ -352,7 +347,7 @@ function Header() {
                     </svg>
                   </button>
                   <div
-                    className="absolute left-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu z-50"
+                    className="absolute left-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu z-50 animate-fadeIn"
                     style={{
                       backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
                       borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')
@@ -361,12 +356,9 @@ function Header() {
                     {link.dropdownItems.map((item) => (
                       <Link
                         key={item.name}
-                        to={`/${item.href}`}
+                        to={item.href}
                         className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 text-sm"
-                        onClick={() => {
-                          window.scrollTo(0, 0);
-                          navigate(`/${item.href}`);
-                        }}
+                        onClick={(e) => handleNavClick(item.href, item.sectionId, e)}
                       >
                         {item.name}
                       </Link>
@@ -376,7 +368,7 @@ function Header() {
               ) : (
                 <Link
                   key={link.name}
-                  to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
+                  to={link.href}
                   className="relative font-medium transition-colors duration-300 pb-1 text-sm lg:text-base"
                   onClick={(e) => handleNavClick(link.href, link.sectionId, e)}
                 >
@@ -385,7 +377,7 @@ function Header() {
                     className="absolute inset-x-0 bottom-0 h-0.5 transform transition-transform duration-300 scale-x-0 group-hover:scale-x-100"
                     style={{
                       backgroundColor: currentTheme.primary || '#7c3aed',
-                      transform: location.pathname === `/${link.href}` ? 'scaleX(1)' : 'scaleX(0)'
+                      transform: location.pathname === link.href ? 'scaleX(1)' : 'scaleX(0)'
                     }}
                   ></span>
                 </Link>
@@ -449,14 +441,10 @@ function Header() {
                   {link.dropdownItems.map((item) => (
                     <Link
                       key={item.name}
-                      to={`/${item.href}`}
+                      to={item.href}
                       className="block py-2 px-8 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
                       style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        window.scrollTo(0, 0);
-                        navigate(`/${item.href}`);
-                      }}
+                      onClick={(e) => handleNavClick(item.href, item.sectionId, e)}
                     >
                       {item.name}
                     </Link>
@@ -465,7 +453,7 @@ function Header() {
               ) : (
                 <Link
                   key={link.name}
-                  to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
+                  to={link.href}
                   className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
                   style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                   onClick={(e) => handleNavClick(link.href, link.sectionId, e)}
