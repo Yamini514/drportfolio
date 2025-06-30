@@ -67,12 +67,12 @@ function CustomTable({ headers, children, onBulkDelete, enableBulkDelete = false
                 )}
                 {headers.map((header, index) => (
                   <th
-                    key={index}
-                    className={`py-3 text-xs font-medium uppercase tracking-wider whitespace-nowrap overflow-hidden overflow-ellipsis ${index === 0 ? 'text-left pl-6' : 'text-center px-3'}`}
+                    key={header.key || index}
+                    className={`py-3 text-xs font-medium uppercase tracking-wider whitespace-nowrap overflow-hidden overflow-ellipsis ${header.className || (index === 0 ? 'text-left pl-6' : 'text-center px-3')}`}
                     style={{ color: '#ffffff', maxWidth: '150px', textOverflow: 'ellipsis' }}
-                    title={header}
+                    title={header.label || header}
                   >
-                    {header}
+                    {header.label || header}
                   </th>
                 ))}
               </tr>
