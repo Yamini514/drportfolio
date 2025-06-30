@@ -214,7 +214,7 @@ function Header() {
         className="flex items-center gap-2 font-medium transition-colors duration-300 text-sm sm:text-base"
         style={{ color: `${isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor()} !important` }}
       >
-        <User className="w-4 h-4 sm:w-5 h-5" />
+        <User className="w-4 sm:w-5 h-5" />
       </button>
       {isUserMenuOpen && (
         <div
