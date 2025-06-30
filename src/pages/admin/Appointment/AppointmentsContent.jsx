@@ -5,7 +5,7 @@ import CustomButton from '../../../components/CustomButton';
 import CustomTable from '../../../components/CustomTable';
 import CustomSelect from '../../../components/CustomSelect';
 import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmation';
-import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where, deleteDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -91,6 +91,56 @@ function AppointmentsContent() {
     }
   }, []);
 
+  // Check if date is blocked
+  const checkIfDateIsBlocked = useCallback(async (dateStr, dayName) => {
+    try {
+      const blockedPeriodsDoc = await getDoc(doc(db, 'settings', 'blockedPeriods'));
+      if (blockedPeriodsDoc.exists()) {
+        const periods = blockedPeriodsDoc.data().periods || [];
+        for (const period of periods) {
+          if (period.type === 'day' && period.day === dayName.toLowerCase()) {
+            const blockDate = new Date(period.startDate);
+            if (blockDate.toDateString() === new Date(dateStr).toDateString()) {
+              return { blocked: true, reason: period.reason || 'This date is blocked.' };
+            }
+          } else if (period.type === 'week' || period.type === 'month') {
+            const blockStart = new Date(period.startDate);
+            const blockEnd = new Date(period.endDate);
+            if (new Date(dateStr) >= blockStart && new Date(dateStr) <= blockEnd) {
+              return { blocked: true, reason: period.reason || 'This period is blocked.' };
+            }
+          }
+        }
+      }
+      return { blocked: false, reason: '' };
+    } catch (error) {
+      console.error('Error checking blocked date:', error);
+      setNotification({ message: 'Failed to check date availability. Please try again.', type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+      return { blocked: false, reason: '' };
+    }
+  }, []);
+
+  // Delete blocked schedule
+  const deleteBlockedSchedule = useCallback(async (date) => {
+    try {
+      const scheduleRef = collection(db, 'appointments/data/schedule');
+      const q = query(scheduleRef, where('date', '==', date));
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(async (docSnap) => {
+        await deleteDoc(doc(db, 'appointments/data/schedule', docSnap.id));
+        console.log(`Deleted blocked schedule for date: ${date}, docId: ${docSnap.id}`);
+      });
+      await Promise.all(deletePromises);
+      setNotification({ message: `Deleted schedule for blocked date: ${formatDate(date)}`, type: 'success' });
+      setTimeout(() => setNotification(null), 5000);
+    } catch (error) {
+      console.error('Error deleting blocked schedule:', error);
+      setNotification({ message: `Failed to delete blocked schedule: ${error.message}`, type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+    }
+  }, [formatDate]);
+
   // Simulate sending phone notification
   const sendPhoneNotification = useCallback((appointment, action) => {
     const message = action === 'confirmed'
@@ -115,13 +165,22 @@ function AppointmentsContent() {
         acc[pid] = {
           pid,
           clientNames: new Set(),
+          emails: new Set(),
+          phones: new Set(),
+          ages: new Set(),
+          medicalHistories: new Set(),
+          medicalHistoryMessages: new Set(),
           consultationCount: 0,
           appointments: [],
-          phone: app.phone || 'Unknown',
           location: app.location || 'Unknown',
         };
       }
       acc[pid].clientNames.add(app.clientName);
+      if (app.email) acc[pid].emails.add(app.email);
+      acc[pid].phones.add(app.phone || 'Unknown');
+      if (app.age) acc[pid].ages.add(app.age);
+      if (app.medicalHistory) acc[pid].medicalHistories.add(app.medicalHistory);
+      if (app.medicalHistoryMessage) acc[pid].medicalHistoryMessages.add(app.medicalHistoryMessage);
       acc[pid].consultationCount += 1;
       acc[pid].appointments.push({ ...app, formattedDate: formatDate(app.date) });
       return acc;
@@ -130,6 +189,11 @@ function AppointmentsContent() {
     return Object.values(pidData).map(data => ({
       ...data,
       clientNames: Array.from(data.clientNames).join(', '),
+      emails: Array.from(data.emails).join(', ') || 'N/A',
+      phones: Array.from(data.phones).join(', ') || 'Unknown',
+      ages: Array.from(data.ages).join(', ') || 'N/A',
+      medicalHistories: Array.from(data.medicalHistories).join(', ') || 'None',
+      medicalHistoryMessages: Array.from(data.medicalHistoryMessages).join('; ') || 'None',
       appointments: data.appointments.sort((a, b) => new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`))
     }));
   }, [formatDate]);
@@ -155,6 +219,10 @@ function AppointmentsContent() {
             time: data.time || '',
             appointmentType: data.appointmentType || 'Consultation',
             phone: data.phone || 'Unknown',
+            email: data.email || '',
+            age: data.age || '',
+            medicalHistory: data.medicalHistory || '',
+            medicalHistoryMessage: data.medicalHistoryMessage || '',
             location: data.location || 'Unknown',
           };
         });
@@ -188,13 +256,13 @@ function AppointmentsContent() {
     fetchAppointments();
   }, [calculatePidData]);
 
-  // Real-time listener
+  // Real-time listener with blocked date checking
   useEffect(() => {
     const appointmentsRef = collection(db, 'appointments/data/bookings');
     const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
     let hasInitialized = false;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const appointmentsList = snapshot.docs.map(doc => {
         const data = doc.data();
         if (!data.pid) console.warn('Missing PID for booking:', doc.id);
@@ -208,6 +276,10 @@ function AppointmentsContent() {
           time: data.time || '',
           appointmentType: data.appointmentType || 'Consultation',
           phone: data.phone || 'Unknown',
+          email: data.email || '',
+          age: data.age || '',
+          medicalHistory: data.medicalHistory || '',
+          medicalHistoryMessage: data.medicalHistoryMessage || '',
           location: data.location || 'Unknown',
         };
       });
@@ -217,6 +289,16 @@ function AppointmentsContent() {
       if (!hasInitialized) {
         hasInitialized = true;
         return;
+      }
+
+      // Check for blocked dates and delete schedules
+      const uniqueDates = [...new Set(appointmentsList.map(app => app.date))];
+      for (const date of uniqueDates) {
+        const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
+        const { blocked } = await checkIfDateIsBlocked(date, dayName);
+        if (blocked) {
+          await deleteBlockedSchedule(date);
+        }
       }
 
       snapshot.docChanges().forEach((change) => {
@@ -244,7 +326,7 @@ function AppointmentsContent() {
     });
 
     return () => unsubscribe();
-  }, [calculatePidData, formatDate, notificationSound]);
+  }, [calculatePidData, formatDate, notificationSound, checkIfDateIsBlocked, deleteBlockedSchedule]);
 
   // Handle status update
   const handleStatusUpdate = useCallback(async (appointmentId, newStatus) => {
@@ -373,6 +455,7 @@ function AppointmentsContent() {
     const patientData = appointments.find(data => data.pid === pid);
     if (patientData) {
       setSelectedPatientDetails(patientData);
+      setSelectedPid(null); // Clear PID view to prioritize patient details view
     }
   }, [appointments]);
   const handleBackToList = useCallback(() => {
@@ -446,6 +529,15 @@ function AppointmentsContent() {
         </button>
       )}
       <button
+        onClick={() => handleViewPatientDetails(appointment.pid)}
+        className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+        title="View Patient Details"
+        aria-label="View Patient Details"
+        disabled={!appointment.pid || appointment.pid === 'Unknown'}
+      >
+        <Eye size={20} />
+      </button>
+      <button
         onClick={() => handleStatusUpdate(appointment.id, 'confirmed')}
         className="p-1 text-green-600 hover:opacity-80 transition-opacity"
         title="Approve Appointment"
@@ -498,10 +590,10 @@ function AppointmentsContent() {
           </div>
         </div>
         <div className="p-4 sm:p-6">
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div>
-              <h4 className="text-sm font-medium" style={{ color: currentTheme.text.secondary }}>Patient Information</h4>
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <h4 className="text-sm font-medium mb-2" style={{ color: currentTheme.text.secondary }}>Patient Information</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <span className="font-medium" style={{ color: currentTheme.text.primary }}>PID: </span>
                   <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.pid}</span>
@@ -512,11 +604,27 @@ function AppointmentsContent() {
                 </div>
                 <div>
                   <span className="font-medium" style={{ color: currentTheme.text.primary }}>Phone: </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phone}</span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phones}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Email: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.emails}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Age: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.ages}</span>
                 </div>
                 <div>
                   <span className="font-medium" style={{ color: currentTheme.text.primary }}>Total Consultations: </span>
                   <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.consultationCount}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistories}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History Notes: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistoryMessages}</span>
                 </div>
               </div>
             </div>
@@ -562,7 +670,7 @@ function AppointmentsContent() {
         </div>
       </div>
     );
-  }, [selectedPatientDetails, currentTheme, handleBackToList]);
+  }, [selectedPatientDetails, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete, handleViewPatientDetails]);
 
   // PID Detail View
   const PidDetailView = useMemo(() => {
@@ -636,7 +744,7 @@ function AppointmentsContent() {
         </div>
       </div>
     );
-  }, [selectedPid, getPidAppointments, currentTheme, handleBackToList]);
+  }, [selectedPid, getPidAppointments, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete, handleViewPatientDetails]);
 
   return (
     <div className="p-0 sm:p-0 w-full max-w-[1400px] mx-auto" style={{ color: currentTheme.text.primary }}>
