@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Calendar, ThumbsUp, Eye, Trash2, ArrowLeft } from 'lucide-react';
 import CustomSearch from '../../../components/CustomSearch';
@@ -6,7 +5,7 @@ import CustomButton from '../../../components/CustomButton';
 import CustomTable from '../../../components/CustomTable';
 import CustomSelect from '../../../components/CustomSelect';
 import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmation';
-import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where, deleteDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -18,16 +17,35 @@ function AppointmentsContent() {
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [deleteConfirmation, setDeleteConfirmation] = useState({ isOpen: false, appointmentId: null });
-  const { currentTheme } = useTheme();
+  const { currentTheme } = useTheme() || {
+    currentTheme: {
+      background: '#fff',
+      surface: '#fff',
+      secondary: '#f9f9f9',
+      border: '#ccc',
+      success: { light: '#d4edda', dark: '#155724' },
+      error: { light: '#f8d7da', dark: '#721c24' },
+      destructive: '#dc3545',
+      text: { primary: '#000', secondary: '#6c757d' },
+    },
+  };
   const [selectedPid, setSelectedPid] = useState(null);
   const [selectedPatientDetails, setSelectedPatientDetails] = useState(null);
   const [notification, setNotification] = useState(null);
-  const [notificationSound] = useState(new Audio('/notifications.wav'));
+  const [notificationSound] = useState(() => {
+    try {
+      return new Audio('/notifications.wav');
+    } catch (error) {
+      console.warn('Notification sound unavailable:', error);
+      return null;
+    }
+  });
 
   // Format date to DD-MMM-YYYY
   const formatDate = useCallback((dateStr) => {
     try {
       const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
       return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
     } catch (error) {
       console.error('Error formatting date:', error);
@@ -46,13 +64,89 @@ function AppointmentsContent() {
     }
   }, []);
 
+  // Check if slot is available after deletion
+  const checkSlotAvailability = useCallback(async (date, time, location) => {
+    if (!location || location === 'Unknown') {
+      console.warn('Missing location for slot availability check:', { date, time });
+      setNotification({ message: 'Cannot verify slot availability: missing location.', type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+      return false;
+    }
+    try {
+      const bookingsRef = collection(db, 'appointments/data/bookings');
+      const q = query(
+        bookingsRef,
+        where('date', '==', date),
+        where('time', '==', time),
+        where('location', '==', location),
+        where('status', '!=', 'deleted')
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.empty;
+    } catch (error) {
+      console.error('Error checking slot availability:', error);
+      setNotification({ message: `Failed to verify slot availability: ${error.message}`, type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+      return false;
+    }
+  }, []);
+
+  // Check if date is blocked
+  const checkIfDateIsBlocked = useCallback(async (dateStr, dayName) => {
+    try {
+      const blockedPeriodsDoc = await getDoc(doc(db, 'settings', 'blockedPeriods'));
+      if (blockedPeriodsDoc.exists()) {
+        const periods = blockedPeriodsDoc.data().periods || [];
+        for (const period of periods) {
+          if (period.type === 'day' && period.day === dayName.toLowerCase()) {
+            const blockDate = new Date(period.startDate);
+            if (blockDate.toDateString() === new Date(dateStr).toDateString()) {
+              return { blocked: true, reason: period.reason || 'This date is blocked.' };
+            }
+          } else if (period.type === 'week' || period.type === 'month') {
+            const blockStart = new Date(period.startDate);
+            const blockEnd = new Date(period.endDate);
+            if (new Date(dateStr) >= blockStart && new Date(dateStr) <= blockEnd) {
+              return { blocked: true, reason: period.reason || 'This period is blocked.' };
+            }
+          }
+        }
+      }
+      return { blocked: false, reason: '' };
+    } catch (error) {
+      console.error('Error checking blocked date:', error);
+      setNotification({ message: 'Failed to check date availability. Please try again.', type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+      return { blocked: false, reason: '' };
+    }
+  }, []);
+
+  // Delete blocked schedule
+  const deleteBlockedSchedule = useCallback(async (date) => {
+    try {
+      const scheduleRef = collection(db, 'appointments/data/schedule');
+      const q = query(scheduleRef, where('date', '==', date));
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(async (docSnap) => {
+        await deleteDoc(doc(db, 'appointments/data/schedule', docSnap.id));
+        console.log(`Deleted blocked schedule for date: ${date}, docId: ${docSnap.id}`);
+      });
+      await Promise.all(deletePromises);
+      setNotification({ message: `Deleted schedule for blocked date: ${formatDate(date)}`, type: 'success' });
+      setTimeout(() => setNotification(null), 5000);
+    } catch (error) {
+      console.error('Error deleting blocked schedule:', error);
+      setNotification({ message: `Failed to delete blocked schedule: ${error.message}`, type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+    }
+  }, [formatDate]);
+
   // Simulate sending phone notification
   const sendPhoneNotification = useCallback((appointment, action) => {
     const message = action === 'confirmed'
       ? `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been confirmed.`
-      : `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been deleted.`;
+      : `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been deleted and the slot is now available.`;
     
-    // Simulate phone notification (replace with actual service like Twilio if available)
     console.log(`Sending SMS to ${appointment.phone || 'unknown phone'}: ${message}`);
     setNotification({
       message: `Notified patient: ${message}`,
@@ -65,17 +159,28 @@ function AppointmentsContent() {
   const calculatePidData = useCallback((appointmentsList) => {
     const pidData = appointmentsList.reduce((acc, app) => {
       if (app.status === 'deleted') return acc;
-      const pid = app.pid || (app.userId ? `PID${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}` : '-');
+      const pid = app.pid || 'Unknown';
+      if (!app.pid) console.warn('Missing PID for appointment:', app.id);
       if (!acc[pid]) {
         acc[pid] = {
           pid,
           clientNames: new Set(),
+          emails: new Set(),
+          phones: new Set(),
+          ages: new Set(),
+          medicalHistories: new Set(),
+          medicalHistoryMessages: new Set(),
           consultationCount: 0,
           appointments: [],
-          phone: app.phone || 'Unknown' // Assuming phone is in appointment data
+          location: app.location || 'Unknown',
         };
       }
       acc[pid].clientNames.add(app.clientName);
+      if (app.email) acc[pid].emails.add(app.email);
+      acc[pid].phones.add(app.phone || 'Unknown');
+      if (app.age) acc[pid].ages.add(app.age);
+      if (app.medicalHistory) acc[pid].medicalHistories.add(app.medicalHistory);
+      if (app.medicalHistoryMessage) acc[pid].medicalHistoryMessages.add(app.medicalHistoryMessage);
       acc[pid].consultationCount += 1;
       acc[pid].appointments.push({ ...app, formattedDate: formatDate(app.date) });
       return acc;
@@ -84,6 +189,11 @@ function AppointmentsContent() {
     return Object.values(pidData).map(data => ({
       ...data,
       clientNames: Array.from(data.clientNames).join(', '),
+      emails: Array.from(data.emails).join(', ') || 'N/A',
+      phones: Array.from(data.phones).join(', ') || 'Unknown',
+      ages: Array.from(data.ages).join(', ') || 'N/A',
+      medicalHistories: Array.from(data.medicalHistories).join(', ') || 'None',
+      medicalHistoryMessages: Array.from(data.medicalHistoryMessages).join('; ') || 'None',
       appointments: data.appointments.sort((a, b) => new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`))
     }));
   }, [formatDate]);
@@ -96,20 +206,49 @@ function AppointmentsContent() {
         const appointmentsRef = collection(db, 'appointments/data/bookings');
         const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
-        const appointmentsList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          clientName: doc.data().name || 'Unknown',
-          status: doc.data().status || 'pending',
-          pid: doc.data().pid || (doc.data().userId ? `PID${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}` : '-'),
-          date: doc.data().date || '',
-          time: doc.data().time || '',
-          appointmentType: doc.data().appointmentType || 'Consultation',
-          phone: doc.data().phone || 'Unknown' // Assuming phone field exists
-        }));
+        const appointmentsList = snapshot.docs.map(doc => {
+          const data = doc.data();
+          if (!data.pid) console.warn('Missing PID for booking:', doc.id);
+          if (!data.location) console.warn('Missing location for booking:', doc.id);
+          return {
+            id: doc.id,
+            clientName: data.name || 'Unknown',
+            status: data.status || 'pending',
+            pid: data.pid || 'Unknown',
+            date: data.date || '',
+            time: data.time || '',
+            appointmentType: data.appointmentType || 'Consultation',
+            phone: data.phone || 'Unknown',
+            email: data.email || '',
+            age: data.age || '',
+            medicalHistory: data.medicalHistory || '',
+            medicalHistoryMessage: data.medicalHistoryMessage || '',
+            location: data.location || 'Unknown',
+          };
+        });
+        // Check for duplicate bookings
+        const duplicates = appointmentsList.reduce((acc, app, index, arr) => {
+          if (app.status === 'deleted') return acc;
+          const key = `${app.date}|${app.time}|${app.location}`;
+          if (arr.some((other, i) => i !== index && other.status !== 'deleted' && `${other.date}|${other.time}|${other.location}` === key)) {
+            acc.push(key);
+          }
+          return acc;
+        }, []);
+        if (duplicates.length > 0) {
+          console.warn('Duplicate bookings detected:', duplicates);
+          setNotification({ message: 'Warning: Duplicate bookings detected.', type: 'error' });
+          setTimeout(() => setNotification(null), 5000);
+        }
         setAppointments(calculatePidData(appointmentsList));
       } catch (error) {
         console.error('Error fetching appointments:', error);
-        setNotification({ message: 'Failed to fetch appointments.', type: 'error' });
+        const errorMessage = error.code === 'permission-denied'
+          ? 'Permission denied: Please check your authentication.'
+          : error.code === 'unavailable'
+          ? 'Network error: Please check your internet connection.'
+          : `Failed to fetch appointments: ${error.message}`;
+        setNotification({ message: errorMessage, type: 'error' });
       } finally {
         setLoading(false);
       }
@@ -117,23 +256,33 @@ function AppointmentsContent() {
     fetchAppointments();
   }, [calculatePidData]);
 
-  // Real-time listener
+  // Real-time listener with blocked date checking
   useEffect(() => {
     const appointmentsRef = collection(db, 'appointments/data/bookings');
     const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
     let hasInitialized = false;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const appointmentsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        clientName: doc.data().name || 'Unknown',
-        status: doc.data().status || 'pending',
-        pid: doc.data().pid || (doc.data().userId ? `PID${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}` : '-'),
-        date: doc.data().date || '',
-        time: doc.data().time || '',
-        appointmentType: doc.data().appointmentType || 'Consultation',
-        phone: doc.data().phone || 'Unknown'
-      }));
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const appointmentsList = snapshot.docs.map(doc => {
+        const data = doc.data();
+        if (!data.pid) console.warn('Missing PID for booking:', doc.id);
+        if (!data.location) console.warn('Missing location for booking:', doc.id);
+        return {
+          id: doc.id,
+          clientName: data.name || 'Unknown',
+          status: data.status || 'pending',
+          pid: data.pid || 'Unknown',
+          date: data.date || '',
+          time: data.time || '',
+          appointmentType: data.appointmentType || 'Consultation',
+          phone: data.phone || 'Unknown',
+          email: data.email || '',
+          age: data.age || '',
+          medicalHistory: data.medicalHistory || '',
+          medicalHistoryMessage: data.medicalHistoryMessage || '',
+          location: data.location || 'Unknown',
+        };
+      });
 
       setAppointments(calculatePidData(appointmentsList));
 
@@ -142,10 +291,22 @@ function AppointmentsContent() {
         return;
       }
 
+      // Check for blocked dates and delete schedules
+      const uniqueDates = [...new Set(appointmentsList.map(app => app.date))];
+      for (const date of uniqueDates) {
+        const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
+        const { blocked } = await checkIfDateIsBlocked(date, dayName);
+        if (blocked) {
+          await deleteBlockedSchedule(date);
+        }
+      }
+
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added' && change.doc.data().status !== 'deleted') {
           const newAppointment = change.doc.data();
-          notificationSound.play().catch(error => console.error('Notification sound error:', error));
+          if (notificationSound) {
+            notificationSound.play().catch(error => console.warn('Notification sound error:', error));
+          }
           setNotification({
             message: `New appointment booked by ${newAppointment.name || 'Unknown'} for ${formatDate(newAppointment.date)}`,
             type: 'success'
@@ -155,12 +316,17 @@ function AppointmentsContent() {
       });
     }, (error) => {
       console.error('Error in real-time listener:', error);
-      setNotification({ message: 'Error receiving real-time updates.', type: 'error' });
+      const errorMessage = error.code === 'permission-denied'
+        ? 'Permission denied: Please check your authentication.'
+        : error.code === 'unavailable'
+        ? 'Network error: Please check your internet connection.'
+        : `Error receiving real-time updates: ${error.message}`;
+      setNotification({ message: errorMessage, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     });
 
     return () => unsubscribe();
-  }, [calculatePidData, formatDate, notificationSound]);
+  }, [calculatePidData, formatDate, notificationSound, checkIfDateIsBlocked, deleteBlockedSchedule]);
 
   // Handle status update
   const handleStatusUpdate = useCallback(async (appointmentId, newStatus) => {
@@ -172,11 +338,21 @@ function AppointmentsContent() {
       ));
       if (newStatus === 'confirmed') {
         const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
+        if (!appointment) {
+          setNotification({ message: 'Appointment not found.', type: 'error' });
+          setTimeout(() => setNotification(null), 5000);
+          return;
+        }
         sendPhoneNotification(appointment, 'confirmed');
       }
     } catch (error) {
       console.error('Error updating appointment status:', error);
-      setNotification({ message: 'Failed to update appointment status.', type: 'error' });
+      const errorMessage = error.code === 'permission-denied'
+        ? 'Permission denied: Please check your authentication.'
+        : error.code === 'unavailable'
+        ? 'Network error: Please check your internet connection.'
+        : `Failed to update appointment status: ${error.message}`;
+      setNotification({ message: errorMessage, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     }
   }, [appointments, calculatePidData, sendPhoneNotification]);
@@ -185,6 +361,11 @@ function AppointmentsContent() {
   const handleDelete = useCallback(async (appointmentId) => {
     try {
       const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
+      if (!appointment) {
+        setNotification({ message: 'Appointment not found.', type: 'error' });
+        setTimeout(() => setNotification(null), 5000);
+        return;
+      }
       if (!isFutureAppointment(appointment)) {
         setNotification({ message: 'Cannot delete past appointments.', type: 'error' });
         setTimeout(() => setNotification(null), 5000);
@@ -192,56 +373,89 @@ function AppointmentsContent() {
       }
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
       await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
+      const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
       setAppointments(prev => calculatePidData(
         prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: 'deleted' } : app)
       ));
       sendPhoneNotification(appointment, 'deleted');
+      if (isSlotAvailable) {
+        setNotification({
+          message: `Appointment deleted and slot ${appointment.time} on ${formatDate(appointment.date)} is now available.`,
+          type: 'success'
+        });
+        setTimeout(() => setNotification(null), 5000);
+      }
       if (selectedPid === appointment.pid) setSelectedPid(null);
       if (selectedPatientDetails && selectedPatientDetails.pid === appointment.pid) setSelectedPatientDetails(null);
       setDeleteConfirmation({ isOpen: false, appointmentId: null });
-      setNotification({ message: 'Appointment marked as deleted.', type: 'success' });
-      setTimeout(() => setNotification(null), 5000);
     } catch (error) {
       console.error('Error marking appointment as deleted:', error);
-      setNotification({ message: 'Failed to delete appointment.', type: 'error' });
+      const errorMessage = error.code === 'permission-denied'
+        ? 'Permission denied: Please check your authentication.'
+        : error.code === 'unavailable'
+        ? 'Network error: Please check your internet connection.'
+        : `Failed to delete appointment: ${error.message}`;
+      setNotification({ message: errorMessage, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification]);
+  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate]);
 
   // Handle bulk delete
   const handleBulkDelete = useCallback(async (ids) => {
     try {
       const allAppointments = appointments.flatMap(data => data.appointments);
-      const futureAppointmentIds = ids.filter(id => isFutureAppointment(allAppointments.find(app => app.id === id)));
+      const futureAppointmentIds = ids.filter(id => {
+        const app = allAppointments.find(app => app.id === id);
+        return app && isFutureAppointment(app);
+      });
       if (!futureAppointmentIds.length) {
         setNotification({ message: 'Cannot delete past appointments.', type: 'error' });
         setTimeout(() => setNotification(null), 5000);
         return;
       }
+      const deletedSlots = [];
       await Promise.all(futureAppointmentIds.map(async id => {
         const appointment = allAppointments.find(app => app.id === id);
+        if (!appointment) return;
         await updateDoc(doc(db, 'appointments/data/bookings', id), { status: 'deleted', deletedAt: new Date().toISOString() });
+        const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
+        if (isSlotAvailable) {
+          deletedSlots.push(`${appointment.time} on ${formatDate(appointment.date)}`);
+        }
         sendPhoneNotification(appointment, 'deleted');
       }));
       setAppointments(prev => calculatePidData(
         prev.flatMap(data => data.appointments).map(app => futureAppointmentIds.includes(app.id) ? { ...app, status: 'deleted' } : app)
       ));
       setDeleteConfirmation({ isOpen: false, appointmentId: null });
-      setNotification({ message: `Successfully marked ${futureAppointmentIds.length} appointment(s) as deleted.`, type: 'success' });
+      setNotification({
+        message: `Successfully marked ${futureAppointmentIds.length} appointment(s) as deleted. ${deletedSlots.length > 0 ? `Slots ${deletedSlots.join(', ')} are now available.` : ''}`,
+        type: 'success'
+      });
       setTimeout(() => setNotification(null), 5000);
     } catch (error) {
       console.error('Error marking appointments as deleted:', error);
-      setNotification({ message: 'Failed to delete appointments.', type: 'error' });
+      const errorMessage = error.code === 'permission-denied'
+        ? 'Permission denied: Please check your authentication.'
+        : error.code === 'unavailable'
+        ? 'Network error: Please check your internet connection.'
+        : `Failed to delete appointments: ${error.message}`;
+      setNotification({ message: errorMessage, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification]);
+  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification, checkSlotAvailability, formatDate]);
 
   // Handle view details and patient details
-  const handleViewDetails = useCallback((pid) => setSelectedPid(pid), []);
+  const handleViewDetails = useCallback((pid) => {
+    if (pid === 'Unknown') return;
+    setSelectedPid(pid);
+  }, []);
   const handleViewPatientDetails = useCallback((pid) => {
+    if (pid === 'Unknown') return;
     const patientData = appointments.find(data => data.pid === pid);
     if (patientData) {
       setSelectedPatientDetails(patientData);
+      setSelectedPid(null); // Clear PID view to prioritize patient details view
     }
   }, [appointments]);
   const handleBackToList = useCallback(() => {
@@ -256,6 +470,7 @@ function AppointmentsContent() {
     const end = endDate ? new Date(endDate) : null;
     return appointmentData.appointments.some(app => {
       const appDate = new Date(app.date);
+      if (isNaN(appDate.getTime())) return false;
       if (start && end) return appDate >= start && appDate <= end;
       if (start) return appDate >= start;
       if (end) return appDate <= end;
@@ -307,15 +522,26 @@ function AppointmentsContent() {
           onClick={() => handleViewDetails(appointment.pid)}
           className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
           title="View PID Appointments"
-          disabled={!appointment.pid || appointment.pid === '-'}
+          aria-label="View PID Appointments"
+          disabled={!appointment.pid || appointment.pid === 'Unknown'}
         >
           <Eye size={20} />
         </button>
       )}
       <button
+        onClick={() => handleViewPatientDetails(appointment.pid)}
+        className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+        title="View Patient Details"
+        aria-label="View Patient Details"
+        disabled={!appointment.pid || appointment.pid === 'Unknown'}
+      >
+        <Eye size={20} />
+      </button>
+      <button
         onClick={() => handleStatusUpdate(appointment.id, 'confirmed')}
         className="p-1 text-green-600 hover:opacity-80 transition-opacity"
         title="Approve Appointment"
+        aria-label="Approve Appointment"
         disabled={appointment.status === 'deleted'}
       >
         <ThumbsUp size={20} />
@@ -325,6 +551,7 @@ function AppointmentsContent() {
           onClick={() => setDeleteConfirmation({ isOpen: true, appointmentId: appointment.id })}
           className="p-1 hover:opacity-80 transition-opacity"
           title="Delete Appointment"
+          aria-label="Delete Appointment"
           style={{ color: currentTheme.destructive }}
         >
           <Trash2 size={20} />
@@ -347,6 +574,7 @@ function AppointmentsContent() {
                 variant="secondary"
                 className="p-1"
                 icon={() => <ArrowLeft size={20} />}
+                aria-label="Back to appointment list"
               />
               <h3 className="text-lg font-medium" style={{ color: currentTheme.text.primary }}>
                 Patient Details for PID: {selectedPatientDetails.pid}
@@ -355,16 +583,17 @@ function AppointmentsContent() {
             <CustomButton
               onClick={handleBackToList}
               variant="secondary"
+              aria-label="Close patient details"
             >
               Close
             </CustomButton>
           </div>
         </div>
         <div className="p-4 sm:p-6">
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div>
-              <h4 className="text-sm font-medium" style={{ color: currentTheme.text.secondary }}>Patient Information</h4>
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <h4 className="text-sm font-medium mb-2" style={{ color: currentTheme.text.secondary }}>Patient Information</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <span className="font-medium" style={{ color: currentTheme.text.primary }}>PID: </span>
                   <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.pid}</span>
@@ -375,11 +604,27 @@ function AppointmentsContent() {
                 </div>
                 <div>
                   <span className="font-medium" style={{ color: currentTheme.text.primary }}>Phone: </span>
-                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phone}</span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phones}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Email: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.emails}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Age: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.ages}</span>
                 </div>
                 <div>
                   <span className="font-medium" style={{ color: currentTheme.text.primary }}>Total Consultations: </span>
                   <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.consultationCount}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistories}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History Notes: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistoryMessages}</span>
                 </div>
               </div>
             </div>
@@ -425,7 +670,7 @@ function AppointmentsContent() {
         </div>
       </div>
     );
-  }, [selectedPatientDetails, currentTheme, handleBackToList]);
+  }, [selectedPatientDetails, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete, handleViewPatientDetails]);
 
   // PID Detail View
   const PidDetailView = useMemo(() => {
@@ -442,6 +687,7 @@ function AppointmentsContent() {
                 variant="secondary"
                 className="p-1"
                 icon={() => <ArrowLeft size={20} />}
+                aria-label="Back to appointment list"
               />
               <h3 className="text-lg font-medium" style={{ color: currentTheme.text.primary }}>
                 Appointments for PID: {selectedPid}
@@ -450,6 +696,7 @@ function AppointmentsContent() {
             <CustomButton
               onClick={handleBackToList}
               variant="secondary"
+              aria-label="Close PID details"
             >
               Close
             </CustomButton>
@@ -497,7 +744,7 @@ function AppointmentsContent() {
         </div>
       </div>
     );
-  }, [selectedPid, getPidAppointments, currentTheme, handleBackToList]);
+  }, [selectedPid, getPidAppointments, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete, handleViewPatientDetails]);
 
   return (
     <div className="p-0 sm:p-0 w-full max-w-[1400px] mx-auto" style={{ color: currentTheme.text.primary }}>
@@ -549,6 +796,7 @@ function AppointmentsContent() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full"
+                    aria-label="Search appointments"
                   />
                 </div>
                 <div className="w-full sm:w-48">
@@ -562,6 +810,7 @@ function AppointmentsContent() {
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                     className="w-full"
+                    aria-label="Filter by status"
                   />
                 </div>
                 <div className="w-full sm:w-2/5 flex gap-2">
@@ -572,6 +821,8 @@ function AppointmentsContent() {
                     className="border rounded-lg p-2 w-full"
                     style={{ borderColor: currentTheme.border }}
                     placeholder="Start Date"
+                    title="Select start date"
+                    aria-label="Start date"
                   />
                   <input
                     type="date"
@@ -580,6 +831,8 @@ function AppointmentsContent() {
                     className="border rounded-lg p-2 w-full"
                     style={{ borderColor: currentTheme.border }}
                     placeholder="End Date"
+                    title="Select end date"
+                    aria-label="End date"
                   />
                 </div>
               </div>
@@ -610,7 +863,8 @@ function AppointmentsContent() {
                           <button
                             onClick={() => handleViewPatientDetails(appointmentData.pid)}
                             className="text-blue-600 hover:underline"
-                            disabled={!appointmentData.pid || appointmentData.pid === '-'}
+                            disabled={!appointmentData.pid || appointmentData.pid === 'Unknown'}
+                            aria-label={`View details for PID ${appointmentData.pid}`}
                           >
                             {appointmentData.pid || '-'}
                           </button>
@@ -672,4 +926,4 @@ function AppointmentsContent() {
   );
 }
 
-export default React.memo(AppointmentsContent);
+export default AppointmentsContent;

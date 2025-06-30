@@ -12,8 +12,9 @@ function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
-  const [pid, setPid] = useState(null); // Updated to use 'pid' based on Firestore
+  const [pid, setPid] = useState(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
@@ -24,10 +25,9 @@ function Header() {
     { name: 'Home', href: '' },
     { name: 'About', href: '', sectionId: 'about' },
     { name: 'Services', href: '', sectionId: 'services' },
-    { name: 'Testimonials', href: 'review'},
-    { name: 'Gallery', href: '', sectionId:'gallery'},
-    {name: 'Video', href: '', sectionId:'Video'},
-    { name: 'Contact', href: '', sectionId: 'contactme' },
+    { name: 'Testimonials', href: 'review' },
+    { name: 'Gallery', href: '', sectionId: 'gallery' },
+    { name: 'Contact', href: '', sectionId: 'contact' },
     {
       name: 'Research',
       dropdownItems: [
@@ -87,7 +87,7 @@ function Header() {
               const userDoc = await getDoc(userDocRef);
               if (userDoc.exists()) {
                 const role = userDoc.data().role || 'user';
-                const pidValue = userDoc.data().pid || `PID-${currentUser.uid.slice(0, 6)}`; // Fallback PID
+                const pidValue = userDoc.data().pid || `PID-${currentUser.uid.slice(0, 6)}`;
                 setUserRole(role);
                 setPid(pidValue);
                 localStorage.setItem(`userRole_${currentUser.uid}`, role);
@@ -118,7 +118,7 @@ function Header() {
         setPid(null);
         localStorage.removeItem('userRole');
         localStorage.removeItem(`userRole_${currentUid}`);
-        localStorage.removeItem('pid');
+        localStorage.removeItem('pid allotted');
         localStorage.removeItem(`pid_${currentUid}`);
         currentUid = null;
       }
@@ -185,6 +185,12 @@ function Header() {
       setUserRole(null);
       setPid(null);
       setIsUserMenuOpen(false);
+      setShowLogoutSuccess(true);
+      setTimeout(() => {
+        setShowLogoutSuccess(false);
+        navigate('/', { replace: true }); // Direct redirect to home page
+        window.scrollTo(0, 0);
+      }, 2000); // Show success message for 2 seconds before redirect
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -205,15 +211,14 @@ function Header() {
     <div className="relative group" ref={userMenuRef}>
       <button
         onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-        className="flex items-center gap-2 font-medium transition-colors duration-300"
+        className="flex items-center gap-2 font-medium transition-colors duration-300 text-sm sm:text-base"
         style={{ color: `${isTransparentHeader && theme === 'dark' ? '#000000' : getTextColor()} !important` }}
       >
-        <User className="w-5 h-5" />
-        <span>U</span>
+        <User className="w-4 sm:w-5 h-5" />
       </button>
       {isUserMenuOpen && (
         <div
-          className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu"
+          className="absolute right-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu z-50"
           style={{
             backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
             borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb'),
@@ -221,13 +226,13 @@ function Header() {
           }}
         >
           <div className="py-1">
-            <div className="px-4 py-2">
+            <div className="px-4 py-2 text-sm">
               PID: {pid || 'Not Available'}
             </div>
             {userRole !== 'admin' && (
               <Link
                 to="/my-appointments"
-                className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200"
+                className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-sm"
                 onClick={() => setIsUserMenuOpen(false)}
               >
                 My Appointments
@@ -235,7 +240,7 @@ function Header() {
             )}
             <button
               onClick={handleLogout}
-              className="w-full px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-left"
+              className="w-full px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-left text-sm"
             >
               Logout
             </button>
@@ -246,12 +251,11 @@ function Header() {
   ) : (
     <Link
       to="/login"
-      className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline login-link"
+      className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline login-link text-sm sm:text-base"
       style={{ color: isTransparentHeader && theme === 'light' ? '#000000' : getTextColor() }}
       onClick={() => setIsMenuOpen(false)}
-      title="Login"
     >
-      <UserCircle className="w-5 h-5" />
+      <UserCircle className="w-4 sm:w-5 h-5" />
     </Link>
   );
 
@@ -303,10 +307,25 @@ function Header() {
         .animate-fadeIn {
           animation: fadeIn 0.3s ease-out forwards;
         }
+        .logout-toast {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          background-color: #10B981;
+          color: white;
+          padding: 12px 24px;
+          border-radius: 8px;
+          z-index: 1000;
+          animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
       `}</style>
       <header
         key={theme}
-        className={`px-4 md:px-8 py-4 fixed w-full top-0 ${isTransparentHeader ? 'home-header-transparent' : 'header-colored'}`}
+        className={`px-4 sm:px-6 md:px-8 py-3 sm:py-4 fixed w-full top-0 ${isTransparentHeader ? 'home-header-transparent' : 'header-colored'}`}
         style={{
           backgroundColor: isTransparentHeader ? 'transparent' : (currentTheme.background || (theme === 'dark' ? '#1a1a1a' : '#ffffff')),
           transition: 'all 0.3s ease'
@@ -315,25 +334,25 @@ function Header() {
         <div className="flex items-center justify-between">
           <Link
             to="/"
-            className="text-xl md:text-2xl font-bold"
+            className="text-lg sm:text-xl md:text-2xl font-bold truncate"
             onClick={handleNameClick}
           >
             Dr. Laxminadh Sivaraju
           </Link>
-          <nav className="hidden md:flex items-center gap-8">
+          <nav className="hidden md:flex items-center gap-4 lg:gap-8">
             {navLinks.map((link) => (
               link.dropdownItems ? (
                 <div key={link.name} className="relative group">
                   <button
-                    className={`font-medium transition-colors duration-300 flex items-center gap-1 ${link.name === 'Research' ? 'research-button' : ''}`}
+                    className={`font-medium transition-colors duration-300 flex items-center gap-1 text-sm lg:text-base ${link.name === 'Research' ? 'research-button' : ''}`}
                   >
                     {link.name}
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3 lg:w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
                   <div
-                    className="absolute left-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu"
+                    className="absolute left-0 mt-2 w-48 rounded-md shadow-lg dropdown-menu z-50"
                     style={{
                       backgroundColor: currentTheme.surface || (theme === 'dark' ? '#2d2d2d' : '#ffffff'),
                       borderColor: currentTheme.border || (theme === 'dark' ? '#444444' : '#e5e7eb')
@@ -343,7 +362,7 @@ function Header() {
                       <Link
                         key={item.name}
                         to={`/${item.href}`}
-                        className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500"
+                        className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 text-sm"
                         onClick={() => {
                           window.scrollTo(0, 0);
                           navigate(`/${item.href}`);
@@ -358,7 +377,7 @@ function Header() {
                 <Link
                   key={link.name}
                   to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
-                  className="relative font-medium transition-colors duration-300 pb-1"
+                  className="relative font-medium transition-colors duration-300 pb-1 text-sm lg:text-base"
                   onClick={(e) => handleNavClick(link.href, link.sectionId, e)}
                 >
                   {link.name}
@@ -374,36 +393,35 @@ function Header() {
             ))}
             <CustomButton
               variant="primary"
-
-
               onClick={handleBookAppointmentClick}
+              className="text-sm lg:text-base"
             >
               Book Appointment
             </CustomButton>
             {userMenu}
             <span
               onClick={toggleTheme}
-              className="cursor-pointer p-2"
+              className="cursor-pointer p-2 text-sm lg:text-base"
               style={{ color: getTextColor() }}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </span>
           </nav>
-          <div className="flex items-center gap-4 md:hidden">
+          <div className="flex items-center gap-2 sm:gap-4 md:hidden">
             <span
               onClick={toggleTheme}
-              className="cursor-pointer p-2"
+              className="cursor-pointer p-1 sm:p-2 text-sm sm:text-base"
               style={{ color: getTextColor() }}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </span>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2"
+              className="p-1 sm:p-2"
               aria-label="Toggle menu"
             >
               <svg
-                className="w-6 h-6"
+                className="w-5 sm:w-6 h-6"
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -425,14 +443,14 @@ function Header() {
             {navLinks.map((link) => (
               link.dropdownItems ? (
                 <div key={link.name}>
-                  <div className="px-4 py-2 font-medium" style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}>
+                  <div className="px-4 py-2 font-medium text-sm sm:text-base" style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}>
                     {link.name}
                   </div>
                   {link.dropdownItems.map((item) => (
                     <Link
                       key={item.name}
                       to={`/${item.href}`}
-                      className="block py-2 px-8 hover:bg-opacity-10 hover:bg-gray-500"
+                      className="block py-2 px-8 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
                       style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                       onClick={() => {
                         setIsMenuOpen(false);
@@ -448,7 +466,7 @@ function Header() {
                 <Link
                   key={link.name}
                   to={isHomePage && link.sectionId ? '#' : `/${link.href}`}
-                  className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
+                  className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
                   style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                   onClick={(e) => handleNavClick(link.href, link.sectionId, e)}
                 >
@@ -461,7 +479,7 @@ function Header() {
                 {userRole !== 'admin' && (
                   <Link
                     to="/my-appointments"
-                    className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
+                    className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
                     style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                     onClick={() => setIsMenuOpen(false)}
                   >
@@ -470,7 +488,7 @@ function Header() {
                 )}
                 <button
                   onClick={handleLogout}
-                  className="w-full py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-left"
+                  className="w-full py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-left text-sm sm:text-base"
                   style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                 >
                   Logout
@@ -479,22 +497,27 @@ function Header() {
             ) : (
               <Link
                 to="/login"
-                className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500"
+                className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
                 style={{ color: theme === 'light' ? '#000000' : '#e5e7eb' }}
                 onClick={() => setIsMenuOpen(false)}
               >
-                <UserCircle className="w-4 h-4" />
+                <UserCircle className="w-4 sm:w-5 h-5" />
                 Login
               </Link>
             )}
             <CustomButton
               variant="primary"
               onClick={handleBookAppointmentClick}
-              className="block w-auto justify-center mt-2 mx-4"
+              className="block w-auto justify-center mt-2 mx-4 text-sm sm:text-base"
             >
               Book Appointment
             </CustomButton>
           </nav>
+        )}
+        {showLogoutSuccess && (
+          <div className="logout-toast">
+            Successfully logged out!
+          </div>
         )}
       </header>
     </>

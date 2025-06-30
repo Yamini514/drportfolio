@@ -12,7 +12,8 @@ function CustomInput({
   rows = 4,
   min,
   max,
-  error
+  error,
+  readOnly // Add readOnly to the props
 }) {
   const { currentTheme } = useTheme();
   
@@ -49,6 +50,7 @@ function CustomInput({
           className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${className}`}
           style={inputStyles}
           aria-describedby={errorId}
+          readOnly={readOnly} // Pass readOnly prop
         />
       ) : (
         <input
@@ -63,6 +65,7 @@ function CustomInput({
           className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${className}`}
           style={inputStyles}
           aria-describedby={errorId}
+          readOnly={readOnly} // Pass readOnly prop
         />
       )}
       {error && (
