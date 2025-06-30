@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useTheme } from "../../../context/ThemeContext";
-import { db } from "../../../firebase/config";
-import { collection, getDocs, addDoc, doc, getDoc, query, where } from "firebase/firestore";
+import { db, auth } from "../../../firebase/config";
+import { collection, getDocs, addDoc, doc, getDoc, query, where, onSnapshot } from "firebase/firestore";
 import CustomInput from "../../../components/CustomInput";
 import CustomButton from "../../../components/CustomButton";
 import CustomSelect from "../../../components/CustomSelect";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { Clock } from "lucide-react";
-import emailjs from "@emailjs/browser";
 import SelfBookingForm from "../../admin/Appointment/SelfBookingForm";
 import { format, isSameDay, parse, isValid } from "date-fns";
 import { useNavigate } from "react-router-dom";
@@ -38,16 +37,14 @@ const Card = ({ title, children }) => {
 };
 
 function AddAppointment() {
-  const { currentTheme } = useTheme() || {
-    currentTheme: {
-      background: '#fff',
-      surface: '#fff',
-      border: '#ccc',
-      primary: '#2563eb',
-      inputBackground: '#f9f9f9',
-      text: { primary: '#000' },
-    },
-  };
+  const { currentTheme = {
+    background: '#fff',
+    surface: '#fff',
+    border: '#ccc',
+    primary: '#2563eb',
+    inputBackground: '#f9f9f9',
+    text: { primary: '#000' },
+  } } = useTheme();
   const navigate = useNavigate();
   const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState("");
@@ -84,8 +81,15 @@ function AddAppointment() {
   const [hasAvailableDates, setHasAvailableDates] = useState(true);
 
   useEffect(() => {
-    emailjs.init("2pSuAO6tF3T-sejH-");
-  }, []);
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!user) {
+        setBookingMessage("Authentication required. Please log in to book an appointment.");
+        localStorage.setItem("redirectAfterLogin", "/addappointment");
+        navigate("/login", { state: { redirectTo: "/addappointment" } });
+      }
+    });
+    return () => unsubscribe();
+  }, [navigate]);
 
   const handleLocation = async () => {
     try {
@@ -105,9 +109,9 @@ function AddAppointment() {
       }
       setLocations(uniqueLocations);
     } catch (error) {
-      console.error("Error fetching locations:", error.message);
+      console.error("Error fetching locations:", error.message || "Unknown error");
       setLocations([]);
-      setBookingMessage(`Failed to load locations: ${error.message}. Please try again later.`);
+      setBookingMessage("Failed to load locations. Please try again later.");
     } finally {
       setIsLoading(false);
     }
@@ -123,7 +127,6 @@ function AddAppointment() {
       setSelectedDayName("");
       setSelectedSlot("");
       setShowForm(false);
-      setBookingMessage("");
       setTimeSlots([]);
       setDaySchedule(null);
       setIsDateBlocked(false);
@@ -168,8 +171,8 @@ function AddAppointment() {
         setBookingMessage("");
       }
     } catch (error) {
-      console.error("Error checking date availability for location:", error.message);
-      setBookingMessage(`Failed to check date availability: ${error.message}. Please try again.`);
+      console.error("Error checking date availability for location:", error.message || "Unknown error");
+      setBookingMessage("Failed to check date availability. Please try again.");
       setHasAvailableDates(false);
     } finally {
       setIsLoading(false);
@@ -182,15 +185,15 @@ function AddAppointment() {
 
   const handlePhoneInput = (e) => {
     const value = e.target.value.replace(/[^0-9+]/g, "");
-    if (value.length > 11) {
-      setErrors((prev) => ({ ...prev, phone: "Phone number cannot exceed 11 digits." }));
+    if (value.length > 12) {
+      setErrors((prev) => ({ ...prev, phone: "Phone number cannot exceed 12 digits." }));
       return;
     }
     setFormData((prev) => ({ ...prev, phone: value }));
     if (!value) {
       setErrors((prev) => ({ ...prev, phone: "Phone number is required." }));
-    } else if (!/^\+?[0-9]{10,11}$/.test(value)) {
-      setErrors((prev) => ({ ...prev, phone: "Please enter a valid phone number (10-11 digits)." }));
+    } else if (!/^\+?[0-9]{10,12}$/.test(value)) {
+      setErrors((prev) => ({ ...prev, phone: "Please enter a valid phone number (10-12 digits)." }));
     } else {
       setErrors((prev) => ({ ...prev, phone: "" }));
     }
@@ -208,6 +211,12 @@ function AddAppointment() {
 
     if (dateStr) {
       const selectedDateObj = new Date(dateStr);
+      if (!isValid(selectedDateObj)) {
+        setBookingMessage("Invalid date selected. Please choose a valid date.");
+        setTimeSlots([]);
+        setDaySchedule(null);
+        return;
+      }
       const dayName = selectedDateObj.toLocaleDateString("en-US", { weekday: "long" });
       setSelectedDayName(dayName);
       setIsSunday(dayName === "Sunday");
@@ -231,6 +240,7 @@ function AddAppointment() {
   };
 
   const fetchTimeSlots = async (date, dayName) => {
+    if (!date || !dayName) return;
     setIsLoading(true);
     try {
       const { blocked, reason } = await checkIfDateIsBlocked(date, dayName);
@@ -258,22 +268,34 @@ function AddAppointment() {
       const storedSlots = Array.isArray(docData.timeSlots)
         ? docData.timeSlots.map((slot) => slot.replace(/["']/g, "").trim())
         : [];
+      const bookingsRef = collection(db, "appointments/data/bookings");
+      const bookingsQuery = query(
+        bookingsRef,
+        where("date", "==", date),
+        where("location", "==", selectedLocation),
+        where("status", "!=", "deleted")
+      );
+      const bookingsSnapshot = await getDocs(bookingsQuery);
+      const bookedSlots = bookingsSnapshot.docs.map((doc) => doc.data().time);
       const currentTime = getCurrentTimeInIST();
       const selectedDateObj = new Date(date);
       const now = new Date();
       const isToday = isSameDay(selectedDateObj, now);
       const availableSlots = storedSlots.filter((slot) => {
-        if (!isToday) return true;
-        const [time, period] = slot.split(" ");
-        const [slotHour, slotMinute] = time.split(":").map(Number);
-        let slotHour24 = period === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
-        if (period === "AM" && slotHour === 12) slotHour24 = 0;
-        const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
-        const [currentHour, currentMinute, currentPeriod] = currentTime.split(/[:\s]/).map((part, index) => (index < 2 ? Number(part) : part));
-        const currentTimeInMinutes =
-          (currentPeriod === "PM" && currentHour !== 12 ? currentHour + 12 : currentHour === 12 && currentPeriod === "AM" ? 0 : currentHour) * 60 +
-          currentMinute;
-        return slotTimeInMinutes > currentTimeInMinutes;
+        if (!bookedSlots.includes(slot)) {
+          if (!isToday) return true;
+          const [time, period] = slot.split(" ");
+          const [slotHour, slotMinute] = time.split(":").map(Number);
+          let slotHour24 = period === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
+          if (period === "AM" && slotHour === 12) slotHour24 = 0;
+          const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
+          const [currentHour, currentMinute, currentPeriod] = currentTime.split(/[:\s]/).map((part, index) => (index < 2 ? Number(part) : part));
+          const currentTimeInMinutes =
+            (currentPeriod === "PM" && currentHour !== 12 ? currentHour + 12 : currentHour === 12 && currentPeriod === "AM" ? 0 : currentHour) * 60 +
+            currentMinute;
+          return slotTimeInMinutes > currentTimeInMinutes;
+        }
+        return false;
       });
       const sortedSlots = availableSlots.sort((a, b) => {
         const timeA = parse(a, "h:mm a", new Date());
@@ -288,8 +310,14 @@ function AddAppointment() {
         setBookingMessage("");
       }
     } catch (error) {
-      console.error("Error fetching time slots:", error.message);
-      setBookingMessage(`Failed to load time slots: ${error.message}. Please try again later.`);
+      console.error("Error fetching time slots:", error);
+      if (error.code === "failed-precondition" && error.message?.includes("index")) {
+        setBookingMessage("Database index is being created. Please try again in a few minutes.");
+      } else if (error.code === "permission-denied") {
+        setBookingMessage("You do not have permission to access this data. Please contact support.");
+      } else {
+        setBookingMessage("Failed to load time slots. Please try again later.");
+      }
       setTimeSlots([]);
       setDaySchedule(null);
     } finally {
@@ -298,9 +326,16 @@ function AddAppointment() {
   };
 
   const checkSlotAvailability = async (date, slot) => {
+    if (!date || !slot) return false;
     try {
       const bookingsRef = collection(db, "appointments/data/bookings");
-      const q = query(bookingsRef, where("date", "==", date), where("time", "==", slot), where("location", "==", selectedLocation));
+      const q = query(
+        bookingsRef,
+        where("date", "==", date),
+        where("time", "==", slot),
+        where("location", "==", selectedLocation),
+        where("status", "!=", "deleted")
+      );
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
         setBookingMessage("This time slot is already booked. Please choose another slot.");
@@ -308,13 +343,20 @@ function AddAppointment() {
       }
       return true;
     } catch (error) {
-      console.error("Error checking slot availability:", error.message);
-      setBookingMessage(`Failed to check slot availability: ${error.message}. Please try again.`);
+      console.error("Error checking slot availability:", error);
+      if (error.code === "failed-precondition" && error.message?.includes("index")) {
+        setBookingMessage("Database index is being created. Please try again in a few minutes.");
+      } else if (error.code === "permission-denied") {
+        setBookingMessage("You do not have permission to access this data. Please contact support.");
+      } else {
+        setBookingMessage("Failed to check slot availability. Please try again.");
+      }
       return false;
     }
   };
 
   const handleSlotSelect = async (slot) => {
+    if (!slot) return;
     setIsLoading(true);
     const isAvailable = await checkSlotAvailability(selectedDate, slot);
     if (!isAvailable) {
@@ -361,7 +403,7 @@ function AddAppointment() {
     const newErrors = {};
     if (!formData.name) newErrors.name = "Name is required.";
     if (!formData.phone) newErrors.phone = "Phone number is required.";
-    else if (!/^\+?[0-9]{10,11}$/.test(formData.phone)) newErrors.phone = "Please enter a valid phone number (10-11 digits).";
+    else if (!/^\+?[0-9]{10,12}$/.test(formData.phone)) newErrors.phone = "Please enter a valid phone number (10-12 digits).";
     if (!formData.dob) newErrors.dob = "Date of birth is required.";
     if (!formData.pid) newErrors.pid = "Patient ID is required.";
     if (!formData.age) newErrors.age = "Age is required.";
@@ -410,41 +452,18 @@ function AddAppointment() {
         appointmentType: formData.appointmentType,
         medicalHistory: formData.medicalHistory ? formData.medicalHistory.name : "",
         medicalHistoryMessage: formData.medicalHistoryMessage,
-        bookedBy: "anonymous",
+        bookedBy: auth.currentUser?.uid || "anonymous",
         status: "pending",
         createdAt: new Date().toISOString(),
       });
 
-      if (formData.phone) {
+      if (formData.phone && /^\+?[0-9]{10,12}$/.test(formData.phone)) {
         const phoneNumber = formData.phone.startsWith("+") ? formData.phone : `+91${formData.phone}`;
         const message = `Dear ${formData.name}, your appointment is confirmed for ${format(
           new Date(selectedDate),
           "MMMM d, yyyy"
         )} at ${selectedSlot} at ${selectedLocation}. Appointment Type: ${formData.appointmentType}. PID: ${formData.pid}.`;
         window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
-      }
-
-      if (formData.email) {
-        const emailParams = {
-          name: formData.name,
-          email: formData.email,
-          date: format(new Date(selectedDate), "MMMM d, yyyy"),
-          time: selectedSlot,
-          location: selectedLocation,
-          appointment_type: formData.appointmentType,
-          pid: formData.pid,
-        };
-        await emailjs.send("service_dkv3rib", "template_iremp8a", emailParams);
-
-        const autoReplyParams = {
-          name: formData.name,
-          email: formData.email,
-          pid: formData.pid,
-          to_email: formData.email,
-          from_name: "noreply@gmail.com",
-          reply_to: "yamini.b@srinistha.com",
-        };
-        await emailjs.send("service_dkv3rib", "template_auto_reply", autoReplyParams);
       }
 
       setShowSuccess(true);
@@ -471,26 +490,35 @@ function AddAppointment() {
         setDaySchedule(null);
       }, 3000);
     } catch (error) {
-      console.error("Error booking appointment:", error.message);
-      setBookingMessage(`Failed to book appointment: ${error.message}. Please try again later.`);
+      console.error("Error booking appointment:", error);
+      if (error.code === "permission-denied") {
+        setBookingMessage("You do not have permission to book an appointment. Please contact support.");
+      } else {
+        setBookingMessage(`Failed to book appointment: ${error.message || "Unknown error"}. Please try again later.`);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const getCurrentTimeInIST = () => {
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Kolkata",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-    const parts = formatter.formatToParts(now);
-    const hour = parts.find((part) => part.type === "hour").value;
-    const minute = parts.find((part) => part.type === "minute").value;
-    const period = parts.find((part) => part.type === "dayPeriod")?.value || "AM";
-    return `${hour}:${minute} ${period}`;
+    try {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      const parts = formatter.formatToParts(now);
+      const hour = parts.find((part) => part.type === "hour").value;
+      const minute = parts.find((part) => part.type === "minute").value;
+      const period = parts.find((part) => part.type === "dayPeriod")?.value || "AM";
+      return `${hour}:${minute} ${period}`;
+    } catch (error) {
+      console.error("Error getting current time in IST:", error);
+      return "12:00 AM";
+    }
   };
 
   const checkIfDateIsBlocked = async (dateStr, dayName) => {
@@ -515,26 +543,42 @@ function AddAppointment() {
       }
       return { blocked: false, reason: "" };
     } catch (error) {
-      console.error("Error checking blocked date:", error.message);
-      setBookingMessage(`Failed to check date availability: ${error.message}. Please try again.`);
+      console.error("Error checking blocked date:", error);
+      setBookingMessage("Failed to check date availability. Please try again.");
       return { blocked: false, reason: "" };
     }
   };
 
   const isDateUnavailable = (dateStr) => {
-    const date = new Date(dateStr);
-    const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
-    return dayName === "Sunday" || date < new Date(today);
+    try {
+      const date = new Date(dateStr);
+      if (!isValid(date)) return true;
+      const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
+      return dayName === "Sunday" || date < new Date(today);
+    } catch (error) {
+      console.error("Error checking date availability:", error);
+      return true;
+    }
   };
 
   const isDateAvailable = (date) => {
-    const dateStr = format(date, "yyyy-MM-dd");
-    return availableDates.some((d) => d.date === dateStr && d.location.toLowerCase() === selectedLocation.toLowerCase()) && !isDateUnavailable(dateStr);
+    try {
+      const dateStr = format(date, "yyyy-MM-dd");
+      return availableDates.some((d) => d.date === dateStr && d.location.toLowerCase() === selectedLocation.toLowerCase()) && !isDateUnavailable(dateStr);
+    } catch (error) {
+      console.error("Error checking date availability:", error);
+      return false;
+    }
   };
 
   const filterUnavailableDates = (date) => {
-    const dateStr = format(date, "yyyy-MM-dd");
-    return !isDateUnavailable(dateStr) && isDateAvailable(date);
+    try {
+      const dateStr = format(date, "yyyy-MM-dd");
+      return !isDateUnavailable(dateStr) && isDateAvailable(date);
+    } catch (error) {
+      console.error("Error filtering unavailable dates:", error);
+      return false;
+    }
   };
 
   useEffect(() => {
@@ -551,8 +595,12 @@ function AddAppointment() {
         }
         setAvailableDates(dates);
       } catch (error) {
-        console.error("Error fetching available dates:", error.message);
-        setBookingMessage(`Failed to load available dates: ${error.message}. Please try again later.`);
+        console.error("Error fetching available dates:", error);
+        if (error.code === "permission-denied") {
+          setBookingMessage("You do not have permission to access this data. Please contact support.");
+        } else {
+          setBookingMessage("Failed to load available dates. Please try again later.");
+        }
       }
     };
     fetchAvailableDates();
@@ -564,17 +612,23 @@ function AddAppointment() {
         const snapshot = await getDocs(collection(db, "appointments/data/bookings"));
         const counts = {};
         snapshot.forEach((doc) => {
-          const { date, location } = doc.data();
-          const key = `${date}|${location}`;
-          counts[key] = (counts[key] || 0) + 1;
+          const { date, location, status } = doc.data();
+          if (status !== "deleted") {
+            const key = `${date}|${location}`;
+            counts[key] = (counts[key] || 0) + 1;
+          }
         });
         const fullyBooked = Object.entries(counts)
           .filter(([key, count]) => count >= 10)
           .map(([key]) => key.split("|")[0]);
         setBookedDates(fullyBooked);
       } catch (error) {
-        console.error("Error fetching booked dates:", error.message);
-        setBookingMessage(`Failed to load booked dates: ${error.message}. Please try again.`);
+        console.error("Error fetching booked dates:", error);
+        if (error.code === "permission-denied") {
+          setBookingMessage("You do not have permission to access this data. Please contact support.");
+        } else {
+          setBookingMessage("Failed to load booked dates. Please try again.");
+        }
       }
     };
     fetchBookedDates();
@@ -588,18 +642,50 @@ function AddAppointment() {
         const slots = {};
         querySnapshot.forEach((doc) => {
           const appointment = doc.data();
-          const key = `${appointment.date}|${appointment.location}`;
-          if (!slots[key]) slots[key] = [];
-          slots[key].push(appointment.time);
+          if (appointment.status !== "deleted") {
+            const key = `${appointment.date}|${appointment.location}`;
+            if (!slots[key]) slots[key] = [];
+            slots[key].push(appointment.time);
+          }
         });
         setBookedSlots(slots);
       } catch (error) {
-        console.error("Error fetching booked slots:", error.message);
-        setBookingMessage(`Failed to load booked slots: ${error.message}. Please try again.`);
+        console.error("Error fetching booked slots:", error);
+        if (error.code === "permission-denied") {
+          setBookingMessage("You do not have permission to access this data. Please contact support.");
+        } else {
+          setBookingMessage("Failed to load booked slots. Please try again.");
+        }
       }
     };
     fetchBookedSlots();
   }, []);
+
+  useEffect(() => {
+    if (!selectedDate || !selectedLocation) return;
+    const bookingsRef = collection(db, "appointments/data/bookings");
+    const q = query(
+      bookingsRef,
+      where("date", "==", selectedDate),
+      where("location", "==", selectedLocation),
+      where("status", "!=", "deleted")
+    );
+    const unsubscribe = onSnapshot(
+      q,
+      () => {
+        fetchTimeSlots(selectedDate, selectedDayName);
+      },
+      (error) => {
+        console.error("Error in real-time bookings listener:", error);
+        if (error.code === "permission-denied") {
+          setBookingMessage("You do not have permission to access this data. Please contact support.");
+        } else {
+          setBookingMessage("Failed to update available slots. Please try again.");
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, [selectedDate, selectedLocation, selectedDayName]);
 
   return (
     <section
@@ -610,7 +696,7 @@ function AddAppointment() {
         <Card title="Book Your Appointment">
           {showSuccess && (
             <p className="mb-4 p-3 rounded-lg bg-green-100 text-green-800 text-sm sm:text-base text-center">
-              Appointment booked successfully! A confirmation has been sent.
+              Appointment booked successfully! A confirmation has been sent via WhatsApp.
             </p>
           )}
 

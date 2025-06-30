@@ -129,24 +129,6 @@ function BookAppointment() {
 
   useEffect(() => {
     emailjs.init("2pSuAO6tF3T-sejH-");
-    // Test EmailJS initialization
-    const testEmailJS = async () => {
-      try {
-        await emailjs.send("service_l920egs", "template_iremp8a", {
-          name: "Test User",
-          email: "test@example.com",
-          date: "June 30, 2025",
-          time: "10:00 AM",
-          location: "Test Location",
-          appointment_type: "Consultation",
-          pid: "TEST123",
-        });
-        console.log("EmailJS test successful");
-      } catch (error) {
-        console.error("EmailJS test failed:", error);
-      }
-    };
-    testEmailJS();
   }, []);
 
   const handleLocation = async () => {
@@ -514,25 +496,59 @@ function BookAppointment() {
         const emailParams = {
           name: formData.name,
           email: formData.email,
-          preferred_date: selectedDate,
-          time: selectedSlot,
+          preferred_date: format(new Date(selectedDate), "MMMM d, yyyy"),
+          preferred_time: selectedSlot,
           location: selectedLocation,
           appointment_type: formData.appointmentType,
           pid: formData.pid,
+          content: `
+Thank you for reaching out to Dr. Laxminadh Sivaraju!
+
+We have received your appointment request with the following details:
+
+🗓️ **Preferred Date:** ${format(new Date(selectedDate), "MMMM d, yyyy")}  
+⏰ **Preferred Time:** ${selectedSlot}  
+
+Our team will get back to you shortly to confirm the availability or suggest the next closest slot.
+
+📌 **What Happens Next?**
+- You will receive a confirmation email or call once your appointment is scheduled.
+- If this is urgent, please call our clinic directly at +91-XXXXXXXXXX.
+- Visit [your website URL] for more about our services and consultation process.
+
+We appreciate your trust in our care and look forward to assisting you.
+          `
         };
         await emailjs.send("service_l920egs", "template_iremp8a", emailParams);
 
         const autoReplyParams = {
           name: formData.name,
           email: formData.email,
-          preferred_date: selectedDate,
-          time: selectedSlot,
+          preferred_date: format(new Date(selectedDate), "MMMM d, yyyy"),
+          preferred_time: selectedSlot,
           location: selectedLocation,
           appointment_type: formData.appointmentType,
           pid: formData.pid,
           to_email: formData.email,
           from_name: "noreply@gmail.com",
           reply_to: "yamini.b@srinistha.com",
+          content: `
+Thank you for reaching out to Dr. Laxminadh Sivaraju!
+
+We have received your appointment request with the following details:
+
+🗓️ **Preferred Date:** ${format(new Date(selectedDate), "MMMM d, yyyy")}  
+⏰ **Preferred Time:** ${selectedSlot}  
+
+Our team will get back to you shortly to confirm the availability or suggest the next closest slot.
+
+📌 **What Happens Next?**
+- You will receive a confirmation email or call once your appointment is scheduled.
+- If this is urgent, please call our clinic directly at +91-XXXXXXXXXX.
+- Visit [your website URL] for more about our services and consultation process.
+
+We appreciate your trust in our care and look forward to assisting you.
+          `
         };
         await emailjs.send("service_l920egs", "template_iremp8a", autoReplyParams);
       }
@@ -751,7 +767,7 @@ function BookAppointment() {
                 id="location-select"
                 value={selectedLocation}
                 onChange={handleLocationChange}
-                options={[{ value: "", label: "Select your location", disabled: true }, ...locations.map((loc) => ({ value: loc.name, label: loc.name }))]}
+                options={[{ value: "", label: "Select your website URL", disabled: true }, ...locations.map((loc) => ({ value: loc.name, label: loc.name }))]}
                 required
                 className="w-full p-2 rounded-md border text-sm sm:text-base"
                 style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
