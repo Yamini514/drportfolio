@@ -514,7 +514,7 @@ function BookAppointment() {
         const emailParams = {
           name: formData.name,
           email: formData.email,
-          date: format(new Date(selectedDate), "MMMM d, yyyy"),
+          preferred_date: selectedDate,
           time: selectedSlot,
           location: selectedLocation,
           appointment_type: formData.appointmentType,
@@ -525,6 +525,10 @@ function BookAppointment() {
         const autoReplyParams = {
           name: formData.name,
           email: formData.email,
+          preferred_date: selectedDate,
+          time: selectedSlot,
+          location: selectedLocation,
+          appointment_type: formData.appointmentType,
           pid: formData.pid,
           to_email: formData.email,
           from_name: "noreply@gmail.com",
