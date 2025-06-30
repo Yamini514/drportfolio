@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTheme } from "../../../context/ThemeContext";
 import { db, auth } from "../../../firebase/config";
-import { collection, getDocs, addDoc, doc, getDoc, query, where, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, getDoc, query, where, onSnapshot, setDoc } from "firebase/firestore";
 import CustomInput from "../../../components/CustomInput";
 import CustomButton from "../../../components/CustomButton";
 import CustomSelect from "../../../components/CustomSelect";
@@ -36,6 +36,58 @@ const Card = ({ title, children }) => {
   );
 };
 
+// Function to generate a random 5-digit number
+const generateRandomNumber = () => {
+  return Math.floor(10000 + Math.random() * 90000).toString().padStart(5, '0');
+};
+
+// Function to generate a PID in the format PID{year}-XXXXX
+const generateRandomPid = () => {
+  const year = new Date().getFullYear().toString();
+  const randomNumber = generateRandomNumber();
+  return `PID${year}-${randomNumber}`;
+};
+
+// Function to check if a PID already exists in Firestore
+const checkPidUniqueness = async (pid) => {
+  try {
+    const bookingsRef = collection(db, "appointments/data/bookings");
+    const usersRef = collection(db, "users");
+    const bookingsQuery = query(bookingsRef, where("pid", "==", pid));
+    const usersQuery = query(usersRef, where("pid", "==", pid));
+    const [bookingsSnapshot, usersSnapshot] = await Promise.all([
+      getDocs(bookingsQuery),
+      getDocs(usersQuery),
+    ]);
+    console.log(`PID ${pid} uniqueness: bookings=${bookingsSnapshot.empty}, users=${usersSnapshot.empty}`);
+    return bookingsSnapshot.empty && usersSnapshot.empty;
+  } catch (error) {
+    console.error("Error checking PID uniqueness:", error);
+    return false;
+  }
+};
+
+// Function to generate a unique PID
+const generateUniquePid = async () => {
+  let pid;
+  let isUnique = false;
+  let attempts = 0;
+  const maxAttempts = 20;
+
+  while (!isUnique && attempts < maxAttempts) {
+    pid = generateRandomPid();
+    isUnique = await checkPidUniqueness(pid);
+    attempts++;
+  }
+
+  if (!isUnique) {
+    console.error("Failed to generate unique PID after", maxAttempts, "attempts");
+    return null;
+  }
+
+  return pid;
+};
+
 function AddAppointment() {
   const { currentTheme = {
     background: '#fff',
@@ -62,7 +114,7 @@ function AddAppointment() {
     email: "",
     pid: "",
     phone: "",
-    dob: "",
+    // dob: "",
     age: "",
     reasonForVisit: "",
     appointmentType: "Consultation",
@@ -81,7 +133,24 @@ function AddAppointment() {
   const [hasAvailableDates, setHasAvailableDates] = useState(true);
 
   useEffect(() => {
+    if (showForm) {
+      const fetchPid = async () => {
+        const newPid = await generateUniquePid();
+        if (newPid) {
+          setFormData((prev) => ({ ...prev, pid: newPid }));
+        } else {
+          setShowForm(false);
+          setSelectedSlot("");
+          setBookingMessage("Unable to generate a unique Patient ID. Please try again.");
+        }
+      };
+      fetchPid();
+    }
+  }, [showForm]);
+
+  useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
+      console.log("Current user:", user);
       if (!user) {
         setBookingMessage("Authentication required. Please log in to book an appointment.");
         localStorage.setItem("redirectAfterLogin", "/addappointment");
@@ -100,6 +169,7 @@ function AddAppointment() {
         name: doc.data().location,
         docId: doc.id,
       }));
+      console.log("Fetched locations:", locationList);
       const uniqueLocations = [...new Set(locationList.map((loc) => loc.name))].map((name) => ({
         name,
         docId: locationList.find((loc) => loc.name === name).docId,
@@ -109,7 +179,7 @@ function AddAppointment() {
       }
       setLocations(uniqueLocations);
     } catch (error) {
-      console.error("Error fetching locations:", error.message || "Unknown error");
+      console.error("Error fetching locations:", error);
       setLocations([]);
       setBookingMessage("Failed to load locations. Please try again later.");
     } finally {
@@ -153,11 +223,13 @@ function AddAppointment() {
       const q = query(scheduleRef, where("location", "==", location));
       const querySnapshot = await getDocs(q);
       const locationDates = querySnapshot.docs.map((doc) => doc.data().date);
+      console.log(`Available dates for ${location}:`, locationDates);
 
       const validDates = [];
       for (const dateStr of locationDates) {
         const isUnavailable = isDateUnavailable(dateStr);
         const { blocked } = await checkIfDateIsBlocked(dateStr, new Date(dateStr).toLocaleDateString("en-US", { weekday: "long" }));
+        console.log(`Date ${dateStr}: isUnavailable=${isUnavailable}, blocked=${blocked}`);
         if (!isUnavailable && !blocked) {
           validDates.push(dateStr);
         }
@@ -171,7 +243,7 @@ function AddAppointment() {
         setBookingMessage("");
       }
     } catch (error) {
-      console.error("Error checking date availability for location:", error.message || "Unknown error");
+      console.error("Error checking date availability for location:", error);
       setBookingMessage("Failed to check date availability. Please try again.");
       setHasAvailableDates(false);
     } finally {
@@ -242,6 +314,10 @@ function AddAppointment() {
   const fetchTimeSlots = async (date, dayName) => {
     if (!date || !dayName) return;
     setIsLoading(true);
+    const timeout = setTimeout(() => {
+      setIsLoading(false);
+      setBookingMessage("Request timed out. Please try again.");
+    }, 10000);
     try {
       const { blocked, reason } = await checkIfDateIsBlocked(date, dayName);
       if (blocked) {
@@ -257,17 +333,18 @@ function AddAppointment() {
       const scheduleRef = collection(db, "appointments/data/schedule");
       const q = query(scheduleRef, where("date", "==", date), where("location", "==", selectedLocation));
       const querySnapshot = await getDocs(q);
-      if (querySnapshot.empty) {
+      if (querySnapshot.empty || !querySnapshot.docs[0].data().timeSlots || querySnapshot.docs[0].data().timeSlots.length === 0) {
         setTimeSlots([]);
         setDaySchedule({ isOpen: false });
         setLocationMismatch(true);
-        setBookingMessage(`There are no active slots available on this date at ${selectedLocation}. Please select another date or location.`);
+        setBookingMessage(`No time slots available for ${selectedLocation} on ${format(new Date(date), "MMMM d, yyyy")}. Please select another date or location.`);
         return;
       }
       const docData = querySnapshot.docs[0].data();
       const storedSlots = Array.isArray(docData.timeSlots)
         ? docData.timeSlots.map((slot) => slot.replace(/["']/g, "").trim())
         : [];
+      console.log(`Stored slots for ${date} at ${selectedLocation}:`, storedSlots);
       const bookingsRef = collection(db, "appointments/data/bookings");
       const bookingsQuery = query(
         bookingsRef,
@@ -277,6 +354,7 @@ function AddAppointment() {
       );
       const bookingsSnapshot = await getDocs(bookingsQuery);
       const bookedSlots = bookingsSnapshot.docs.map((doc) => doc.data().time);
+      console.log(`Booked slots for ${date} at ${selectedLocation}:`, bookedSlots);
       const currentTime = getCurrentTimeInIST();
       const selectedDateObj = new Date(date);
       const now = new Date();
@@ -305,7 +383,7 @@ function AddAppointment() {
       setTimeSlots(sortedSlots);
       setDaySchedule({ isOpen: sortedSlots.length > 0 });
       if (sortedSlots.length === 0 && !isDateBlocked && !isSunday && !locationMismatch) {
-        setBookingMessage(`All slots are booked for this day at ${selectedLocation}. Please select another date or location.`);
+        setBookingMessage(`No available time slots for ${format(new Date(date), "MMMM d, yyyy")} at ${selectedLocation}. Please try another date or location.`);
       } else if (sortedSlots.length > 0) {
         setBookingMessage("");
       }
@@ -321,6 +399,7 @@ function AddAppointment() {
       setTimeSlots([]);
       setDaySchedule(null);
     } finally {
+      clearTimeout(timeout);
       setIsLoading(false);
     }
   };
@@ -337,6 +416,7 @@ function AddAppointment() {
         where("status", "!=", "deleted")
       );
       const snapshot = await getDocs(q);
+      console.log(`Slot ${slot} on ${date} at ${selectedLocation}:`, snapshot.empty ? "Available" : "Booked");
       if (!snapshot.empty) {
         setBookingMessage("This time slot is already booked. Please choose another slot.");
         return false;
@@ -359,6 +439,7 @@ function AddAppointment() {
     if (!slot) return;
     setIsLoading(true);
     const isAvailable = await checkSlotAvailability(selectedDate, slot);
+    console.log("Selected slot:", slot, "Available:", isAvailable);
     if (!isAvailable) {
       setShowForm(false);
       setSelectedSlot("");
@@ -388,7 +469,7 @@ function AddAppointment() {
       email: "",
       pid: "",
       phone: "",
-      dob: "",
+      // dob: "",
       age: "",
       reasonForVisit: "",
       appointmentType: "Consultation",
@@ -404,8 +485,9 @@ function AddAppointment() {
     if (!formData.name) newErrors.name = "Name is required.";
     if (!formData.phone) newErrors.phone = "Phone number is required.";
     else if (!/^\+?[0-9]{10,12}$/.test(formData.phone)) newErrors.phone = "Please enter a valid phone number (10-12 digits).";
-    if (!formData.dob) newErrors.dob = "Date of birth is required.";
+    // if (!formData.dob) newErrors.dob = "Date of birth is required.";
     if (!formData.pid) newErrors.pid = "Patient ID is required.";
+    else if (!/^PID\d{4}-\d{5}$/.test(formData.pid)) newErrors.pid = "Invalid Patient ID format. It should be PIDYYYY-NNNNN (e.g., PID2025-12345).";
     if (!formData.age) newErrors.age = "Age is required.";
     else if (!/^\d+$/.test(formData.age) || formData.age < 0 || formData.age > 120) newErrors.age = "Please enter a valid age (0-120).";
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
@@ -417,6 +499,7 @@ function AddAppointment() {
     if (formData.medicalHistoryMessage && formData.medicalHistoryMessage.length > 200) {
       newErrors.medicalHistoryMessage = "Medical history summary must be 200 characters or less.";
     }
+    console.log("Form validation errors:", newErrors);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -436,8 +519,24 @@ function AddAppointment() {
         fetchTimeSlots(selectedDate, selectedDayName);
         return;
       }
+      if (!window.confirm(`Confirm booking for ${selectedSlot} on ${format(new Date(selectedDate), "MMMM d, yyyy")} at ${selectedLocation}?`)) {
+        setIsLoading(false);
+        return;
+      }
+      // Check and create user document if necessary
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (!userDoc.exists()) {
+        await setDoc(userDocRef, {
+          role: "user",
+          pid: formData.pid,
+          email: auth.currentUser.email,
+          createdAt: new Date().toISOString(),
+        });
+        console.log("Created user document for UID:", auth.currentUser.uid);
+      }
       const bookingsRef = collection(db, "appointments/data/bookings");
-      await addDoc(bookingsRef, {
+      const docRef = await addDoc(bookingsRef, {
         location: selectedLocation,
         date: selectedDate,
         time: selectedSlot,
@@ -446,7 +545,7 @@ function AddAppointment() {
         email: formData.email,
         pid: formData.pid,
         phone: formData.phone,
-        dob: formData.dob,
+        // dob: formData.dob,
         age: formData.age,
         reasonForVisit: formData.reasonForVisit,
         appointmentType: formData.appointmentType,
@@ -456,6 +555,7 @@ function AddAppointment() {
         status: "pending",
         createdAt: new Date().toISOString(),
       });
+      console.log("Appointment booked, Doc ID:", docRef.id);
 
       if (formData.phone && /^\+?[0-9]{10,12}$/.test(formData.phone)) {
         const phoneNumber = formData.phone.startsWith("+") ? formData.phone : `+91${formData.phone}`;
@@ -478,7 +578,7 @@ function AddAppointment() {
           email: "",
           pid: "",
           phone: "",
-          dob: "",
+          // dob: "",
           age: "",
           reasonForVisit: "",
           appointmentType: "Consultation",
@@ -590,6 +690,7 @@ function AddAppointment() {
           date: doc.data().date,
           location: doc.data().location,
         }));
+        console.log("Available dates:", dates);
         if (dates.length === 0) {
           setBookingMessage("No available dates found. Please try again later.");
         }
@@ -621,6 +722,7 @@ function AddAppointment() {
         const fullyBooked = Object.entries(counts)
           .filter(([key, count]) => count >= 10)
           .map(([key]) => key.split("|")[0]);
+        console.log("Fully booked dates:", fullyBooked);
         setBookedDates(fullyBooked);
       } catch (error) {
         console.error("Error fetching booked dates:", error);
@@ -648,6 +750,7 @@ function AddAppointment() {
             slots[key].push(appointment.time);
           }
         });
+        console.log("Booked slots:", slots);
         setBookedSlots(slots);
       } catch (error) {
         console.error("Error fetching booked slots:", error);

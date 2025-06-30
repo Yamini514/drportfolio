@@ -14,6 +14,7 @@ function Header() {
   const [userRole, setUserRole] = useState(null);
   const [pid, setPid] = useState(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
@@ -117,7 +118,7 @@ function Header() {
         setPid(null);
         localStorage.removeItem('userRole');
         localStorage.removeItem(`userRole_${currentUid}`);
-        localStorage.removeItem('pid');
+        localStorage.removeItem('pid allotted');
         localStorage.removeItem(`pid_${currentUid}`);
         currentUid = null;
       }
@@ -184,6 +185,12 @@ function Header() {
       setUserRole(null);
       setPid(null);
       setIsUserMenuOpen(false);
+      setShowLogoutSuccess(true);
+      setTimeout(() => {
+        setShowLogoutSuccess(false);
+        navigate('/', { replace: true }); // Direct redirect to home page
+        window.scrollTo(0, 0);
+      }, 2000); // Show success message for 2 seconds before redirect
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -248,7 +255,7 @@ function Header() {
       style={{ color: isTransparentHeader && theme === 'light' ? '#000000' : getTextColor() }}
       onClick={() => setIsMenuOpen(false)}
     >
-      <UserCircle className="w-4 h-4 sm:w-5 h-5" />
+      <UserCircle className="w-4 sm:w-5 h-5" />
     </Link>
   );
 
@@ -299,6 +306,21 @@ function Header() {
         }
         .animate-fadeIn {
           animation: fadeIn 0.3s ease-out forwards;
+        }
+        .logout-toast {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          background-color: #10B981;
+          color: white;
+          padding: 12px 24px;
+          border-radius: 8px;
+          z-index: 1000;
+          animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
       <header
@@ -491,6 +513,11 @@ function Header() {
               Book Appointment
             </CustomButton>
           </nav>
+        )}
+        {showLogoutSuccess && (
+          <div className="logout-toast">
+            Successfully logged out!
+          </div>
         )}
       </header>
     </>

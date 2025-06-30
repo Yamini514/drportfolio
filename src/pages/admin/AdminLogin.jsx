@@ -25,6 +25,7 @@ const AdminLogin = () => {
     const savedEmail = localStorage.getItem("adminEmail");
     const savedRememberMe = localStorage.getItem("adminRememberMe") === "true";
     const sessionStart = localStorage.getItem("adminSessionStart");
+    const manualLogout = localStorage.getItem("manualLogout") === "true";
 
     if (savedEmail && savedRememberMe) {
       setCredentials((prev) => ({ ...prev, email: savedEmail }));
@@ -32,7 +33,7 @@ const AdminLogin = () => {
     }
 
     // Check if session exists and is still valid
-    if (sessionStart) {
+    if (sessionStart && !manualLogout) {
       const currentTime = new Date().getTime();
       const sessionTime = parseInt(sessionStart, 10);
       if (currentTime - sessionTime > SESSION_TIMEOUT) {
@@ -66,23 +67,23 @@ const AdminLogin = () => {
       const user = userCredential.user;
 
       // Check if user is an admin in Firestore
-      const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+      const adminDoc = await getDoc(doc(db, "admins", user.uid));
       if (adminDoc.exists()) {
         const adminData = adminDoc.data();
-        if (adminData.role !== 'admin') {
+        if (adminData.role !== "admin") {
           throw new Error("Invalid admin role.");
         }
       } else {
         // Check if user is registered as a regular user
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           throw new Error("Please use the user login page.");
         }
 
         // If not in users or admins, create admin entry (for first-time admin login)
-        await setDoc(doc(db, 'admins', user.uid), {
+        await setDoc(doc(db, "admins", user.uid), {
           email: credentials.email,
-          role: 'admin',
+          role: "admin",
           createdAt: new Date().toISOString(),
         });
       }
@@ -100,6 +101,7 @@ const AdminLogin = () => {
       localStorage.setItem("adminToken", await user.getIdToken());
       localStorage.setItem("isAdminLoggedIn", "true");
       localStorage.setItem("adminSessionStart", new Date().getTime().toString());
+      localStorage.removeItem("manualLogout"); // Clear manual logout flag
 
       navigate("/admin/dashboard");
     } catch (error) {
@@ -120,9 +122,13 @@ const AdminLogin = () => {
           setError("Invalid admin role. Please contact support.");
           break;
         default:
-          if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+          if (
+            error.code === "auth/invalid-credential" ||
+            error.code === "auth/user-not-found" ||
+            error.code === "auth/wrong-password"
+          ) {
             setError("Invalid email or password. Please try again.");
-          } else if (error.code === 'auth/too-many-requests') {
+          } else if (error.code === "auth/too-many-requests") {
             setError("Too many login attempts. Please try again later.");
           } else {
             setError("Login failed. Please try again.");
@@ -227,11 +233,10 @@ const AdminLogin = () => {
           >
             {loading ? "Signing in..." : "Sign in"}
           </CustomButton>
-
         </form>
         <div>
-          <h6>Email:Admin@srinishtha.com</h6>
-          <h6>Password:admin@123</h6>
+          <h6>Email: Admin@srinishtha.com</h6>
+          <h6>Password: admin@123</h6>
         </div>
       </div>
     </div>

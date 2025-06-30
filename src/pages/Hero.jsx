@@ -50,7 +50,7 @@ function Hero() {
   return (
     <div
       id="hero"
-      className="min-h-screen pt-20 pb-24 px-4 relative bg-gray-900 text-white"
+      className="min-h-screen pt-20  pb-24 px-4 relative bg-gray-900 text-white"
     >
       {/* Background Image */}
       <div
@@ -66,9 +66,9 @@ function Hero() {
       />
 
       {/* Content */}
-      <div className="container mx-auto relative z-10">
+      <div className="container pt-10 mx-auto relative z-10">
         <div className="text-center mb-16">
-          <div className="flex items-center justify-center gap-2 mb-6">
+          <div className="flex items-center  justify-center gap-2 mb-6">
             <div className="flex items-center px-6 py-2 gap-3 rounded-full bg-purple-100/20">
               <FaStar
                 className="w-8 h-8 fill-yellow-400 stroke-purple-950"
