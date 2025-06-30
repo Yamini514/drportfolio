@@ -10,13 +10,21 @@ import "react-datepicker/dist/react-datepicker.css";
 import { Clock } from "lucide-react";
 import emailjs from "@emailjs/browser";
 import SelfBookingForm from "../../admin/Appointment/SelfBookingForm";
-import OtherPatientForm from "../../admin/Appointment/OtherPatientForm";
 import { format, isSameDay, parse, isValid } from "date-fns";
 import { useNavigate } from "react-router-dom";
 
 // Inline Card Component
 const Card = ({ title, children }) => {
-  const { currentTheme } = useTheme();
+  const { currentTheme } = useTheme() || {
+    currentTheme: {
+      background: '#fff',
+      surface: '#fff',
+      border: '#ccc',
+      primary: '#2563eb',
+      inputBackground: '#f9f9f9',
+      text: { primary: '#000' },
+    },
+  };
   return (
     <div className="p-6 rounded-lg shadow-md border w-full" style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}>
       {title && (
@@ -30,7 +38,16 @@ const Card = ({ title, children }) => {
 };
 
 function AddAppointment() {
-  const { currentTheme } = useTheme();
+  const { currentTheme } = useTheme() || {
+    currentTheme: {
+      background: '#fff',
+      surface: '#fff',
+      border: '#ccc',
+      primary: '#2563eb',
+      inputBackground: '#f9f9f9',
+      text: { primary: '#000' },
+    },
+  };
   const navigate = useNavigate();
   const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState("");
@@ -64,15 +81,6 @@ function AddAppointment() {
   const [timeSlots, setTimeSlots] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [locationMismatch, setLocationMismatch] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [bookingFor, setBookingFor] = useState("self");
-  const [otherPatientData, setOtherPatientData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    dob: "",
-  });
-  const [otherPatientErrors, setOtherPatientErrors] = useState({});
   const [hasAvailableDates, setHasAvailableDates] = useState(true);
 
   useEffect(() => {
@@ -115,7 +123,7 @@ function AddAppointment() {
       setSelectedDayName("");
       setSelectedSlot("");
       setShowForm(false);
-      setShowConfirmation(false);
+      setBookingMessage("");
       setTimeSlots([]);
       setDaySchedule(null);
       setIsDateBlocked(false);
@@ -129,7 +137,6 @@ function AddAppointment() {
     setSelectedDayName("");
     setSelectedSlot("");
     setShowForm(false);
-    setShowConfirmation(false);
     setBookingMessage("");
     setTimeSlots([]);
     setDaySchedule(null);
@@ -173,30 +180,19 @@ function AddAppointment() {
     handleLocation();
   }, []);
 
-  const handlePhoneInput = (e, isOther = false) => {
+  const handlePhoneInput = (e) => {
     const value = e.target.value.replace(/[^0-9+]/g, "");
     if (value.length > 11) {
       setErrors((prev) => ({ ...prev, phone: "Phone number cannot exceed 11 digits." }));
       return;
     }
-    if (isOther) {
-      setOtherPatientData((prev) => ({ ...prev, phone: value }));
-      if (!value) {
-        setOtherPatientErrors((prev) => ({ ...prev, phone: "Phone number is required." }));
-      } else if (!/^\+?[0-9]{10,11}$/.test(value)) {
-        setOtherPatientErrors((prev) => ({ ...prev, phone: "Please enter a valid phone number (10-11 digits)." }));
-      } else {
-        setOtherPatientErrors((prev) => ({ ...prev, phone: "" }));
-      }
+    setFormData((prev) => ({ ...prev, phone: value }));
+    if (!value) {
+      setErrors((prev) => ({ ...prev, phone: "Phone number is required." }));
+    } else if (!/^\+?[0-9]{10,11}$/.test(value)) {
+      setErrors((prev) => ({ ...prev, phone: "Please enter a valid phone number (10-11 digits)." }));
     } else {
-      setFormData((prev) => ({ ...prev, phone: value }));
-      if (!value) {
-        setErrors((prev) => ({ ...prev, phone: "Phone number is required." }));
-      } else if (!/^\+?[0-9]{10,11}$/.test(value)) {
-        setErrors((prev) => ({ ...prev, phone: "Please enter a valid phone number (10-11 digits)." }));
-      } else {
-        setErrors((prev) => ({ ...prev, phone: "" }));
-      }
+      setErrors((prev) => ({ ...prev, phone: "" }));
     }
   };
 
@@ -205,7 +201,6 @@ function AddAppointment() {
     setSelectedDate(dateStr);
     setSelectedSlot("");
     setShowForm(false);
-    setShowConfirmation(false);
     setBookingMessage("");
     setIsDateBlocked(false);
     setBlockReason("");
@@ -268,7 +263,7 @@ function AddAppointment() {
       const now = new Date();
       const isToday = isSameDay(selectedDateObj, now);
       const availableSlots = storedSlots.filter((slot) => {
-        if (!isToday) return true; // For future dates, include all slots
+        if (!isToday) return true;
         const [time, period] = slot.split(" ");
         const [slotHour, slotMinute] = time.split(":").map(Number);
         let slotHour24 = period === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
@@ -290,7 +285,7 @@ function AddAppointment() {
       if (sortedSlots.length === 0 && !isDateBlocked && !isSunday && !locationMismatch) {
         setBookingMessage(`All slots are booked for this day at ${selectedLocation}. Please select another date or location.`);
       } else if (sortedSlots.length > 0) {
-        setBookingMessage(""); // Clear message if slots are available
+        setBookingMessage("");
       }
     } catch (error) {
       console.error("Error fetching time slots:", error.message);
@@ -328,38 +323,10 @@ function AddAppointment() {
       fetchTimeSlots(selectedDate, selectedDayName);
     } else {
       setSelectedSlot(slot);
-      setShowConfirmation(true);
+      setShowForm(true);
       setBookingMessage("");
     }
     setIsLoading(false);
-  };
-
-  const handleConfirmation = (e, value) => {
-    e.preventDefault();
-    setBookingFor(value);
-    if (value === "self") {
-      setShowForm(true);
-      setShowConfirmation(false);
-      setOtherPatientData({
-        name: "",
-        email: "",
-        phone: "",
-        dob: "",
-      });
-      setOtherPatientErrors({});
-    } else {
-      setShowForm(true);
-    }
-  };
-
-  const handleOtherPatientSubmit = () => {
-    const hasErrors = Object.values(otherPatientErrors).some((error) => error !== "");
-    if (hasErrors || !otherPatientData.name || !otherPatientData.phone || !otherPatientData.dob) {
-      setBookingMessage("Please correct the errors in the form before submitting.");
-      return;
-    }
-    setShowForm(false);
-    setShowConfirmation(false);
   };
 
   const handleCancel = () => {
@@ -368,21 +335,12 @@ function AddAppointment() {
     setSelectedDayName("");
     setSelectedSlot("");
     setShowForm(false);
-    setShowConfirmation(false);
     setBookingMessage("");
     setTimeSlots([]);
     setDaySchedule(null);
     setIsDateBlocked(false);
     setBlockReason("");
     setLocationMismatch(false);
-    setBookingFor("self");
-    setOtherPatientData({
-      name: "",
-      email: "",
-      phone: "",
-      dob: "",
-    });
-    setOtherPatientErrors({});
     setFormData({
       name: "",
       email: "",
@@ -406,7 +364,17 @@ function AddAppointment() {
     else if (!/^\+?[0-9]{10,11}$/.test(formData.phone)) newErrors.phone = "Please enter a valid phone number (10-11 digits).";
     if (!formData.dob) newErrors.dob = "Date of birth is required.";
     if (!formData.pid) newErrors.pid = "Patient ID is required.";
-    if (!formData.reasonForVisit) newErrors.reasonForVisit = "Reason for visit is required.";
+    if (!formData.age) newErrors.age = "Age is required.";
+    else if (!/^\d+$/.test(formData.age) || formData.age < 0 || formData.age > 120) newErrors.age = "Please enter a valid age (0-120).";
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      newErrors.email = "Please enter a valid email address.";
+    }
+    if (formData.reasonForVisit && formData.reasonForVisit.length > 100) {
+      newErrors.reasonForVisit = "Purpose of visit must be 100 characters or less.";
+    }
+    if (formData.medicalHistoryMessage && formData.medicalHistoryMessage.length > 200) {
+      newErrors.medicalHistoryMessage = "Medical history summary must be 200 characters or less.";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -422,7 +390,6 @@ function AddAppointment() {
       const isStillAvailable = await checkSlotAvailability(selectedDate, selectedSlot);
       if (!isStillAvailable) {
         setShowForm(false);
-        setShowConfirmation(false);
         setSelectedSlot("");
         fetchTimeSlots(selectedDate, selectedDayName);
         return;
@@ -438,12 +405,12 @@ function AddAppointment() {
         pid: formData.pid,
         phone: formData.phone,
         dob: formData.dob,
+        age: formData.age,
         reasonForVisit: formData.reasonForVisit,
         appointmentType: formData.appointmentType,
         medicalHistory: formData.medicalHistory ? formData.medicalHistory.name : "",
         medicalHistoryMessage: formData.medicalHistoryMessage,
         bookedBy: "anonymous",
-        bookedFor: bookingFor,
         status: "pending",
         createdAt: new Date().toISOString(),
       });
@@ -482,15 +449,11 @@ function AddAppointment() {
 
       setShowSuccess(true);
       setShowForm(false);
-      setShowConfirmation(false);
       setTimeout(() => {
         setShowSuccess(false);
         setSelectedDate("");
         setSelectedDayName("");
         setSelectedSlot("");
-        setBookingFor("self");
-        setOtherPatientData({ name: "", email: "", phone: "", dob: "" });
-        setOtherPatientErrors({});
         setFormData({
           name: "",
           email: "",
@@ -598,9 +561,7 @@ function AddAppointment() {
   useEffect(() => {
     const fetchBookedDates = async () => {
       try {
-        const snapshot = await
-
-        getDocs(collection(db, "appointments/data/bookings"));
+        const snapshot = await getDocs(collection(db, "appointments/data/bookings"));
         const counts = {};
         snapshot.forEach((doc) => {
           const { date, location } = doc.data();
@@ -641,146 +602,118 @@ function AddAppointment() {
   }, []);
 
   return (
-    <>
-      <section
-        className="min-h-[calc(100vh-200px)] flex items-center justify-center p-4 sm:p-6"
-        style={{ backgroundColor: currentTheme.background, borderColor: currentTheme.border, borderWidth: "1px" }}
-      >
-        <div className="w-full max-w-2xl">
-          <Card title="Book Your Appointment">
-            {showSuccess && (
-              <p className="mb-4 p-3 rounded-lg bg-green-100 text-green-800 text-sm sm:text-base text-center">
-                Appointment booked successfully! A confirmation has been sent.
-              </p>
-            )}
+    <section
+      className="min-h-[calc(100vh-200px)] flex items-center justify-center p-4 sm:p-6"
+      style={{ backgroundColor: currentTheme.background, borderColor: currentTheme.border, borderWidth: "1px" }}
+    >
+      <div className="w-full max-w-2xl">
+        <Card title="Book Your Appointment">
+          {showSuccess && (
+            <p className="mb-4 p-3 rounded-lg bg-green-100 text-green-800 text-sm sm:text-base text-center">
+              Appointment booked successfully! A confirmation has been sent.
+            </p>
+          )}
 
-            {bookingMessage && (
-              <p className="mb-4 p-3 rounded-lg bg-red-100 text-red-800 text-sm sm:text-base text-center">
-                {bookingMessage}
-              </p>
-            )}
+          {bookingMessage && (
+            <p className="mb-4 p-3 rounded-lg bg-red-100 text-red-800 text-sm sm:text-base text-center">
+              {bookingMessage}
+            </p>
+          )}
 
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <div className="w-full sm:w-1/2 flex items-center">
-                <label htmlFor="location" className="text-sm sm:text-base font-medium mr-2 whitespace-nowrap" style={{ color: currentTheme.text.primary }}>
-                  Select Location<span className="text-red-500 ml-1">*</span>
-                </label>
-                <CustomSelect
-                  id="location-select"
-                  value={selectedLocation}
-                  onChange={handleLocationChange}
-                  options={[{ value: "", label: "Select your location", disabled: true }, ...locations.map((loc) => ({ value: loc.name, label: loc.name }))]}
-                  required
-                  className="w-full p-2 rounded-md border text-sm sm:text-base"
-                  style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
-                />
-              </div>
-              <div className="w-full sm:w-1/2 flex items-center">
-                <label htmlFor="date-input" className="text-sm sm:text-base font-medium mr-2 whitespace-nowrap" style={{ color: currentTheme.text.primary }}>
-                  Select Date<span className="text-red-500 ml-1">*</span>
-                </label>
-                <DatePicker
-                  selected={selectedDate ? new Date(selectedDate) : null}
-                  onChange={handleDateChange}
-                  minDate={new Date(today)}
-                  maxDate={new Date(new Date().setFullYear(new Date().getFullYear() + 1))}
-                  dayClassName={(date) =>
-                    isDateAvailable(date) && isValid(date) ? "bg-green-100 text-green-800 font-semibold" : isDateUnavailable(format(date, "yyyy-MM-dd")) ? "cursor-not-allowed text-gray-400" : ""
-                  }
-                  filterDate={filterUnavailableDates}
-                  required
-                  className="w-full p-2 rounded-md border text-sm sm:text-base"
-                  style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
-                  disabled={!selectedLocation || !hasAvailableDates}
-                  placeholderText="Select Date"
-                  showPopperArrow={false}
-                  dateFormat="dd-MM-yyyy"
-                  onKeyDown={(e) => e.preventDefault()}
-                />
-              </div>
+          <div className="flex flex-col sm:flex-row gap-4 mb-6 items-center">
+            <div className="w-full sm:w-1/2 flex items-center">
+              <label htmlFor="location-select" className="text-sm sm:text-base font-medium mr-2 whitespace-nowrap" style={{ color: currentTheme.text.primary }}>
+                Select Location<span className="text-red-500 ml-1">*</span>
+              </label>
+              <CustomSelect
+                id="location-select"
+                value={selectedLocation}
+                onChange={handleLocationChange}
+                options={[{ value: "", label: "Select your location", disabled: true }, ...locations.map((loc) => ({ value: loc.name, label: loc.name }))]}
+                required
+                className="w-full p-2 rounded-md border text-sm sm:text-base"
+                style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
+              />
             </div>
+            <div className="w-full sm:w-1/2 flex items-center">
+              <label htmlFor="date-input" className="text-sm sm:text-base font-medium mr-2 whitespace-nowrap" style={{ color: currentTheme.text.primary }}>
+                Select Date<span className="text-red-500 ml-1">*</span>
+              </label>
+              <DatePicker
+                id="date-input"
+                selected={selectedDate ? new Date(selectedDate) : null}
+                onChange={handleDateChange}
+                minDate={new Date(today)}
+                maxDate={new Date(new Date().setFullYear(new Date().getFullYear() + 1))}
+                dayClassName={(date) =>
+                  isDateAvailable(date) && isValid(date) ? "bg-green-100 text-green-800 font-semibold" : isDateUnavailable(format(date, "yyyy-MM-dd")) ? "cursor-not-allowed text-gray-400" : ""
+                }
+                filterDate={filterUnavailableDates}
+                required
+                className="w-full p-2 rounded-md border text-sm sm:text-base"
+                style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
+                disabled={!selectedLocation || !hasAvailableDates}
+                placeholderText="Select Date"
+                showPopperArrow={false}
+                dateFormat="dd-MM-yyyy"
+                onKeyDown={(e) => e.preventDefault()}
+              />
+            </div>
+          </div>
 
-            {selectedDate && selectedDayName && !isLoading && (
-              <p className="text-sm sm:text-base font-medium text-center mb-6" style={{ color: currentTheme.text.primary }}>
-                Selected Date: {format(new Date(selectedDate), "MMMM d, yyyy")} at {selectedLocation} | Day: {selectedDayName}
-              </p>
-            )}
+          {selectedDate && selectedDayName && !isLoading && (
+            <p className="text-sm sm:text-base font-medium text-center mb-6" style={{ color: currentTheme.text.primary }}>
+              Selected Date: {format(new Date(selectedDate), "MMMM d, yyyy")} at {selectedLocation} | Day: {selectedDayName}
+            </p>
+          )}
 
-            {isLoading && (
-              <span className="animate-spin rounded-full h-8 w-8 border-b-2 block mx-auto py-4" style={{ borderColor: currentTheme.primary }}></span>
-            )}
+          {isLoading && (
+            <span className="animate-spin rounded-full h-8 w-8 border-b-2 block mx-auto py-4" style={{ borderColor: currentTheme.primary }}></span>
+          )}
 
-            {selectedDate && timeSlots.length > 0 && !isLoading && !locationMismatch && (
-              <>
-                <label className="block text-sm sm:text-base font-medium mb-2 text-center" style={{ color: currentTheme.text.primary }}>
-                  Available Time Slots
-                </label>
-                <div className="flex flex-wrap justify-center gap-4">
-                  {timeSlots.map((slot) => {
-                    const [time, period] = slot.split(" ");
-                    const isBooked = bookedSlots[`${selectedDate}|${selectedLocation}`]?.includes(slot);
-                    return (
-                      <CustomButton
-                        key={slot}
-                        variant={selectedSlot === slot ? "primary" : isBooked ? "disabled" : "secondary"}
-                        onClick={() => !isBooked && handleSlotSelect(slot)}
-                        className={`w-28 sm:w-32 h-10 text-xs sm:text-sm py-2 px-3 flex items-center justify-center ${isBooked ? "cursor-not-allowed bg-red-500 text-white opacity-75 hover:bg-red-600" : ""}`}
-                        disabled={isBooked}
-                      >
-                        <Clock className="w-4 h-4" />
-                        <span>{time}</span>
-                        <span>{period}</span>
-                      </CustomButton>
-                    );
-                  })}
-                </div>
-              </>
-            )}
+          {selectedDate && timeSlots.length > 0 && !isLoading && !locationMismatch && (
+            <>
+              <label className="block text-sm sm:text-base font-medium mb-2 text-center" style={{ color: currentTheme.text.primary }}>
+                Available Time Slots
+              </label>
+              <div className="flex flex-wrap justify-center gap-4">
+                {timeSlots.map((slot) => {
+                  const [time, period] = slot.split(" ");
+                  const isBooked = bookedSlots[`${selectedDate}|${selectedLocation}`]?.includes(slot);
+                  return (
+                    <CustomButton
+                      key={slot}
+                      variant={selectedSlot === slot ? "primary" : isBooked ? "disabled" : "secondary"}
+                      onClick={() => !isBooked && handleSlotSelect(slot)}
+                      className={`w-28 sm:w-32 h-10 text-xs sm:text-sm py-2 px-3 flex items-center justify-center ${isBooked ? "cursor-not-allowed bg-red-500 text-white opacity-75 hover:bg-red-600" : ""}`}
+                      disabled={isBooked}
+                    >
+                      <Clock className="w-4 h-4 mr-1" />
+                      <span>{time}</span>
+                      <span>{period}</span>
+                    </CustomButton>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
-            {showConfirmation && (
-              <section className="p-6 rounded-lg shadow-md border w-full mt-6" style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}>
-                <h3 className="text-lg sm:text-xl font-semibold mb-4 text-center" style={{ color: currentTheme.text.primary }}>
-                  Booking Confirmation
-                </h3>
-                <p className="text-sm sm:text-base mb-4 text-center" style={{ color: currentTheme.text.primary }}>
-                  Are you booking this appointment for yourself or someone else?
-                </p>
-                <div className="flex justify-center gap-4">
-                  <CustomButton
-                    variant={bookingFor === "self" ? "primary" : "secondary"}
-                    onClick={(e) => handleConfirmation(e, "self")}
-                    className="w-max py-2 px-4 mr-4"
-                  >
-                    For Myself
-                  </CustomButton>
-                  <CustomButton
-                    variant={bookingFor === "other" ? "primary" : "secondary"}
-                    onClick={(e) => handleConfirmation(e, "other")}
-                    className="w-max py-2 px-4"
-                  >
-                    For Someone Else
-                  </CustomButton>
-                </div>
-              </section>
-            )}
-
-            {showForm && bookingFor === "self" && <SelfBookingForm formData={formData} setFormData={setFormData} errors={errors} setErrors={setErrors} handleSubmit={handleSubmit} handleCancel={handleCancel} isLoading={isLoading} />}
-            {showForm && bookingFor === "other" && (
-              <OtherPatientForm
-                otherPatientData={otherPatientData}
-                setOtherPatientData={setOtherPatientData}
-                otherPatientErrors={otherPatientErrors}
-                setOtherPatientErrors={setOtherPatientErrors}
+          {showForm && (
+            <form onSubmit={handleSubmit}>
+              <SelfBookingForm
+                formData={formData}
                 setFormData={setFormData}
-                handleOtherPatientSubmit={handleOtherPatientSubmit}
+                errors={errors}
+                setErrors={setErrors}
+                handleSubmit={handleSubmit}
                 handleCancel={handleCancel}
                 isLoading={isLoading}
               />
-            )}
-          </Card>
-        </div>
-      </section>
-    </>
+            </form>
+          )}
+        </Card>
+      </div>
+    </section>
   );
 }
 

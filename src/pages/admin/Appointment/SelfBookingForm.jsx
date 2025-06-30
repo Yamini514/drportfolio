@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import CustomInput from '../../../components/CustomInput';
 import CustomSelect from '../../../components/CustomSelect';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+import CustomButton from '../../../components/CustomButton';
 import { useTheme } from '../../../context/ThemeContext';
 
 const SelfBookingForm = ({
@@ -11,7 +10,6 @@ const SelfBookingForm = ({
     email: '',
     pid: '',
     phone: '',
-    dob: '',
     age: '',
     reasonForVisit: '',
     appointmentType: 'Consultation',
@@ -34,12 +32,11 @@ const SelfBookingForm = ({
     },
   };
 
-  // Event Handlers
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'reasonForVisit' ? value.trimStart() : value,
+      [name]: name === 'reasonForVisit' || name === 'medicalHistoryMessage' ? value.trimStart() : value,
     }));
 
     if (name === 'name') {
@@ -60,12 +57,48 @@ const SelfBookingForm = ({
       }
     }
 
+    if (name === 'pid') {
+      if (!value) {
+        setErrors((prev) => ({ ...prev, pid: 'Patient ID is required' }));
+      } else {
+        setErrors((prev) => ({ ...prev, pid: '' }));
+      }
+    }
+
+    if (name === 'phone') {
+      const phoneValue = value.replace(/[^0-9+]/g, '');
+      if (phoneValue.length > 12) {
+        setErrors((prev) => ({ ...prev, phone: 'Phone number cannot exceed 12 digits' }));
+      } else if (!phoneValue) {
+        setErrors((prev) => ({ ...prev, phone: 'Phone is required' }));
+      } else if (!/^\+?[0-9]{10,12}$/.test(phoneValue)) {
+        setErrors((prev) => ({ ...prev, phone: 'Please enter a valid phone number (10-12 digits)' }));
+      } else {
+        setErrors((prev) => ({ ...prev, phone: '' }));
+      }
+    }
+
+    if (name === 'age') {
+      if (!value) {
+        setErrors((prev) => ({ ...prev, age: 'Age is required' }));
+      } else if (!/^\d+$/.test(value) || value < 0 || value > 120) {
+        setErrors((prev) => ({ ...prev, age: 'Please enter a valid age (0-120)' }));
+      } else {
+        setErrors((prev) => ({ ...prev, age: '' }));
+      }
+    }
+
+    if (name === 'reasonForVisit') {
+      if (value.length > 100) {
+        setErrors((prev) => ({ ...prev, reasonForVisit: 'Purpose of visit must be 100 characters or less' }));
+      } else {
+        setErrors((prev) => ({ ...prev, reasonForVisit: '' }));
+      }
+    }
+
     if (name === 'medicalHistoryMessage') {
       if (value.length > 200) {
-        setErrors((prev) => ({
-          ...prev,
-          medicalHistoryMessage: 'Summary must be 200 characters or less',
-        }));
+        setErrors((prev) => ({ ...prev, medicalHistoryMessage: 'Summary must be 200 characters or less' }));
       } else {
         setErrors((prev) => ({ ...prev, medicalHistoryMessage: '' }));
       }
@@ -81,10 +114,7 @@ const SelfBookingForm = ({
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       ];
       if (!validTypes.includes(file.type)) {
-        setErrors((prev) => ({
-          ...prev,
-          medicalHistory: 'Please upload a PDF or DOC/DOCX file',
-        }));
+        setErrors((prev) => ({ ...prev, medicalHistory: 'Please upload a PDF or DOC/DOCX file' }));
         setFormData((prev) => ({ ...prev, medicalHistory: null }));
       } else if (file.size > 5 * 1024 * 1024) {
         setErrors((prev) => ({ ...prev, medicalHistory: 'File size must be less than 5MB' }));
@@ -99,41 +129,6 @@ const SelfBookingForm = ({
     }
   };
 
-  const handleDobChange = (date) => {
-    const formattedDate = date ? date.toISOString().split('T')[0] : '';
-    setFormData((prev) => ({ ...prev, dob: formattedDate }));
-    if (!formattedDate) {
-      setErrors((prev) => ({ ...prev, dob: 'Date of Birth is required' }));
-    } else {
-      const dobDate = new Date(formattedDate);
-      const today = new Date();
-      if (isNaN(dobDate.getTime())) {
-        setErrors((prev) => ({ ...prev, dob: 'Please enter a valid date' }));
-      } else if (dobDate >= today) {
-        setErrors((prev) => ({ ...prev, dob: 'Date of Birth cannot be in the future' }));
-      } else {
-        setErrors((prev) => ({ ...prev, dob: '' }));
-      }
-    }
-  };
-
-  // Effects
-  useEffect(() => {
-    if (formData.dob) {
-      const birthDate = new Date(formData.dob);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-      setFormData((prev) => ({ ...prev, age: age >= 0 ? age : '' }));
-    } else {
-      setFormData((prev) => ({ ...prev, age: '' }));
-    }
-  }, [formData.dob, setFormData]);
-
-  // Render
   return (
     <div className="space-y-6 mt-8">
       <div
@@ -144,218 +139,180 @@ const SelfBookingForm = ({
           Personal Information
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div className="flex flex-row items-center gap-2">
+          <div className="flex flex-col gap-2">
             <label
-              className="text-sm font-medium whitespace-nowrap"
+              htmlFor="name"
+              className="text-sm font-medium"
               style={{ color: currentTheme.text.primary }}
             >
               Name<span className="text-red-500 ml-1">*</span>
             </label>
-            <div className="flex-1">
-              <CustomInput
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                required
-                maxLength={25}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.name ? 'rgb(239, 68, 68)' : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
-            </div>
+            <CustomInput
+              id="name"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              required
+              maxLength={25}
+              className="w-full p-2 rounded-md border"
+              style={{
+                borderColor: errors.name ? 'rgb(239, 68, 68)' : currentTheme.border,
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.text.primary,
+              }}
+            />
+            {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
           </div>
-          <div className="flex flex-row items-center gap-2">
+          <div className="flex flex-col gap-2">
             <label
-              className="text-sm font-medium whitespace-nowrap"
+              htmlFor="email"
+              className="text-sm font-medium"
               style={{ color: currentTheme.text.primary }}
             >
               Email
             </label>
-            <div className="flex-1">
-              <CustomInput
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.email ? 'rgb(239, 68, 68)' : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-            </div>
+            <CustomInput
+              id="email"
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              className="w-full p-2 rounded-md border"
+              style={{
+                borderColor: errors.email ? 'rgb(239, 68, 68)' : currentTheme.border,
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.text.primary,
+              }}
+            />
+            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
           </div>
-          <div className="flex flex-row items-center gap-2">
+          <div className="flex flex-col gap-2">
             <label
-              className="text-sm font-medium whitespace-nowrap"
+              htmlFor="pid"
+              className="text-sm font-medium"
               style={{ color: currentTheme.text.primary }}
             >
               PID<span className="text-red-500 ml-1">*</span>
             </label>
-            <div className="flex-1">
-              <CustomInput
-                name="pid"
-                value={formData.pid} // Use value instead of defaultValue for controlled input
-                readOnly
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.pid ? 'rgb(239, 68, 68)' : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              {errors.pid && <p className="text-red-500 text-xs mt-1">{errors.pid}</p>}
-            </div>
+            <CustomInput
+              id="pid"
+              name="pid"
+              value={formData.pid}
+              readOnly
+              className="w-full p-2 rounded-md border"
+              style={{
+                borderColor: errors.pid ? 'rgb(239, 68, 68)' : currentTheme.border,
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.text.primary,
+              }}
+            />
+            {errors.pid && <p className="text-red-500 text-xs mt-1">{errors.pid}</p>}
           </div>
         </div>
-        <div className="grid sm:grid-cols-3 gap-6 mt-6">
-          <div className="flex flex-row items-center gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6">
+          <div className="flex flex-col gap-2">
             <label
-              className="text-sm font-medium whitespace-nowrap"
+              htmlFor="phone"
+              className="text-sm font-medium"
               style={{ color: currentTheme.text.primary }}
             >
               Phone<span className="text-red-500 ml-1">*</span>
             </label>
-            <div className="flex-1">
-              <CustomInput
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9+]/g, '');
-                  if (value.length <= 12) {
-                    setFormData((prev) => ({ ...prev, phone: value }));
-                  }
-                  if (!value) {
-                    setErrors((prev) => ({ ...prev, phone: 'Phone is required' }));
-                  } else if (!/^\+?[0-9]{10,12}$/.test(value)) {
-                    setErrors((prev) => ({
-                      ...prev,
-                      phone: 'Please enter a valid phone number (10-12 digits)',
-                    }));
-                  } else {
-                    setErrors((prev) => ({ ...prev, phone: '' }));
-                  }
-                }}
-                required
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.phone ? 'rgb(239, 68, 68)' : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
-            </div>
+            <CustomInput
+              id="phone"
+              type="tel"
+              name="phone"
+              value={formData.phone}
+              onChange={handleInputChange}
+              required
+              className="w-full p-2 rounded-md border"
+              style={{
+                borderColor: errors.phone ? 'rgb(239, 68, 68)' : currentTheme.border,
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.text.primary,
+              }}
+            />
+            {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
           </div>
-          <div className="flex flex-row items-center gap-2">
+          <div className="flex flex-col gap-2">
             <label
-              className="text-sm font-medium whitespace-nowrap"
+              htmlFor="age"
+              className="text-sm font-medium"
               style={{ color: currentTheme.text.primary }}
             >
-              Date of Birth<span className="text-red-500 ml-1">*</span>
+              Age<span className="text-red-500 ml-1">*</span>
             </label>
-            <div className="flex-1">
-              <DatePicker
-                selected={formData.dob ? new Date(formData.dob) : null}
-                onChange={handleDobChange}
-                maxDate={new Date()}
-                showYearDropdown
-                showMonthDropdown
-                dropdownMode="select"
-                placeholderText="Select Date of Birth"
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.dob ? 'rgb(239, 68, 68)' : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-                required
-                dateFormat="dd-MM-yyyy"
-                onKeyDown={(e) => e.preventDefault()}
-              />
-              {errors.dob && <p className="text-red-500 text-xs mt-1">{errors.dob}</p>}
-            </div>
-          </div>
-          <div className="flex flex-row items-center gap-2">
-            <label
-              className="text-sm font-medium whitespace-nowrap"
-              style={{ color: currentTheme.text.primary }}
-            >
-              Age
-            </label>
-            <div className="flex-1">
-              <CustomInput
-                name="age"
-                value={formData.age}
-                readOnly
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-            </div>
+            <CustomInput
+              id="age"
+              type="number"
+              name="age"
+              value={formData.age}
+              onChange={handleInputChange}
+              required
+              min="0"
+              max="120"
+              className="w-full p-2 rounded-md border"
+              style={{
+                borderColor: errors.age ? 'rgb(239, 68, 68)' : currentTheme.border,
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.text.primary,
+              }}
+            />
+            {errors.age && <p className="text-red-500 text-xs mt-1">{errors.age}</p>}
           </div>
         </div>
-        <div className="grid sm:grid-cols-2 gap-6 mt-6">
-          <div className="flex flex-row items-center gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6">
+          <div className="flex flex-col gap-2">
             <label
-              className="text-sm font-medium whitespace-nowrap"
+              htmlFor="appointmentType"
+              className="text-sm font-medium"
               style={{ color: currentTheme.text.primary }}
             >
               Appointment Type
             </label>
-            <div className="flex-1">
-              <CustomSelect
-                name="appointmentType"
-                value={formData.appointmentType}
-                onChange={handleInputChange}
-                options={[
-                  { value: 'Consultation', label: 'Consultation' },
-                  { value: 'Follow-up', label: 'Follow-up' },
-                  { value: 'Second Opinion', label: 'Second Opinion' },
-                ]}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-            </div>
+            <CustomSelect
+              id="appointmentType"
+              name="appointmentType"
+              value={formData.appointmentType}
+              onChange={handleInputChange}
+              options={[
+                { value: 'Consultation', label: 'Consultation' },
+                { value: 'Follow-up', label: 'Follow-up' },
+                { value: 'Second Opinion', label: 'Second Opinion' },
+              ]}
+              className="w-full p-2 rounded-md border"
+              style={{
+                borderColor: currentTheme.border,
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.text.primary,
+              }}
+            />
           </div>
-          <div className="flex flex-row items-center gap-2">
+          <div className="flex flex-col gap-2">
             <label
-              className="text-sm font-medium whitespace-nowrap"
+              htmlFor="reasonForVisit"
+              className="text-sm font-medium"
               style={{ color: currentTheme.text.primary }}
             >
               Purpose of Visit
             </label>
-            <div className="flex-1">
-              <CustomInput
-                name="reasonForVisit"
-                value={formData.reasonForVisit}
-                onChange={handleInputChange}
-                maxLength={100}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Characters: {formData.reasonForVisit?.trim().length || 0}/100
-              </p>
-            </div>
+            <CustomInput
+              id="reasonForVisit"
+              name="reasonForVisit"
+              value={formData.reasonForVisit}
+              onChange={handleInputChange}
+              maxLength={100}
+              className="w-full p-2 rounded-md border"
+              style={{
+                borderColor: errors.reasonForVisit ? 'rgb(239, 68, 68)' : currentTheme.border,
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.text.primary,
+              }}
+            />
+            {errors.reasonForVisit && <p className="text-red-500 text-xs mt-1">{errors.reasonForVisit}</p>}
+            <p className="text-sm text-gray-500 mt-1">
+              Characters: {formData.reasonForVisit?.trim().length || 0}/100
+            </p>
           </div>
         </div>
       </div>
@@ -367,85 +324,86 @@ const SelfBookingForm = ({
         <h3 className="text-lg font-semibold mb-4" style={{ color: currentTheme.text.primary }}>
           Medical History
         </h3>
-        <div className="grid sm:grid-cols-1 gap-6">
-          <div className="flex flex-row items-center gap-2">
+        <div className="grid grid-cols-1 gap-6">
+          <div className="flex flex-col gap-2">
             <label
-              className="text-sm font-medium whitespace-nowrap"
+              htmlFor="medicalHistoryMessage"
+              className="text-sm font-medium"
               style={{ color: currentTheme.text.primary }}
             >
               Medical History Summary
             </label>
-            <div className="flex-1">
-              <textarea
-                name="medicalHistoryMessage"
-                value={formData.medicalHistoryMessage}
-                onChange={handleInputChange}
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.medicalHistoryMessage ? 'rgb(239, 68, 68)' : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-                rows="3"
-                maxLength="200"
-              />
-              {errors.medicalHistoryMessage && (
-                <p className="text-red-500 text-xs mt-1">{errors.medicalHistoryMessage}</p>
-              )}
-              <p className="text-sm text-gray-500 mt-1">
-                Characters: {formData.medicalHistoryMessage?.length || 0}/200
-              </p>
-            </div>
+            <textarea
+              id="medicalHistoryMessage"
+              name="medicalHistoryMessage"
+              value={formData.medicalHistoryMessage}
+              onChange={handleInputChange}
+              className="w-full p-2 rounded-md border"
+              style={{
+                borderColor: errors.medicalHistoryMessage ? 'rgb(239, 68, 68)' : currentTheme.border,
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.text.primary,
+              }}
+              rows="3"
+              maxLength="200"
+            />
+            {errors.medicalHistoryMessage && (
+              <p className="text-red-500 text-xs mt-1">{errors.medicalHistoryMessage}</p>
+            )}
+            <p className="text-sm text-gray-500 mt-1">
+              Characters: {formData.medicalHistoryMessage?.length || 0}/200
+            </p>
           </div>
-          <div className="flex flex-row items-center gap-2">
+          <div className="flex flex-col gap-2">
             <label
-              className="text-sm font-medium whitespace-nowrap"
+              htmlFor="medicalHistory"
+              className="text-sm font-medium"
               style={{ color: currentTheme.text.primary }}
             >
               Medical History (Optional)
             </label>
-            <div className="flex-1">
-              <input
-                type="file"
-                name="medicalHistory"
-                onChange={handleFileChange}
-                accept=".pdf,.doc,.docx"
-                className="w-full p-2 rounded-md border"
-                style={{
-                  borderColor: errors.medicalHistory ? 'rgb(239, 68, 68)' : currentTheme.border,
-                  backgroundColor: currentTheme.inputBackground,
-                  color: currentTheme.text.primary,
-                }}
-              />
-              {errors.medicalHistory && (
-                <p className="text-red-500 text-xs mt-1">{errors.medicalHistory}</p>
-              )}
-              {formData.medicalHistory && (
-                <p className="text-sm text-gray-500 mt-1">
-                  Selected file: {formData.medicalHistory.name}
-                </p>
-              )}
-            </div>
+            <input
+              id="medicalHistory"
+              type="file"
+              name="medicalHistory"
+              onChange={handleFileChange}
+              accept=".pdf,.doc,.docx"
+              className="w-full p-2 rounded-md border"
+              style={{
+                borderColor: errors.medicalHistory ? 'rgb(239, 68, 68)' : currentTheme.border,
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.text.primary,
+              }}
+            />
+            {errors.medicalHistory && (
+              <p className="text-red-500 text-xs mt-1">{errors.medicalHistory}</p>
+            )}
+            {formData.medicalHistory && (
+              <p className="text-sm text-gray-500 mt-1">
+                Selected file: {formData.medicalHistory.name}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
       <div className="flex justify-center gap-4">
-        <button
+        <CustomButton
           type="submit"
-          className="w-max py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400"
+          variant="primary"
           disabled={isLoading}
-          onClick={handleSubmit}
+          className="w-max py-2 px-4"
         >
           {isLoading ? 'Processing...' : 'Book Appointment'}
-        </button>
-        <button
+        </CustomButton>
+        <CustomButton
           type="button"
-          className="w-max py-2 px-4 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
+          variant="secondary"
           onClick={handleCancel}
+          className="w-max py-2 px-4"
         >
           Cancel
-        </button>
+        </CustomButton>
       </div>
     </div>
   );

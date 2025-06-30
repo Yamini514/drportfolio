@@ -214,7 +214,8 @@ function ContactMe() {
   };
 
   return (
-    <div id="contactme" className="px-5 pb-5 md:px-15 md:pb-5 lg:px-20" style={{ backgroundColor: currentTheme.background }}>
+    <section id="contactme">
+    <div className="px-5 md:px-15 pb-12 mt-5 md:pb-10 lg:px-20 p-8" style={{ backgroundColor: currentTheme.background }}>
       <div className="container mx-auto">
         {showSuccess && (
           <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-md shadow-lg z-50 animate-fade-in-out">
@@ -404,6 +405,7 @@ function ContactMe() {
         </div>
       )}
     </div>
+  </section>
   );
 }
 
