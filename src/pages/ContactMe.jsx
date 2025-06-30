@@ -31,9 +31,7 @@ function ContactMe() {
 
   // Scroll to top if directed by location state
   useEffect(() => {
-    if (location.state?.scrollToTop) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [location]);
 
   // Phone validation: 10 digits starting with 6-9
