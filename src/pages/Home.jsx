@@ -18,7 +18,7 @@ function Home() {
         <Services id="services"/>
         <Testimonials id="review"/> {/* Ensure id matches sectionId in navLinks */}
         <Gallery id="gallery"/>
-        <Video id="video"/>
+        <Video />
         <ContactMe id="contact"/>
         <BookAppointment/>
       </div>
