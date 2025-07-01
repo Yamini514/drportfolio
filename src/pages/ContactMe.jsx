@@ -26,7 +26,7 @@ function ContactMe() {
 
   // Initialize EmailJS
   useEffect(() => {
-    emailjs.init('2pSuAO6tF3T-sejH-'); // Ensure this user ID matches your EmailJS account
+    emailjs.init('2pSuAO6tF3T-sejH-');
   }, []);
 
   // Scroll to top if directed by location state
@@ -110,25 +110,6 @@ function ContactMe() {
     }));
   };
 
-  // Send WhatsApp notification via direct link
-  const sendWhatsAppNotification = (phone, templateName, params) => {
-    try {
-      console.log(`Preparing WhatsApp message for ${phone} with template ${templateName}`);
-      let message;
-      if (templateName === 'form_submission_confirmation') {
-        message = `Dear ${params[0].value}, we have received your enquiry. We will contact you soon.`;
-      } else {
-        message = `New enquiry from ${params[0].value}. Email: ${params[1].value}, Phone: ${params[2].value}, Message: ${params[3].value}`;
-      }
-      const whatsappUrl = `https://wa.me/${phone.replace('+', '')}?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank');
-      console.log(`Opened WhatsApp link for ${phone}`);
-    } catch (error) {
-      console.error('Error opening WhatsApp link:', error);
-      throw error;
-    }
-  };
-
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -160,7 +141,7 @@ function ContactMe() {
 
       console.log('Preparing email parameters...');
       const emailParams = {
-        name: formData.fullName, // Match template variable
+        name: formData.fullName,
         email: formData.email,
         phone: formData.phone,
         message: formData.message,
@@ -175,21 +156,6 @@ function ContactMe() {
         emailParams
       );
       console.log('EmailJS sent successfully:', response);
-
-      console.log('Sending WhatsApp to user...');
-      sendWhatsAppNotification(`+91${formData.phone}`, 'form_submission_confirmation', [
-        { name: 'fullName', value: formData.fullName },
-      ]);
-      console.log('WhatsApp to user sent');
-
-      console.log('Sending WhatsApp to doctor...');
-      sendWhatsAppNotification('+918688423659', 'new_enquiry_notification', [
-        { name: 'fullName', value: formData.fullName },
-        { name: 'email', value: formData.email },
-        { name: 'phone', value: `+91${formData.phone}` },
-        { name: 'message', value: formData.message },
-      ]);
-      console.log('WhatsApp to doctor sent');
 
       setShowSuccess(true);
       setTimeout(() => {
@@ -374,7 +340,7 @@ function ContactMe() {
                       href="mailto:laxminadh.sivaraju@gmail.com"
                       className="flex items-center gap-2 hover:text-primary transition-colors"
                     >
-                      <FaEnvelope className="text-lg" style={{ color: currentTheme.text.primary }} />
+                      <FaEnvelope className="textLg" style={{ color: currentTheme.text.primary }} />
                       <span>laxminadh.sivaraju@gmail.com</span>
                     </a>
                   </p>

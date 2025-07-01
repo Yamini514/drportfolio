@@ -8,6 +8,7 @@ import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmati
 import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useTheme } from '../../../context/ThemeContext';
+import emailjs from '@emailjs/browser';
 
 function AppointmentsContent() {
   const [appointments, setAppointments] = useState([]);
@@ -40,6 +41,11 @@ function AppointmentsContent() {
       return null;
     }
   });
+
+  // Initialize EmailJS
+  useEffect(() => {
+    emailjs.init('2pSuAO6tF3T-sejH-');
+  }, []);
 
   // Format date to DD-MMM-YYYY
   const formatDate = useCallback((dateStr) => {
@@ -91,22 +97,22 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Check if date is blocked
-  const checkIfDateIsBlocked = useCallback(async (dateStr, dayName) => {
+  // Check if date is blocked (aligned with TimingSchedular)
+  const checkIfDateIsBlocked = useCallback(async (dateStr) => {
     try {
       const blockedPeriodsDoc = await getDoc(doc(db, 'settings', 'blockedPeriods'));
       if (blockedPeriodsDoc.exists()) {
         const periods = blockedPeriodsDoc.data().periods || [];
+        const checkDate = new Date(dateStr);
         for (const period of periods) {
-          if (period.type === 'day' && period.day === dayName.toLowerCase()) {
-            const blockDate = new Date(period.startDate);
-            if (blockDate.toDateString() === new Date(dateStr).toDateString()) {
+          const blockStart = new Date(period.startDate);
+          if (period.type === 'day') {
+            if (blockStart.toDateString() === checkDate.toDateString()) {
               return { blocked: true, reason: period.reason || 'This date is blocked.' };
             }
-          } else if (period.type === 'week' || period.type === 'month') {
-            const blockStart = new Date(period.startDate);
+          } else if (period.type === 'period') {
             const blockEnd = new Date(period.endDate);
-            if (new Date(dateStr) >= blockStart && new Date(dateStr) <= blockEnd) {
+            if (checkDate >= blockStart && checkDate <= blockEnd) {
               return { blocked: true, reason: period.reason || 'This period is blocked.' };
             }
           }
@@ -145,7 +151,7 @@ function AppointmentsContent() {
   const sendPhoneNotification = useCallback((appointment, action) => {
     const message = action === 'confirmed'
       ? `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been confirmed.`
-      : `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been deleted and the slot is now available.`;
+      : `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been ${action === 'deleted' ? 'deleted' : 'cancelled'} and the slot is now available.`;
     
     console.log(`Sending SMS to ${appointment.phone || 'unknown phone'}: ${message}`);
     setNotification({
@@ -154,6 +160,50 @@ function AppointmentsContent() {
     });
     setTimeout(() => setNotification(null), 5000);
   }, [formatDate]);
+
+  // Cancel appointment and send email
+  const cancelAppointmentAndSendEmail = useCallback(async (appointment) => {
+    try {
+      if (!appointment.email || appointment.email === 'noreply@gmail.com') {
+        console.warn(`No valid email for appointment ${appointment.id}`);
+        setNotification({
+          message: `Cannot send cancellation email: No valid email address for ${appointment.clientName}.`,
+          type: 'error'
+        });
+        setTimeout(() => setNotification(null), 5000);
+        return;
+      }
+
+      const appointmentRef = doc(db, 'appointments/data/bookings', appointment.id);
+      await updateDoc(appointmentRef, { status: 'cancelled', cancelledAt: new Date().toISOString() });
+
+      // Send email using EmailJS
+      const emailParams = {
+        name: appointment.clientName || 'Unknown',
+        date: formatDate(appointment.date),
+        time: appointment.time,
+        reason: (await checkIfDateIsBlocked(appointment.date)).reason || 'The appointment date has been blocked.',
+        to_email: appointment.email,
+      };
+
+      await emailjs.send('service_l920egs', 'template_iremp8a', emailParams);
+      console.log(`Email sent to ${appointment.email} for cancelled appointment:`, emailParams);
+
+      sendPhoneNotification(appointment, 'cancelled');
+      setNotification({
+        message: `Appointment on ${formatDate(appointment.date)} at ${appointment.time} cancelled and patient notified.`,
+        type: 'success'
+      });
+      setTimeout(() => setNotification(null), 5000);
+    } catch (error) {
+      console.error('Error cancelling appointment or sending email:', error);
+      setNotification({
+        message: `Failed to cancel appointment or send email: ${error.message}`,
+        type: 'error'
+      });
+      setTimeout(() => setNotification(null), 5000);
+    }
+  }, [formatDate, sendPhoneNotification, checkIfDateIsBlocked]);
 
   // Calculate PID data
   const calculatePidData = useCallback((appointmentsList) => {
@@ -226,20 +276,6 @@ function AppointmentsContent() {
             location: data.location || 'Unknown',
           };
         });
-        // Check for duplicate bookings
-        const duplicates = appointmentsList.reduce((acc, app, index, arr) => {
-          if (app.status === 'deleted') return acc;
-          const key = `${app.date}|${app.time}|${app.location}`;
-          if (arr.some((other, i) => i !== index && other.status !== 'deleted' && `${other.date}|${other.time}|${other.location}` === key)) {
-            acc.push(key);
-          }
-          return acc;
-        }, []);
-        if (duplicates.length > 0) {
-          console.warn('Duplicate bookings detected:', duplicates);
-          setNotification({ message: 'Warning: Duplicate bookings detected.', type: 'error' });
-          setTimeout(() => setNotification(null), 5000);
-        }
         setAppointments(calculatePidData(appointmentsList));
       } catch (error) {
         console.error('Error fetching appointments:', error);
@@ -256,7 +292,7 @@ function AppointmentsContent() {
     fetchAppointments();
   }, [calculatePidData]);
 
-  // Real-time listener with blocked date checking
+  // Real-time listener for appointments
   useEffect(() => {
     const appointmentsRef = collection(db, 'appointments/data/bookings');
     const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
@@ -291,13 +327,16 @@ function AppointmentsContent() {
         return;
       }
 
-      // Check for blocked dates and delete schedules
+      // Check for blocked dates and cancel appointments
       const uniqueDates = [...new Set(appointmentsList.map(app => app.date))];
       for (const date of uniqueDates) {
-        const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
-        const { blocked } = await checkIfDateIsBlocked(date, dayName);
+        const { blocked, reason } = await checkIfDateIsBlocked(date);
         if (blocked) {
           await deleteBlockedSchedule(date);
+          const affectedAppointments = appointmentsList.filter(app => app.date === date && app.status !== 'cancelled' && app.status !== 'deleted');
+          for (const appointment of affectedAppointments) {
+            await cancelAppointmentAndSendEmail(appointment);
+          }
         }
       }
 
@@ -326,7 +365,56 @@ function AppointmentsContent() {
     });
 
     return () => unsubscribe();
-  }, [calculatePidData, formatDate, notificationSound, checkIfDateIsBlocked, deleteBlockedSchedule]);
+  }, [calculatePidData, formatDate, notificationSound, checkIfDateIsBlocked, deleteBlockedSchedule, cancelAppointmentAndSendEmail]);
+
+  // Real-time listener for blocked periods
+  useEffect(() => {
+    const blockedPeriodsRef = doc(db, 'settings', 'blockedPeriods');
+    const unsubscribe = onSnapshot(blockedPeriodsRef, async (docSnap) => {
+      if (!docSnap.exists()) return;
+      const periods = docSnap.data().periods || [];
+      const appointmentsRef = collection(db, 'appointments/data/bookings');
+      const q = query(appointmentsRef, where('status', 'not-in', ['cancelled', 'deleted']));
+      const snapshot = await getDocs(q);
+      const appointmentsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        date: doc.data().date,
+        time: doc.data().time,
+        clientName: doc.data().name || 'Unknown',
+        email: doc.data().email || '',
+        location: doc.data().location || 'Unknown',
+        status: doc.data().status || 'pending',
+      }));
+
+      for (const period of periods) {
+        const blockStart = new Date(period.startDate);
+        const blockEnd = period.type === 'day' ? blockStart : new Date(period.endDate);
+        const affectedAppointments = appointmentsList.filter(app => {
+          const appDate = new Date(app.date);
+          return (
+            appDate >= blockStart &&
+            appDate <= blockEnd &&
+            app.status !== 'cancelled' &&
+            app.status !== 'deleted'
+          );
+        });
+
+        for (const appointment of affectedAppointments) {
+          await cancelAppointmentAndSendEmail(appointment);
+          await deleteBlockedSchedule(appointment.date);
+        }
+      }
+    }, (error) => {
+      console.error('Error in blocked periods listener:', error);
+      setNotification({
+        message: `Error monitoring blocked periods: ${error.message}`,
+        type: 'error'
+      });
+      setTimeout(setNotification(null), 5000);
+    });
+
+    return () => unsubscribe();
+  }, [cancelAppointmentAndSendEmail, deleteBlockedSchedule]);
 
   // Handle status update
   const handleStatusUpdate = useCallback(async (appointmentId, newStatus) => {
@@ -374,13 +462,6 @@ function AppointmentsContent() {
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
       await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
   
-      // New: Check if the appointment date is blocked and delete slots if blocked
-      const dayName = new Date(appointment.date).toLocaleDateString('en-US', { weekday: 'long' });
-      const { blocked } = await checkIfDateIsBlocked(appointment.date, dayName);
-      if (blocked) {
-        await deleteBlockedSchedule(appointment.date);
-      }
-  
       const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
       setAppointments(prev => calculatePidData(
         prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: 'deleted' } : app)
@@ -406,12 +487,12 @@ function AppointmentsContent() {
       setNotification({ message: errorMessage, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate, checkIfDateIsBlocked, deleteBlockedSchedule]);
+  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate]);
 
   // Handle bulk delete
   const handleBulkDelete = useCallback(async (ids) => {
     try {
-      const allAppointments = appointments.flatMap(data => data.appointments);
+      const allAppointments = appointments.semiflatMap(data => data.appointments);
       const futureAppointmentIds = ids.filter(id => {
         const app = allAppointments.find(app => app.id === id);
         return app && isFutureAppointment(app);
@@ -463,7 +544,7 @@ function AppointmentsContent() {
     const patientData = appointments.find(data => data.pid === pid);
     if (patientData) {
       setSelectedPatientDetails(patientData);
-      setSelectedPid(null); // Clear PID view to prioritize patient details view
+      setSelectedPid(null);
     }
   }, [appointments]);
   const handleBackToList = useCallback(() => {
@@ -502,7 +583,6 @@ function AppointmentsContent() {
     return pidData ? pidData.appointments.sort((a, b) => {
       const isFutureA = isFutureAppointment(a);
       const isFutureB = isFutureAppointment(b);
-      if (isFutureA && !isFutureB) return -1;
       if (!isFutureA && isFutureB) return 1;
       return new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`);
     }) : [];
@@ -619,7 +699,7 @@ function AppointmentsContent() {
                   <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.emails}</span>
                 </div>
                 <div>
-                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Age: </span>
+                  <span className="Favoritesfont-medium" style={{ color: currentTheme.text.primary }}>Age: </span>
                   <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.ages}</span>
                 </div>
                 <div>
@@ -859,7 +939,7 @@ function AppointmentsContent() {
                   onBulkDelete={handleBulkDelete}
                 >
                   {filteredAppointments.map((appointmentData) => {
-                    const latestAppointment = appointmentData.appointments[0] ;
+                    const latestAppointment = appointmentData.appointments[0];
                     const consultationCount = appointmentData.consultationCount || 0;
                     return (
                       <tr key={appointmentData.pid} id={appointmentData.pid}>
