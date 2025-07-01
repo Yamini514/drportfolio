@@ -454,11 +454,9 @@ function Header() {
         )}
         {showLogoutSuccess && (
           <div className="logout-toast">
-<<<<<<< HEAD
+
             Logged out successfully!
-=======
-            Successfully logged out
->>>>>>> 9dc9efce129ae1e5add34b5c0ab5558b0b383e52
+
           </div>
         )}
       </header>
