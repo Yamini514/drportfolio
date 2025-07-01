@@ -27,7 +27,7 @@ function Header() {
     { name: "Services", href: "/", sectionId: "services" },
     { name: "Testimonials", href: "/review", sectionId: null },
     { name: "Gallery", href: "/", sectionId: "gallery" },
-    { name: "Contact", href: "/", sectionId: "contact" }, // Changed from "contactme" to "contact"
+    { name: "Contact", href: "/", sectionId: "contact" },
     {
       name: "Research",
       dropdownItems: [
@@ -103,16 +103,25 @@ function Header() {
     return false;
   };
 
+  useEffect(() => {
+    if (isHomePage && location.state?.scrollTo) {
+      const scrollTo = () => {
+        if (!scrollToSection(location.state.scrollTo)) {
+          setTimeout(scrollTo, 100);
+        }
+      };
+      setTimeout(scrollTo, 100);
+    }
+  }, [location.pathname, location.state, isHomePage]);
+
   const handleNavClick = (href, sectionId, e) => {
     e.preventDefault();
     setIsMenuOpen(false);
     if (sectionId) {
-      if (location.pathname === "/") {
-        // If already on homepage, scroll directly
-        scrollToSection(sectionId);
-      } else {
-        // Navigate to homepage with scrollTo state
+      if (!isHomePage) {
         navigate("/", { state: { scrollTo: sectionId } });
+      } else {
+        scrollToSection(sectionId);
       }
     } else {
       navigate(href);
@@ -164,8 +173,7 @@ function Header() {
         className="flex items-center gap-2 font-medium transition-colors duration-300 text-sm sm:text-base"
         style={{ color: getTextColor() }}
       >
-             <User className="w-4  sm:w-5 h-5" style={{ color: theme === "light" ? "#1f2937" : "#ffffff" }} />
-
+        <User className="w-4 h-4 sm:w-5 h-5" style={{ color: theme === "light" ? "#1f2937" : "#ffffff" }} />
       </button>
       {isUserMenuOpen && (
         <div
@@ -456,9 +464,7 @@ function Header() {
         )}
         {showLogoutSuccess && (
           <div className="logout-toast">
-
-            Logged out successfully!
-
+            Successfully logged out
           </div>
         )}
       </header>
