@@ -28,12 +28,13 @@ import ReviewsContent from './pages/admin/ReviewsContent';
 import Messages from './pages/admin/Messages';
 import SocialIconsResponsive from './pages/SocialIcons';
 import AppointmentSchedular from './pages/admin/Appointment';
+import AdminForgotPassword from './pages/admin/AdminForgotPassword';
 import Appointments from './pages/admin/Appointment';
 // import ArticlesContent from './pages/admin/ArticlesContent';
 // Add this import at the top with other imports
 import ForgotPassword from './pages/ForgotPassword';
 import MyAppointments from './pages/MyAppointments';
-import Forgotpassword from './pages/auth/Forgotpassword';
+import Forgotpassword from './pages/auth/UserForgotPassword';
 
 // Create a wrapper component to conditionally render social icons
 function SocialIconsWrapper() {
@@ -68,7 +69,7 @@ function App() {
             {/* Add this route */}
            
           </Route>
-          <Route path="forgot-password" element={<ForgotPassword />} />
+          <Route path="forgot-password" element={<AdminForgotPassword />} />
           {/* Admin routes */}
           <Route path="/admin">
             <Route index element={<AdminLogin />} />

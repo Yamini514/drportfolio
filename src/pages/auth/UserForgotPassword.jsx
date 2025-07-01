@@ -7,7 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 
-const Forgotpassword = () => {
+const UserForgotPassword = () => {
   const navigate = useNavigate();
   const { currentTheme } = useTheme();
   const [step, setStep] = useState(1); // 1: Verify, 2: Options, 3: Reset
@@ -51,8 +51,7 @@ const Forgotpassword = () => {
     return isValid;
   };
 
-  const handleVerify = async (e) => {
-    e.preventDefault();
+  const handleVerify = async () => {
     if (!validateVerificationForm()) return;
 
     setLoading(true);
@@ -62,11 +61,11 @@ const Forgotpassword = () => {
       const usersRef = collection(db, 'users');
       const q = query(
         usersRef,
-        where('phone', '==', formData.phoneNumber.trim()), // Updated to 'phone'
+        where('phone', '==', formData.phoneNumber.trim()),
         where('pid', '==', formData.pid.trim())
       );
       const querySnapshot = await getDocs(q);
-      console.log('Query Snapshot:', querySnapshot.docs.map(doc => doc.data())); // Debug log
+      console.log('Query Snapshot:', querySnapshot.docs.map(doc => doc.data()));
 
       if (querySnapshot.empty) {
         setErrors({ general: 'Invalid phone number or PID. Please try again.' });
@@ -87,8 +86,7 @@ const Forgotpassword = () => {
     }
   };
 
-  const handleResetPassword = async (e) => {
-    e.preventDefault();
+  const handleResetPassword = async () => {
     setLoading(true);
     setErrors({ general: '' });
 
@@ -150,7 +148,7 @@ const Forgotpassword = () => {
           )}
         </div>
         {step === 1 && (
-          <form className="space-y-6" onSubmit={handleVerify}>
+          <div className="space-y-6">
             <CustomInput
               label="Phone Number"
               type="tel"
@@ -172,7 +170,7 @@ const Forgotpassword = () => {
             />
             <div className="flex flex-col space-y-4">
               <CustomButton
-                type="submit"
+                onClick={handleVerify}
                 disabled={loading}
                 className="justify-center"
               >
@@ -194,7 +192,7 @@ const Forgotpassword = () => {
                 </button>
               </p>
             </div>
-          </form>
+          </div>
         )}
         {step === 2 && (
           <div className="space-y-6">
@@ -275,4 +273,4 @@ const Forgotpassword = () => {
   );
 };
 
-export default Forgotpassword;
+export default UserForgotPassword;

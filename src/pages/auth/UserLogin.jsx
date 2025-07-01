@@ -218,7 +218,7 @@ const UserLogin = () => {
       localStorage.setItem('userRole', 'user');
       setupSessionTimeout();
 
-      const restrictedPaths = ['/login', '/userregister', '/forgot-password'];
+      const restrictedPaths = ['/login', '/userregister', '/userforgotpassword'];
       let destination = '/';
       if (location.state?.redirectTo && !restrictedPaths.includes(location.state.redirectTo)) {
         destination = location.state.redirectTo;
@@ -347,7 +347,7 @@ const UserLogin = () => {
             <div className="flex justify-between text-sm">
               <button
                 type="button"
-                onClick={() => navigate('/forgot-password')}
+                onClick={() => navigate('/userforgotpassword')}
                 className="font-medium hover:underline transition-colors duration-200"
                 style={{ color: currentTheme.primary || '#8B5CF6' }}
                 aria-label="Navigate to forgot password page"
