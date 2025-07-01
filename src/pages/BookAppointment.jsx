@@ -113,6 +113,8 @@ function BookAppointment() {
           }));
           if (!userData.pid) {
             setBookingMessage("User PID not found. Please update your profile or contact support.");
+          } else {
+            setBookingMessage("");
           }
         } else {
           setBookingMessage("User profile not found. Please complete your profile setup.");
@@ -557,9 +559,6 @@ We appreciate your trust in our care and look forward to assisting you.
       setShowForm(false);
       setTimeout(() => {
         setShowSuccess(false);
-        setSelectedDate("");
-        setSelectedDayName("");
-        setSelectedSlot("");
         setFormData({
           name: formData.name,
           email: formData.email,
@@ -718,6 +717,41 @@ We appreciate your trust in our care and look forward to assisting you.
   }, []);
 
   useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (!user) return;
+      try {
+        setIsLoading(true);
+        const userRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setFormData((prev) => ({
+            ...prev,
+            pid: userData.pid || "",
+            name: userData.name || "",
+            email: userData.email || user.email || "",
+            phone: userData.phone || "",
+            age: userData.age || "",
+          }));
+          if (!userData.pid) {
+            setBookingMessage("User PID not found. Please update your profile or contact support.");
+          } else {
+            setBookingMessage("");
+          }
+        } else {
+          setBookingMessage("User profile not found. Please complete your profile setup.");
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error.message || "Unknown error");
+        setBookingMessage("Failed to load user data. Please try again later.");
+      } finally {
+        setIsLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     if (!selectedDate || !selectedLocation) return;
     const bookingsRef = collection(db, "appointments/data/bookings");
     const q = query(
@@ -767,7 +801,7 @@ We appreciate your trust in our care and look forward to assisting you.
                 id="location-select"
                 value={selectedLocation}
                 onChange={handleLocationChange}
-                options={[{ value: "", label: "Select your website URL", disabled: true }, ...locations.map((loc) => ({ value: loc.name, label: loc.name }))]}
+                options={[{ value: "", label: "Select your location ", disabled: true }, ...locations.map((loc) => ({ value: loc.name, label: loc.name }))]}
                 required
                 className="w-full p-2 rounded-md border text-sm sm:text-base"
                 style={{ borderColor: currentTheme.border, backgroundColor: currentTheme.inputBackground, color: currentTheme.text.primary }}
@@ -837,17 +871,15 @@ We appreciate your trust in our care and look forward to assisting you.
           )}
 
           {showForm && (
-            <form onSubmit={handleSubmit}>
-              <SelfBookingForm
-                formData={formData}
-                setFormData={setFormData}
-                errors={errors}
-                setErrors={setErrors}
-                handleSubmit={handleSubmit}
-                handleCancel={handleCancel}
-                isLoading={isLoading}
-              />
-            </form>
+            <SelfBookingForm
+              formData={formData}
+              setFormData={setFormData}
+              errors={errors}
+              setErrors={setErrors}
+              handleSubmit={handleSubmit}
+              handleCancel={handleCancel}
+              isLoading={isLoading}
+            />
           )}
         </Card>
       </div>

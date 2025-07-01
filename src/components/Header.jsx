@@ -26,7 +26,7 @@ function Header() {
     { name: "Services", href: "/", sectionId: "services" },
     { name: "Testimonials", href: "/review", sectionId: null },
     { name: "Gallery", href: "/", sectionId: "gallery" },
-    { name: "Contact", href: "/", sectionId: "contact" },
+    { name: "Contact", href: "/", sectionId: "contact" }, // Changed from "contactme" to "contact"
     {
       name: "Research",
       dropdownItems: [
@@ -102,25 +102,16 @@ function Header() {
     return false;
   };
 
-  useEffect(() => {
-    if (isHomePage && location.state?.scrollTo) {
-      const scrollTo = () => {
-        if (!scrollToSection(location.state.scrollTo)) {
-          setTimeout(scrollTo, 100);
-        }
-      };
-      setTimeout(scrollTo, 100);
-    }
-  }, [location.pathname, location.state, isHomePage]);
-
   const handleNavClick = (href, sectionId, e) => {
     e.preventDefault();
     setIsMenuOpen(false);
     if (sectionId) {
-      if (!isHomePage) {
-        navigate("/", { state: { scrollTo: sectionId } });
-      } else {
+      if (location.pathname === "/") {
+        // If already on homepage, scroll directly
         scrollToSection(sectionId);
+      } else {
+        // Navigate to homepage with scrollTo state
+        navigate("/", { state: { scrollTo: sectionId } });
       }
     } else {
       navigate(href);
@@ -141,11 +132,12 @@ function Header() {
       setPid(null);
       setIsUserMenuOpen(false);
       setShowLogoutSuccess(true);
+      localStorage.removeItem("redirectAfterLogin");
+      navigate("/", { replace: true }); // Navigate immediately
+      window.scrollTo(0, 0);
       setTimeout(() => {
         setShowLogoutSuccess(false);
-        navigate("/", { replace: true });
-        window.scrollTo(0, 0);
-      }, 2000);
+      }, 2000); // Hide message after 2 seconds
     } catch (error) {
       console.error("Logout error:", error);
     }
@@ -462,7 +454,11 @@ function Header() {
         )}
         {showLogoutSuccess && (
           <div className="logout-toast">
-            esg
+<<<<<<< HEAD
+            Logged out successfully!
+=======
+            Successfully logged out
+>>>>>>> 9dc9efce129ae1e5add34b5c0ab5558b0b383e52
           </div>
         )}
       </header>

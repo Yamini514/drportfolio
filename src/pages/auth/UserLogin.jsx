@@ -252,20 +252,25 @@ const UserLogin = () => {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4 sm:p-6"
-      style={{ backgroundColor: currentTheme.background.primary || '#f3f4f6' }}
+      style={{
+        backgroundColor: currentTheme.background || '#f9fafb', // Use normal page background
+        color: currentTheme.text?.primary || '#111827', // Normal text color
+      }}
     >
       <div
-        className="w-full max-w-md space-y-8 p-8 sm:p-10 rounded-2xl shadow-xl border-2"
+        className="w-full max-w-md space-y-8 p-8 sm:p-10 rounded-lg shadow-md border"
         style={{
-          backgroundColor: currentTheme.background.primary || '#ffffff',
-          borderColor: currentTheme.primary || '#8B5CF6',
-          boxShadow: '0 6px 12px rgba(0, 0, 0, 0.2)',
+          backgroundColor: currentTheme.surface || '#ffffff', // Normal page surface
+          borderColor: currentTheme.border || '#d1d5db', // Normal border color
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
         }}
       >
         <div className="text-center">
           <h2
             className="text-3xl font-bold mb-6"
-            style={{ color: currentTheme.text.primary || '#1f2937' }}
+            style={{
+              color: currentTheme.text?.primary || '#111827',
+            }}
           >
             User Login
           </h2>
@@ -273,8 +278,8 @@ const UserLogin = () => {
             <div
               className="text-sm mb-6 p-3 rounded-md"
               style={{
-                backgroundColor: currentTheme.background.error || '#FEE2E2',
-                color: currentTheme.text.error || '#EF4444',
+                backgroundColor: currentTheme.background?.error || '#fee2e2',
+                color: currentTheme.text?.error || '#b91c1c',
               }}
               role="alert"
             >
@@ -285,8 +290,8 @@ const UserLogin = () => {
             <div
               className="text-sm mb-6 p-3 rounded-md"
               style={{
-                backgroundColor: currentTheme.background.error || '#FEE2E2',
-                color: currentTheme.text.error || '#EF4444',
+                backgroundColor: currentTheme.background?.error || '#fee2e2',
+                color: currentTheme.text?.error || '#b91c1c',
               }}
               role="alert"
             >
@@ -297,8 +302,8 @@ const UserLogin = () => {
             <div
               className="text-sm mb-6 p-3 rounded-md"
               style={{
-                backgroundColor: currentTheme.background.error || '#FEE2E2',
-                color: currentTheme.text.error || '#EF4444',
+                backgroundColor: currentTheme.background?.error || '#fee2e2',
+                color: currentTheme.text?.error || '#b91c1c',
               }}
               role="alert"
             >
@@ -315,9 +320,14 @@ const UserLogin = () => {
             onChange={handleChange}
             required
             error={errors.loginId}
-            noBackground={true}
+            noBackground={false} // Use background consistent with normal pages
             placeholder="Enter your email, phone number, or PID"
             aria-describedby="loginId-error"
+            style={{
+              color: currentTheme.text?.primary || '#111827',
+              backgroundColor: currentTheme.inputBackground || '#f9fafb',
+              borderColor: errors.loginId ? '#dc2626' : currentTheme.border || '#d1d5db',
+            }}
           />
           <CustomInput
             label="Password"
@@ -327,9 +337,14 @@ const UserLogin = () => {
             onChange={handleChange}
             required
             error={errors.password}
-            noBackground={true}
+            noBackground={false}
             placeholder="Enter your password"
             aria-describedby="password-error"
+            style={{
+              color: currentTheme.text?.primary || '#111827',
+              backgroundColor: currentTheme.inputBackground || '#f9fafb',
+              borderColor: errors.password ? '#dc2626' : currentTheme.border || '#d1d5db',
+            }}
           />
           <div className="space-y-4">
             <CustomButton
@@ -337,8 +352,10 @@ const UserLogin = () => {
               disabled={loading}
               className="w-full justify-center py-3 text-lg font-medium transition-colors duration-200 hover:bg-opacity-90"
               style={{
-                backgroundColor: loading ? currentTheme.disabled || '#d1d5db' : currentTheme.primary || '#8B5CF6',
-                color: currentTheme.text.button || '#ffffff',
+                backgroundColor: loading
+                  ? currentTheme.disabled || '#9ca3af'
+                  : currentTheme.primary || '#6366f1',
+                color: currentTheme.text?.button || '#ffffff',
               }}
               aria-label={loading ? 'Logging in' : 'Sign In'}
             >
@@ -347,9 +364,11 @@ const UserLogin = () => {
             <div className="flex justify-between text-sm">
               <button
                 type="button"
-                onClick={() => navigate('/forgot-password')}
+                onClick={() => navigate('/userforgotpassword')}
                 className="font-medium hover:underline transition-colors duration-200"
-                style={{ color: currentTheme.primary || '#8B5CF6' }}
+                style={{
+                  color: currentTheme.primary || '#6366f1',
+                }}
                 aria-label="Navigate to forgot password page"
               >
                 Forgot Password?
@@ -358,7 +377,9 @@ const UserLogin = () => {
                 type="button"
                 onClick={() => navigate('/userregister')}
                 className="font-medium hover:underline transition-colors duration-200"
-                style={{ color: currentTheme.primary || '#8B5CF6' }}
+                style={{
+                  color: currentTheme.primary || '#6366f1',
+                }}
                 aria-label="Navigate to registration page"
               >
                 Create an Account

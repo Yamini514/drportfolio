@@ -88,6 +88,23 @@ const generateUniquePid = async () => {
   return pid;
 };
 
+// Function to check if patient name exists and retrieve PID
+const checkPatientNameExists = async (name) => {
+  try {
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("name", "==", name.trim()));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const userDoc = querySnapshot.docs[0];
+      return { exists: true, pid: userDoc.data().pid };
+    }
+    return { exists: false, pid: null };
+  } catch (error) {
+    console.error("Error checking patient name:", error);
+    return { exists: false, pid: null };
+  }
+};
+
 function AddAppointment() {
   const { currentTheme = {
     background: '#fff',
@@ -114,7 +131,6 @@ function AddAppointment() {
     email: "",
     pid: "",
     phone: "",
-    // dob: "",
     age: "",
     reasonForVisit: "",
     appointmentType: "Consultation",
@@ -133,20 +149,27 @@ function AddAppointment() {
   const [hasAvailableDates, setHasAvailableDates] = useState(true);
 
   useEffect(() => {
-    if (showForm) {
+    if (showForm && formData.name) {
       const fetchPid = async () => {
-        const newPid = await generateUniquePid();
-        if (newPid) {
-          setFormData((prev) => ({ ...prev, pid: newPid }));
+        const { exists, pid } = await checkPatientNameExists(formData.name);
+        if (exists && pid) {
+          setFormData((prev) => ({ ...prev, pid }));
+          console.log(`Existing patient found: ${formData.name}, using PID: ${pid}`);
         } else {
-          setShowForm(false);
-          setSelectedSlot("");
-          setBookingMessage("Unable to generate a unique Patient ID. Please try again.");
+          const newPid = await generateUniquePid();
+          if (newPid) {
+            setFormData((prev) => ({ ...prev, pid: newPid }));
+            console.log(`New patient: ${formData.name}, generated PID: ${newPid}`);
+          } else {
+            setShowForm(false);
+            setSelectedSlot("");
+            setBookingMessage("Unable to generate a unique Patient ID. Please try again.");
+          }
         }
       };
       fetchPid();
     }
-  }, [showForm]);
+  }, [showForm, formData.name]);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -469,7 +492,6 @@ function AddAppointment() {
       email: "",
       pid: "",
       phone: "",
-      // dob: "",
       age: "",
       reasonForVisit: "",
       appointmentType: "Consultation",
@@ -485,7 +507,6 @@ function AddAppointment() {
     if (!formData.name) newErrors.name = "Name is required.";
     if (!formData.phone) newErrors.phone = "Phone number is required.";
     else if (!/^\+?[0-9]{10,12}$/.test(formData.phone)) newErrors.phone = "Please enter a valid phone number (10-12 digits).";
-    // if (!formData.dob) newErrors.dob = "Date of birth is required.";
     if (!formData.pid) newErrors.pid = "Patient ID is required.";
     else if (!/^PID\d{4}-\d{5}$/.test(formData.pid)) newErrors.pid = "Invalid Patient ID format. It should be PIDYYYY-NNNNN (e.g., PID2025-12345).";
     if (!formData.age) newErrors.age = "Age is required.";
@@ -531,6 +552,7 @@ function AddAppointment() {
           role: "user",
           pid: formData.pid,
           email: auth.currentUser.email,
+          name: formData.name,
           createdAt: new Date().toISOString(),
         });
         console.log("Created user document for UID:", auth.currentUser.uid);
@@ -545,7 +567,6 @@ function AddAppointment() {
         email: formData.email,
         pid: formData.pid,
         phone: formData.phone,
-        // dob: formData.dob,
         age: formData.age,
         reasonForVisit: formData.reasonForVisit,
         appointmentType: formData.appointmentType,
@@ -578,7 +599,6 @@ function AddAppointment() {
           email: "",
           pid: "",
           phone: "",
-          // dob: "",
           age: "",
           reasonForVisit: "",
           appointmentType: "Consultation",
@@ -888,17 +908,15 @@ function AddAppointment() {
           )}
 
           {showForm && (
-            <form onSubmit={handleSubmit}>
-              <SelfBookingForm
-                formData={formData}
-                setFormData={setFormData}
-                errors={errors}
-                setErrors={setErrors}
-                handleSubmit={handleSubmit}
-                handleCancel={handleCancel}
-                isLoading={isLoading}
-              />
-            </form>
+            <SelfBookingForm
+              formData={formData}
+              setFormData={setFormData}
+              errors={errors}
+              setErrors={setErrors}
+              handleSubmit={handleSubmit}
+              handleCancel={handleCancel}
+              isLoading={isLoading}
+            />
           )}
         </Card>
       </div>
