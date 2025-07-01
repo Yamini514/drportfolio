@@ -792,10 +792,14 @@ function AppointmentsContent() {
                               <Eye size={20} />
                             </button>
                           )}
+                          </td>
                         </td>
+
                       </tr>
+
                     );
                   })}
+                  
                 </CustomTable>
               </div>
 
@@ -835,6 +839,6 @@ function AppointmentsContent() {
       `}</style>
     </div>
   );
-}
+};
 
 export default AppointmentsContent;
