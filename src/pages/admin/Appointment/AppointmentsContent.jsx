@@ -8,6 +8,7 @@ import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmati
 import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useTheme } from '../../../context/ThemeContext';
+import emailjs from '@emailjs/browser';
 
 function AppointmentsContent() {
   const [appointments, setAppointments] = useState([]);
@@ -41,6 +42,11 @@ function AppointmentsContent() {
     }
   });
 
+  // Initialize EmailJS
+  useEffect(() => {
+    emailjs.init('2pSuAO6tF3T-sejH-');
+  }, []);
+
   // Format date to DD-MMM-YYYY
   const formatDate = useCallback((dateStr) => {
     try {
@@ -52,7 +58,6 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Check if appointment is in the future
   const isFutureAppointment = useCallback((appointment) => {
     try {
       const appointmentDateTime = new Date(`${appointment.date} ${appointment.time}`);
@@ -63,7 +68,6 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Check if slot is available after deletion
   const checkSlotAvailability = useCallback(async (date, time, location) => {
     if (!location || location === 'Unknown') {
       console.warn('Missing location for slot availability check:', { date, time });
@@ -90,22 +94,21 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Check if date is blocked
   const checkIfDateIsBlocked = useCallback(async (dateStr, dayName) => {
     try {
       const blockedPeriodsDoc = await getDoc(doc(db, 'settings', 'blockedPeriods'));
       if (blockedPeriodsDoc.exists()) {
         const periods = blockedPeriodsDoc.data().periods || [];
+        const checkDate = new Date(dateStr);
         for (const period of periods) {
-          if (period.type === 'day' && period.day === dayName.toLowerCase()) {
-            const blockDate = new Date(period.startDate);
-            if (blockDate.toDateString() === new Date(dateStr).toDateString()) {
+          const blockStart = new Date(period.startDate);
+          if (period.type === 'day') {
+            if (blockStart.toDateString() === checkDate.toDateString()) {
               return { blocked: true, reason: period.reason || 'This date is blocked.' };
             }
-          } else if (period.type === 'week' || period.type === 'month') {
-            const blockStart = new Date(period.startDate);
+          } else if (period.type === 'period') {
             const blockEnd = new Date(period.endDate);
-            if (new Date(dateStr) >= blockStart && new Date(dateStr) <= blockEnd) {
+            if (checkDate >= blockStart && checkDate <= blockEnd) {
               return { blocked: true, reason: period.reason || 'This period is blocked.' };
             }
           }
@@ -120,7 +123,22 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Automate deletion for blocked dates
+  const deleteBlockedSchedule = useCallback(async (date) => {
+    try {
+      const scheduleRef = collection(db, 'appointments/data/schedule');
+      const q = query(scheduleRef, where('date', '==', date));
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(docSnap => deleteDoc(doc(db, 'appointments/data/schedule', docSnap.id)));
+      await Promise.all(deletePromises);
+      setNotification({ message: `Deleted schedule for blocked date: ${formatDate(date)}`, type: 'success' });
+      setTimeout(() => setNotification(null), 5000);
+    } catch (error) {
+      console.error('Error deleting blocked schedule:', error);
+      setNotification({ message: `Failed to delete blocked schedule: ${error.message}`, type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+    }
+  }, [formatDate]);
+
   const automateBlockedDateDeletion = useCallback(async () => {
     try {
       const appointmentsRef = collection(db, 'appointments/data/bookings');
@@ -150,7 +168,6 @@ function AppointmentsContent() {
     }
   }, [formatDate, checkIfDateIsBlocked]);
 
-  // Simulate sending phone notification
   const sendPhoneNotification = useCallback((appointment, action) => {
     const message = action === 'confirmed'
       ? `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been confirmed.`
@@ -160,7 +177,6 @@ function AppointmentsContent() {
     setTimeout(() => setNotification(null), 5000);
   }, [formatDate]);
 
-  // Calculate PID data
   const calculatePidData = useCallback((appointmentsList) => {
     const pidData = appointmentsList.reduce((acc, app) => {
       if (app.status === 'deleted') return acc;
@@ -202,7 +218,6 @@ function AppointmentsContent() {
     }));
   }, [formatDate]);
 
-  // Fetch appointments
   useEffect(() => {
     const fetchAppointments = async () => {
       setLoading(true);
@@ -210,21 +225,28 @@ function AppointmentsContent() {
         const appointmentsRef = collection(db, 'appointments/data/bookings');
         const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
-        const appointmentsList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          clientName: doc.data().name || 'Unknown',
-          status: doc.data().status || 'pending',
-          pid: doc.data().pid || 'Unknown',
-          date: doc.data().date || '',
-          time: doc.data().time || '',
-          appointmentType: doc.data().appointmentType || 'Consultation',
-          phone: doc.data().phone || 'Unknown',
-          email: doc.data().email || '',
-          age: doc.data().age || '',
-          medicalHistory: doc.data().medicalHistory || '',
-          medicalHistoryMessage: doc.data().medicalHistoryMessage || '',
-          location: doc.data().location || 'Unknown',
-        }));
+      
+
+        const appointmentsList = snapshot.docs.map(doc => {
+          const data = doc.data();
+          if (!data.pid) console.warn('Missing PID for booking:', doc.id);
+          if (!data.location) console.warn('Missing location for booking:', doc.id);
+          return {
+            id: doc.id,
+            clientName: data.name || 'Unknown',
+            status: data.status || 'pending',
+            pid: data.pid || 'Unknown',
+            date: data.date || '',
+            time: data.time || '',
+            appointmentType: data.appointmentType || 'Consultation',
+            phone: data.phone || 'Unknown',
+            email: data.email || '',
+            age: data.age || '',
+            medicalHistory: data.medicalHistory || '',
+            medicalHistoryMessage: data.medicalHistoryMessage || '',
+            location: data.location || 'Unknown',
+          };
+        });
         setAppointments(calculatePidData(appointmentsList));
       } catch (error) {
         console.error('Error fetching appointments:', error);
@@ -236,7 +258,6 @@ function AppointmentsContent() {
     fetchAppointments();
   }, [calculatePidData]);
 
-  // Real-time listener with blocked date checking
   useEffect(() => {
     const appointmentsRef = collection(db, 'appointments/data/bookings');
     const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
@@ -266,7 +287,6 @@ function AppointmentsContent() {
         return;
       }
 
-      // Automate blocked date deletion
       await automateBlockedDateDeletion();
 
       snapshot.docChanges().forEach((change) => {
@@ -288,7 +308,6 @@ function AppointmentsContent() {
     return () => unsubscribe();
   }, [calculatePidData, formatDate, notificationSound, automateBlockedDateDeletion]);
 
-  // Handle status update
   const handleStatusUpdate = useCallback(async (appointmentId, newStatus) => {
     try {
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
@@ -307,7 +326,6 @@ function AppointmentsContent() {
     }
   }, [appointments, calculatePidData, sendPhoneNotification]);
 
-  // Handle soft delete
   const handleDelete = useCallback(async (appointmentId) => {
     try {
       const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
@@ -318,14 +336,13 @@ function AppointmentsContent() {
       }
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
       await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
-  
-      // New: Check if the appointment date is blocked and delete slots if blocked
+
       const dayName = new Date(appointment.date).toLocaleDateString('en-US', { weekday: 'long' });
       const { blocked } = await checkIfDateIsBlocked(appointment.date, dayName);
       if (blocked) {
         await deleteBlockedSchedule(appointment.date);
       }
-  
+
       const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
       const updatedAppointments = appointments.flatMap(data => data.appointments).map(app =>
         app.id === appointmentId ? { ...app, status: 'deleted' } : app
@@ -344,14 +361,13 @@ function AppointmentsContent() {
       console.error('Error marking appointment as deleted:', error);
       setNotification({ message: `Failed to delete appointment: ${error.message}`, type: 'error' });
     }
- 
 
-  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate, checkIfDateIsBlocked, deleteBlockedSchedule]);
+  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate]);
 
-  // Handle bulk delete
+
   const handleBulkDelete = useCallback(async (ids) => {
     try {
-      const allAppointments = appointments.flatMap(data => data.appointments);
+      const allAppointments = appointments.semiflatMap(data => data.appointments);
       const futureAppointmentIds = ids.filter(id => {
         const app = allAppointments.find(app => app.id === id);
         return app && isFutureAppointment(app);
@@ -379,7 +395,6 @@ function AppointmentsContent() {
     }
   }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification]);
 
-  // Handle view details and patient details
   const handleViewDetails = useCallback((pid) => {
     if (pid === 'Unknown') return;
     setSelectedPid(pid);
@@ -399,7 +414,6 @@ function AppointmentsContent() {
     setSelectedPatientDetails(null);
   }, []);
 
-  // Filter appointments by date range
   const filterByDateRange = useCallback((appointmentData) => {
     if (!startDate && !endDate) return true;
     const start = startDate ? new Date(startDate) : null;
@@ -414,7 +428,6 @@ function AppointmentsContent() {
     });
   }, [startDate, endDate]);
 
-  // Memoized filtered appointments
   const filteredAppointments = useMemo(() => appointments.filter(appointment => {
     const matchesFilter = filter === 'all' || appointment.appointments.some(app => app.status === filter);
     const matchesSearch = !searchTerm || (
@@ -424,13 +437,11 @@ function AppointmentsContent() {
     return matchesFilter && matchesSearch && filterByDateRange(appointment);
   }), [appointments, filter, searchTerm, filterByDateRange]);
 
-  // Get PID appointments
   const getPidAppointments = useCallback((pid) => {
     const pidData = appointments.find(data => data.pid === pid);
     return pidData ? pidData.appointments.sort((a, b) => {
       const isFutureA = isFutureAppointment(a);
       const isFutureB = isFutureAppointment(b);
-      if (isFutureA && !isFutureB) return -1;
       if (!isFutureA && isFutureB) return 1;
       return new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`);
     }) : [];
@@ -443,14 +454,12 @@ function AppointmentsContent() {
     deleted: 'bg-gray-100 text-gray-800'
   }[status] || 'bg-gray-100 text-gray-800'), []);
 
-  // Reusable StatusBadge component
   const StatusBadge = ({ status }) => (
     <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(status)}`}>
       {status}
     </span>
   );
 
-  // Reusable ActionButtons component with conditional view
   const ActionButtons = ({ appointment, isDetailView = false }) => {
     const hasConsultationData = appointment.medicalHistory || appointment.medicalHistoryMessage;
     const viewAction = hasConsultationData ? handleViewPatientDetails : handleViewDetails;
@@ -503,7 +512,6 @@ function AppointmentsContent() {
     );
   };
 
-  // Patient Details View
   const PatientDetailsView = useMemo(() => {
     if (!selectedPatientDetails) return null;
     return (
@@ -532,6 +540,7 @@ function AppointmentsContent() {
             <div>
               <h4 className="text-sm font-medium mb-2" style={{ color: currentTheme.text.secondary }}>Patient Information</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
                 <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>PID: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.pid}</span></div>
                 <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Client Name(s): </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.clientNames}</span></div>
                 <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Phone: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phones}</span></div>
@@ -540,6 +549,38 @@ function AppointmentsContent() {
                 <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Total Consultations: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.consultationCount}</span></div>
                 <div className="sm:col-span-2"><span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistories}</span></div>
                 <div className="sm:col-span-2"><span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History Notes: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistoryMessages}</span></div>
+               <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>PID: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.pid}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Client Name(s): </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.clientNames}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Phone: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phones}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Email: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.emails}</span>
+                </div>
+                <div>
+                  <span className="Favoritesfont-medium" style={{ color: currentTheme.text.primary }}>Age: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.ages}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Total Consultations: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.consultationCount}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistories}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History Notes: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistoryMessages}</span>
+                </div>
               </div>
             </div>
             <div>
@@ -575,7 +616,6 @@ function AppointmentsContent() {
     );
   }, [selectedPatientDetails, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete]);
 
-  // PID Detail View
   const PidDetailView = useMemo(() => {
     const pidAppointments = getPidAppointments(selectedPid);
     if (!selectedPid || !pidAppointments.length) return null;
@@ -740,66 +780,27 @@ function AppointmentsContent() {
                         <td className="px-4 py-2">{appointmentData.clientNames || 'Unknown'}</td>
                         <td className="px-4 py-2">
                           <button
-                            onClick={() => consultationCount > 1 ? handleViewDetails(appointmentData.pid) : handleViewPatientDetails(appointmentData.pid)}
+                            onClick={() => appointmentData.consultationCount > 1 ? handleViewDetails(appointmentData.pid) : handleViewPatientDetails(appointmentData.pid)}
                             className="text-blue-600 hover:underline"
                             disabled={!appointmentData.pid || appointmentData.pid === 'Unknown'}
-                            aria-label={consultationCount > 1 ? `View appointments for PID ${appointmentData.pid}` : `View patient details for PID ${appointmentData.pid}`}
+                            aria-label={appointmentData.consultationCount > 1 ? `View appointments for PID ${appointmentData.pid}` : `View patient details for PID ${appointmentData.pid}`}
                           >
                             {appointmentData.pid || '-'}
                           </button>
                         </td>
                         <td className="px-4 py-2">{appointmentData.consultationCount}</td>
                         <td className="px-4 py-2">
-                        <td>
-                          <span>{consultationCount}</span>
-                        </td>
-                        <td>
                           <div className="flex items-center gap-2">
                             <Calendar size={16} style={{ color: currentTheme.text.secondary }} />
                             <span>{latestAppointment ? `${latestAppointment.formattedDate} ${latestAppointment.time}` : '-'}</span>
                           </div>
                         </td>
-
                         <td className="px-4 py-2">{latestAppointment ? latestAppointment.appointmentType : 'Consultation'}</td>
                         <td className="px-4 py-2"><StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} /></td>
                         <td className="px-4 py-2 text-center"><ActionButtons appointment={latestAppointment} /></td>
-
-                        <td>
-                          <span>{latestAppointment ? latestAppointment.appointmentType : 'Consultation'}</span>
-                        </td>
-                        <td>
-                          <StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} />
-                        </td>
-                        <td className="py-3 text-center">
-                          {consultationCount === 0 ? (
-                            <button
-                              onClick={() => handleViewPatientDetails(latestAppointment.pid)}
-                              className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
-                              title="View Patient Details"
-                              aria-label="View Patient Details"
-                              disabled={!latestAppointment.pid || latestAppointment.pid === 'Unknown'}
-                            >
-                              <Eye size={20} />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleViewDetails(latestAppointment.pid)}
-                              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
-                              title="View PID Appointments"
-                              aria-label="View PID Appointments"
-                              disabled={!latestAppointment.pid || latestAppointment.pid === 'Unknown'}
-                            >
-                              <Eye size={20} />
-                            </button>
-                          )}
-                          </td>
-                        </td>
-
                       </tr>
-
                     );
                   })}
-                  
                 </CustomTable>
               </div>
 
@@ -839,6 +840,6 @@ function AppointmentsContent() {
       `}</style>
     </div>
   );
-};
+}
 
 export default AppointmentsContent;
