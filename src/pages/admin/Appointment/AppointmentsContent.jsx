@@ -41,7 +41,6 @@ function AppointmentsContent() {
     }
   });
 
-  // Format date to DD-MMM-YYYY
   const formatDate = useCallback((dateStr) => {
     try {
       const date = new Date(dateStr);
@@ -52,7 +51,6 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Check if appointment is in the future
   const isFutureAppointment = useCallback((appointment) => {
     try {
       const appointmentDateTime = new Date(`${appointment.date} ${appointment.time}`);
@@ -63,7 +61,6 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Check if slot is available after deletion
   const checkSlotAvailability = useCallback(async (date, time, location) => {
     if (!location || location === 'Unknown') {
       console.warn('Missing location for slot availability check:', { date, time });
@@ -90,7 +87,6 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Check if date is blocked
   const checkIfDateIsBlocked = useCallback(async (dateStr, dayName) => {
     try {
       const blockedPeriodsDoc = await getDoc(doc(db, 'settings', 'blockedPeriods'));
@@ -120,7 +116,22 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Automate deletion for blocked dates
+  const deleteBlockedSchedule = useCallback(async (date) => {
+    try {
+      const scheduleRef = collection(db, 'appointments/data/schedule');
+      const q = query(scheduleRef, where('date', '==', date));
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(docSnap => deleteDoc(doc(db, 'appointments/data/schedule', docSnap.id)));
+      await Promise.all(deletePromises);
+      setNotification({ message: `Deleted schedule for blocked date: ${formatDate(date)}`, type: 'success' });
+      setTimeout(() => setNotification(null), 5000);
+    } catch (error) {
+      console.error('Error deleting blocked schedule:', error);
+      setNotification({ message: `Failed to delete blocked schedule: ${error.message}`, type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+    }
+  }, [formatDate]);
+
   const automateBlockedDateDeletion = useCallback(async () => {
     try {
       const appointmentsRef = collection(db, 'appointments/data/bookings');
@@ -150,7 +161,6 @@ function AppointmentsContent() {
     }
   }, [formatDate, checkIfDateIsBlocked]);
 
-  // Simulate sending phone notification
   const sendPhoneNotification = useCallback((appointment, action) => {
     const message = action === 'confirmed'
       ? `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been confirmed.`
@@ -160,7 +170,6 @@ function AppointmentsContent() {
     setTimeout(() => setNotification(null), 5000);
   }, [formatDate]);
 
-  // Calculate PID data
   const calculatePidData = useCallback((appointmentsList) => {
     const pidData = appointmentsList.reduce((acc, app) => {
       if (app.status === 'deleted') return acc;
@@ -202,7 +211,6 @@ function AppointmentsContent() {
     }));
   }, [formatDate]);
 
-  // Fetch appointments
   useEffect(() => {
     const fetchAppointments = async () => {
       setLoading(true);
@@ -236,7 +244,6 @@ function AppointmentsContent() {
     fetchAppointments();
   }, [calculatePidData]);
 
-  // Real-time listener with blocked date checking
   useEffect(() => {
     const appointmentsRef = collection(db, 'appointments/data/bookings');
     const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
@@ -266,7 +273,6 @@ function AppointmentsContent() {
         return;
       }
 
-      // Automate blocked date deletion
       await automateBlockedDateDeletion();
 
       snapshot.docChanges().forEach((change) => {
@@ -288,7 +294,6 @@ function AppointmentsContent() {
     return () => unsubscribe();
   }, [calculatePidData, formatDate, notificationSound, automateBlockedDateDeletion]);
 
-  // Handle status update
   const handleStatusUpdate = useCallback(async (appointmentId, newStatus) => {
     try {
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
@@ -307,7 +312,6 @@ function AppointmentsContent() {
     }
   }, [appointments, calculatePidData, sendPhoneNotification]);
 
-  // Handle soft delete
   const handleDelete = useCallback(async (appointmentId) => {
     try {
       const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
@@ -318,14 +322,13 @@ function AppointmentsContent() {
       }
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
       await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
-  
-      // New: Check if the appointment date is blocked and delete slots if blocked
+
       const dayName = new Date(appointment.date).toLocaleDateString('en-US', { weekday: 'long' });
       const { blocked } = await checkIfDateIsBlocked(appointment.date, dayName);
       if (blocked) {
         await deleteBlockedSchedule(appointment.date);
       }
-  
+
       const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
       const updatedAppointments = appointments.flatMap(data => data.appointments).map(app =>
         app.id === appointmentId ? { ...app, status: 'deleted' } : app
@@ -344,11 +347,8 @@ function AppointmentsContent() {
       console.error('Error marking appointment as deleted:', error);
       setNotification({ message: `Failed to delete appointment: ${error.message}`, type: 'error' });
     }
- 
+  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification, checkSlotAvailability, formatDate, checkIfDateIsBlocked, deleteBlockedSchedule]);
 
-  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate, checkIfDateIsBlocked, deleteBlockedSchedule]);
-
-  // Handle bulk delete
   const handleBulkDelete = useCallback(async (ids) => {
     try {
       const allAppointments = appointments.flatMap(data => data.appointments);
@@ -379,7 +379,6 @@ function AppointmentsContent() {
     }
   }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification]);
 
-  // Handle view details and patient details
   const handleViewDetails = useCallback((pid) => {
     if (pid === 'Unknown') return;
     setSelectedPid(pid);
@@ -399,7 +398,6 @@ function AppointmentsContent() {
     setSelectedPatientDetails(null);
   }, []);
 
-  // Filter appointments by date range
   const filterByDateRange = useCallback((appointmentData) => {
     if (!startDate && !endDate) return true;
     const start = startDate ? new Date(startDate) : null;
@@ -414,7 +412,6 @@ function AppointmentsContent() {
     });
   }, [startDate, endDate]);
 
-  // Memoized filtered appointments
   const filteredAppointments = useMemo(() => appointments.filter(appointment => {
     const matchesFilter = filter === 'all' || appointment.appointments.some(app => app.status === filter);
     const matchesSearch = !searchTerm || (
@@ -424,7 +421,6 @@ function AppointmentsContent() {
     return matchesFilter && matchesSearch && filterByDateRange(appointment);
   }), [appointments, filter, searchTerm, filterByDateRange]);
 
-  // Get PID appointments
   const getPidAppointments = useCallback((pid) => {
     const pidData = appointments.find(data => data.pid === pid);
     return pidData ? pidData.appointments.sort((a, b) => {
@@ -443,14 +439,12 @@ function AppointmentsContent() {
     deleted: 'bg-gray-100 text-gray-800'
   }[status] || 'bg-gray-100 text-gray-800'), []);
 
-  // Reusable StatusBadge component
   const StatusBadge = ({ status }) => (
     <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(status)}`}>
       {status}
     </span>
   );
 
-  // Reusable ActionButtons component with conditional view
   const ActionButtons = ({ appointment, isDetailView = false }) => {
     const hasConsultationData = appointment.medicalHistory || appointment.medicalHistoryMessage;
     const viewAction = hasConsultationData ? handleViewPatientDetails : handleViewDetails;
@@ -503,7 +497,6 @@ function AppointmentsContent() {
     );
   };
 
-  // Patient Details View
   const PatientDetailsView = useMemo(() => {
     if (!selectedPatientDetails) return null;
     return (
@@ -575,7 +568,6 @@ function AppointmentsContent() {
     );
   }, [selectedPatientDetails, currentTheme, handleBackToList, formatDate, isFutureAppointment, handleStatusUpdate, handleDelete]);
 
-  // PID Detail View
   const PidDetailView = useMemo(() => {
     const pidAppointments = getPidAppointments(selectedPid);
     if (!selectedPid || !pidAppointments.length) return null;
@@ -733,72 +725,33 @@ function AppointmentsContent() {
                   onBulkDelete={handleBulkDelete}
                 >
                   {filteredAppointments.map((appointmentData) => {
-                    const latestAppointment = appointmentData.appointments[0] ;
-                    const consultationCount = appointmentData.consultationCount || 0;
+                    const latestAppointment = appointmentData.appointments[0];
                     return (
                       <tr key={appointmentData.pid} id={appointmentData.pid}>
                         <td className="px-4 py-2">{appointmentData.clientNames || 'Unknown'}</td>
                         <td className="px-4 py-2">
                           <button
-                            onClick={() => consultationCount > 1 ? handleViewDetails(appointmentData.pid) : handleViewPatientDetails(appointmentData.pid)}
+                            onClick={() => appointmentData.consultationCount > 1 ? handleViewDetails(appointmentData.pid) : handleViewPatientDetails(appointmentData.pid)}
                             className="text-blue-600 hover:underline"
                             disabled={!appointmentData.pid || appointmentData.pid === 'Unknown'}
-                            aria-label={consultationCount > 1 ? `View appointments for PID ${appointmentData.pid}` : `View patient details for PID ${appointmentData.pid}`}
+                            aria-label={appointmentData.consultationCount > 1 ? `View appointments for PID ${appointmentData.pid}` : `View patient details for PID ${appointmentData.pid}`}
                           >
                             {appointmentData.pid || '-'}
                           </button>
                         </td>
                         <td className="px-4 py-2">{appointmentData.consultationCount}</td>
                         <td className="px-4 py-2">
-                        <td>
-                          <span>{consultationCount}</span>
-                        </td>
-                        <td>
                           <div className="flex items-center gap-2">
                             <Calendar size={16} style={{ color: currentTheme.text.secondary }} />
                             <span>{latestAppointment ? `${latestAppointment.formattedDate} ${latestAppointment.time}` : '-'}</span>
                           </div>
                         </td>
-
                         <td className="px-4 py-2">{latestAppointment ? latestAppointment.appointmentType : 'Consultation'}</td>
                         <td className="px-4 py-2"><StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} /></td>
                         <td className="px-4 py-2 text-center"><ActionButtons appointment={latestAppointment} /></td>
-
-                        <td>
-                          <span>{latestAppointment ? latestAppointment.appointmentType : 'Consultation'}</span>
-                        </td>
-                        <td>
-                          <StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} />
-                        </td>
-                        <td className="py-3 text-center">
-                          {consultationCount === 0 ? (
-                            <button
-                              onClick={() => handleViewPatientDetails(latestAppointment.pid)}
-                              className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
-                              title="View Patient Details"
-                              aria-label="View Patient Details"
-                              disabled={!latestAppointment.pid || latestAppointment.pid === 'Unknown'}
-                            >
-                              <Eye size={20} />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleViewDetails(latestAppointment.pid)}
-                              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
-                              title="View PID Appointments"
-                              aria-label="View PID Appointments"
-                              disabled={!latestAppointment.pid || latestAppointment.pid === 'Unknown'}
-                            >
-                              <Eye size={20} />
-                            </button>
-                          )}
-                          </td>
-                        </td>
-                        </tr>
-
+                      </tr>
                     );
                   })}
-                  
                 </CustomTable>
               </div>
 
@@ -838,6 +791,6 @@ function AppointmentsContent() {
       `}</style>
     </div>
   );
-};
+}
 
 export default AppointmentsContent;
