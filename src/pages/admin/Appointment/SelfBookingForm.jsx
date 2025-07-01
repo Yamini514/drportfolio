@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import CustomInput from '../../../components/CustomInput';
 import CustomSelect from '../../../components/CustomSelect';
 import CustomButton from '../../../components/CustomButton';
@@ -31,6 +31,27 @@ const SelfBookingForm = ({
       text: { primary: '#000' },
     },
   };
+
+  useEffect(() => {
+    const savedFormData = localStorage.getItem('selfBookingFormData');
+    if (savedFormData) {
+      try {
+        const parsedData = JSON.parse(savedFormData);
+        setFormData((prev) => ({
+          ...prev,
+          ...parsedData,
+          medicalHistory: null, // Files cannot be persisted in localStorage
+        }));
+      } catch (error) {
+        console.error('Error parsing saved form data:', error);
+      }
+    }
+  }, [setFormData]);
+
+  useEffect(() => {
+    const { medicalHistory, ...dataToSave } = formData;
+    localStorage.setItem('selfBookingFormData', JSON.stringify(dataToSave));
+  }, [formData]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -129,8 +150,15 @@ const SelfBookingForm = ({
     }
   };
 
+  // Optional: Clear localStorage when form is submitted successfully
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    handleSubmit(e);
+    localStorage.removeItem('selfBookingFormData'); // Clear saved data on successful submission
+  };
+
   return (
-    <div className="space-y-6 mt-8">
+    <form onSubmit={handleFormSubmit} className="space-y-6 mt-8">
       <div
         className="p-6 rounded-lg shadow-md border"
         style={{ backgroundColor: currentTheme.surface, borderColor: currentTheme.border }}
@@ -405,7 +433,7 @@ const SelfBookingForm = ({
           Cancel
         </CustomButton>
       </div>
-    </div>
+    </form>
   );
 };
 

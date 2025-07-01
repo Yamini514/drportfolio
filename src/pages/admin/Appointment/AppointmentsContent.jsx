@@ -5,7 +5,7 @@ import CustomButton from '../../../components/CustomButton';
 import CustomTable from '../../../components/CustomTable';
 import CustomSelect from '../../../components/CustomSelect';
 import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmation';
-import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -373,6 +373,14 @@ function AppointmentsContent() {
       }
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
       await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
+  
+      // New: Check if the appointment date is blocked and delete slots if blocked
+      const dayName = new Date(appointment.date).toLocaleDateString('en-US', { weekday: 'long' });
+      const { blocked } = await checkIfDateIsBlocked(appointment.date, dayName);
+      if (blocked) {
+        await deleteBlockedSchedule(appointment.date);
+      }
+  
       const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
       setAppointments(prev => calculatePidData(
         prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: 'deleted' } : app)
@@ -398,7 +406,7 @@ function AppointmentsContent() {
       setNotification({ message: errorMessage, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate]);
+  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate, checkIfDateIsBlocked, deleteBlockedSchedule]);
 
   // Handle bulk delete
   const handleBulkDelete = useCallback(async (ids) => {
@@ -852,6 +860,7 @@ function AppointmentsContent() {
                 >
                   {filteredAppointments.map((appointmentData) => {
                     const latestAppointment = appointmentData.appointments[0];
+                    const consultationCount = appointmentData.consultationCount || 0;
                     return (
                       <tr key={appointmentData.pid} id={appointmentData.pid}>
                         <td>
@@ -861,16 +870,16 @@ function AppointmentsContent() {
                         </td>
                         <td>
                           <button
-                            onClick={() => handleViewPatientDetails(appointmentData.pid)}
+                            onClick={() => consultationCount > 1 ? handleViewDetails(appointmentData.pid) : handleViewPatientDetails(appointmentData.pid)}
                             className="text-blue-600 hover:underline"
                             disabled={!appointmentData.pid || appointmentData.pid === 'Unknown'}
-                            aria-label={`View details for PID ${appointmentData.pid}`}
+                            aria-label={consultationCount > 1 ? `View appointments for PID ${appointmentData.pid}` : `View patient details for PID ${appointmentData.pid}`}
                           >
                             {appointmentData.pid || '-'}
                           </button>
                         </td>
                         <td>
-                          <span>{appointmentData.consultationCount}</span>
+                          <span>{consultationCount}</span>
                         </td>
                         <td>
                           <div className="flex items-center gap-2">
@@ -885,7 +894,27 @@ function AppointmentsContent() {
                           <StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} />
                         </td>
                         <td className="py-3 text-center">
-                          <ActionButtons appointment={latestAppointment} />
+                          {consultationCount === 0 ? (
+                            <button
+                              onClick={() => handleViewPatientDetails(latestAppointment.pid)}
+                              className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                              title="View Patient Details"
+                              aria-label="View Patient Details"
+                              disabled={!latestAppointment.pid || latestAppointment.pid === 'Unknown'}
+                            >
+                              <Eye size={20} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleViewDetails(latestAppointment.pid)}
+                              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+                              title="View PID Appointments"
+                              aria-label="View PID Appointments"
+                              disabled={!latestAppointment.pid || latestAppointment.pid === 'Unknown'}
+                            >
+                              <Eye size={20} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

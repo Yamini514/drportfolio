@@ -141,11 +141,12 @@ function Header() {
       setPid(null);
       setIsUserMenuOpen(false);
       setShowLogoutSuccess(true);
+      localStorage.removeItem("redirectAfterLogin");
+      navigate("/", { replace: true }); // Navigate immediately
+      window.scrollTo(0, 0);
       setTimeout(() => {
         setShowLogoutSuccess(false);
-        navigate("/", { replace: true });
-        window.scrollTo(0, 0);
-      }, 2000);
+      }, 2000); // Hide message after 2 seconds
     } catch (error) {
       console.error("Logout error:", error);
     }
@@ -462,7 +463,7 @@ function Header() {
         )}
         {showLogoutSuccess && (
           <div className="logout-toast">
-            esg
+            Successfully logged out
           </div>
         )}
       </header>
