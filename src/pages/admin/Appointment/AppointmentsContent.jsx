@@ -859,7 +859,7 @@ function AppointmentsContent() {
                   onBulkDelete={handleBulkDelete}
                 >
                   {filteredAppointments.map((appointmentData) => {
-                    const latestAppointment = appointmentData.appointments[0];
+                    const latestAppointment = appointmentData.appointments[0] ;
                     const consultationCount = appointmentData.consultationCount || 0;
                     return (
                       <tr key={appointmentData.pid} id={appointmentData.pid}>
