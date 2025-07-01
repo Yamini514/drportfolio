@@ -318,6 +318,14 @@ function AppointmentsContent() {
       }
       const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
       await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
+  
+      // New: Check if the appointment date is blocked and delete slots if blocked
+      const dayName = new Date(appointment.date).toLocaleDateString('en-US', { weekday: 'long' });
+      const { blocked } = await checkIfDateIsBlocked(appointment.date, dayName);
+      if (blocked) {
+        await deleteBlockedSchedule(appointment.date);
+      }
+  
       const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
       const updatedAppointments = appointments.flatMap(data => data.appointments).map(app =>
         app.id === appointmentId ? { ...app, status: 'deleted' } : app
@@ -336,7 +344,9 @@ function AppointmentsContent() {
       console.error('Error marking appointment as deleted:', error);
       setNotification({ message: `Failed to delete appointment: ${error.message}`, type: 'error' });
     }
-  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification, checkSlotAvailability, formatDate]);
+ 
+
+  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate, checkIfDateIsBlocked, deleteBlockedSchedule]);
 
   // Handle bulk delete
   const handleBulkDelete = useCallback(async (ids) => {
@@ -724,29 +734,65 @@ function AppointmentsContent() {
                 >
                   {filteredAppointments.map((appointmentData) => {
                     const latestAppointment = appointmentData.appointments[0];
+                    const consultationCount = appointmentData.consultationCount || 0;
                     return (
                       <tr key={appointmentData.pid} id={appointmentData.pid}>
                         <td className="px-4 py-2">{appointmentData.clientNames || 'Unknown'}</td>
                         <td className="px-4 py-2">
                           <button
-                            onClick={() => handleViewPatientDetails(appointmentData.pid)}
+                            onClick={() => consultationCount > 1 ? handleViewDetails(appointmentData.pid) : handleViewPatientDetails(appointmentData.pid)}
                             className="text-blue-600 hover:underline"
                             disabled={!appointmentData.pid || appointmentData.pid === 'Unknown'}
-                            aria-label={`View details for PID ${appointmentData.pid}`}
+                            aria-label={consultationCount > 1 ? `View appointments for PID ${appointmentData.pid}` : `View patient details for PID ${appointmentData.pid}`}
                           >
                             {appointmentData.pid || '-'}
                           </button>
                         </td>
                         <td className="px-4 py-2">{appointmentData.consultationCount}</td>
                         <td className="px-4 py-2">
+                        <td>
+                          <span>{consultationCount}</span>
+                        </td>
+                        <td>
                           <div className="flex items-center gap-2">
                             <Calendar size={16} style={{ color: currentTheme.text.secondary }} />
                             <span>{latestAppointment ? `${latestAppointment.formattedDate} ${latestAppointment.time}` : '-'}</span>
                           </div>
                         </td>
+
                         <td className="px-4 py-2">{latestAppointment ? latestAppointment.appointmentType : 'Consultation'}</td>
                         <td className="px-4 py-2"><StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} /></td>
                         <td className="px-4 py-2 text-center"><ActionButtons appointment={latestAppointment} /></td>
+
+                        <td>
+                          <span>{latestAppointment ? latestAppointment.appointmentType : 'Consultation'}</span>
+                        </td>
+                        <td>
+                          <StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} />
+                        </td>
+                        <td className="py-3 text-center">
+                          {consultationCount === 0 ? (
+                            <button
+                              onClick={() => handleViewPatientDetails(latestAppointment.pid)}
+                              className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                              title="View Patient Details"
+                              aria-label="View Patient Details"
+                              disabled={!latestAppointment.pid || latestAppointment.pid === 'Unknown'}
+                            >
+                              <Eye size={20} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleViewDetails(latestAppointment.pid)}
+                              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+                              title="View PID Appointments"
+                              aria-label="View PID Appointments"
+                              disabled={!latestAppointment.pid || latestAppointment.pid === 'Unknown'}
+                            >
+                              <Eye size={20} />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
