@@ -173,7 +173,7 @@ function Header() {
         className="flex items-center gap-2 font-medium transition-colors duration-300 text-sm sm:text-base"
         style={{ color: getTextColor() }}
       >
-        <User className="w-4 h-4 sm:w-5 h-5" style={{ color: theme === "light" ? "#1f2937" : "#ffffff" }} />
+        <User className="w-4  sm:w-5 h-5" style={{ color: theme === "light" ? "#1f2937" : "#ffffff" }} />
       </button>
       {isUserMenuOpen && (
         <div
