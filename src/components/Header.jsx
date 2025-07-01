@@ -26,7 +26,7 @@ function Header() {
     { name: "Services", href: "/", sectionId: "services" },
     { name: "Testimonials", href: "/review", sectionId: null },
     { name: "Gallery", href: "/", sectionId: "gallery" },
-    { name: "Contact", href: "/", sectionId: "contact" },
+    { name: "Contact", href: "/", sectionId: "contact" }, // Changed from "contactme" to "contact"
     {
       name: "Research",
       dropdownItems: [
@@ -102,25 +102,16 @@ function Header() {
     return false;
   };
 
-  useEffect(() => {
-    if (isHomePage && location.state?.scrollTo) {
-      const scrollTo = () => {
-        if (!scrollToSection(location.state.scrollTo)) {
-          setTimeout(scrollTo, 100);
-        }
-      };
-      setTimeout(scrollTo, 100);
-    }
-  }, [location.pathname, location.state, isHomePage]);
-
   const handleNavClick = (href, sectionId, e) => {
     e.preventDefault();
     setIsMenuOpen(false);
     if (sectionId) {
-      if (!isHomePage) {
-        navigate("/", { state: { scrollTo: sectionId } });
-      } else {
+      if (location.pathname === "/") {
+        // If already on homepage, scroll directly
         scrollToSection(sectionId);
+      } else {
+        // Navigate to homepage with scrollTo state
+        navigate("/", { state: { scrollTo: sectionId } });
       }
     } else {
       navigate(href);
@@ -462,7 +453,7 @@ function Header() {
         )}
         {showLogoutSuccess && (
           <div className="logout-toast">
-            esg
+            Logged out successfully!
           </div>
         )}
       </header>
