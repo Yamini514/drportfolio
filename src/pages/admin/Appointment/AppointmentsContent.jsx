@@ -8,6 +8,7 @@ import CustomDeleteConfirmation from '../../../components/CustomDeleteConfirmati
 import { collection, getDocs, updateDoc, doc, onSnapshot, query, orderBy, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useTheme } from '../../../context/ThemeContext';
+import emailjs from '@emailjs/browser';
 
 function AppointmentsContent() {
   const [appointments, setAppointments] = useState([]);
@@ -41,6 +42,12 @@ function AppointmentsContent() {
     }
   });
 
+  // Initialize EmailJS
+  useEffect(() => {
+    emailjs.init('2pSuAO6tF3T-sejH-');
+  }, []);
+
+  // Format date to DD-MMM-YYYY
   const formatDate = useCallback((dateStr) => {
     try {
       const date = new Date(dateStr);
@@ -92,16 +99,16 @@ function AppointmentsContent() {
       const blockedPeriodsDoc = await getDoc(doc(db, 'settings', 'blockedPeriods'));
       if (blockedPeriodsDoc.exists()) {
         const periods = blockedPeriodsDoc.data().periods || [];
+        const checkDate = new Date(dateStr);
         for (const period of periods) {
-          if (period.type === 'day' && period.day === dayName.toLowerCase()) {
-            const blockDate = new Date(period.startDate);
-            if (blockDate.toDateString() === new Date(dateStr).toDateString()) {
+          const blockStart = new Date(period.startDate);
+          if (period.type === 'day') {
+            if (blockStart.toDateString() === checkDate.toDateString()) {
               return { blocked: true, reason: period.reason || 'This date is blocked.' };
             }
-          } else if (period.type === 'week' || period.type === 'month') {
-            const blockStart = new Date(period.startDate);
+          } else if (period.type === 'period') {
             const blockEnd = new Date(period.endDate);
-            if (new Date(dateStr) >= blockStart && new Date(dateStr) <= blockEnd) {
+            if (checkDate >= blockStart && checkDate <= blockEnd) {
               return { blocked: true, reason: period.reason || 'This period is blocked.' };
             }
           }
@@ -218,21 +225,28 @@ function AppointmentsContent() {
         const appointmentsRef = collection(db, 'appointments/data/bookings');
         const q = query(appointmentsRef, orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
-        const appointmentsList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          clientName: doc.data().name || 'Unknown',
-          status: doc.data().status || 'pending',
-          pid: doc.data().pid || 'Unknown',
-          date: doc.data().date || '',
-          time: doc.data().time || '',
-          appointmentType: doc.data().appointmentType || 'Consultation',
-          phone: doc.data().phone || 'Unknown',
-          email: doc.data().email || '',
-          age: doc.data().age || '',
-          medicalHistory: doc.data().medicalHistory || '',
-          medicalHistoryMessage: doc.data().medicalHistoryMessage || '',
-          location: doc.data().location || 'Unknown',
-        }));
+      
+
+        const appointmentsList = snapshot.docs.map(doc => {
+          const data = doc.data();
+          if (!data.pid) console.warn('Missing PID for booking:', doc.id);
+          if (!data.location) console.warn('Missing location for booking:', doc.id);
+          return {
+            id: doc.id,
+            clientName: data.name || 'Unknown',
+            status: data.status || 'pending',
+            pid: data.pid || 'Unknown',
+            date: data.date || '',
+            time: data.time || '',
+            appointmentType: data.appointmentType || 'Consultation',
+            phone: data.phone || 'Unknown',
+            email: data.email || '',
+            age: data.age || '',
+            medicalHistory: data.medicalHistory || '',
+            medicalHistoryMessage: data.medicalHistoryMessage || '',
+            location: data.location || 'Unknown',
+          };
+        });
         setAppointments(calculatePidData(appointmentsList));
       } catch (error) {
         console.error('Error fetching appointments:', error);
@@ -347,11 +361,13 @@ function AppointmentsContent() {
       console.error('Error marking appointment as deleted:', error);
       setNotification({ message: `Failed to delete appointment: ${error.message}`, type: 'error' });
     }
-  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification, checkSlotAvailability, formatDate, checkIfDateIsBlocked, deleteBlockedSchedule]);
+
+  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate]);
+
 
   const handleBulkDelete = useCallback(async (ids) => {
     try {
-      const allAppointments = appointments.flatMap(data => data.appointments);
+      const allAppointments = appointments.semiflatMap(data => data.appointments);
       const futureAppointmentIds = ids.filter(id => {
         const app = allAppointments.find(app => app.id === id);
         return app && isFutureAppointment(app);
@@ -426,7 +442,6 @@ function AppointmentsContent() {
     return pidData ? pidData.appointments.sort((a, b) => {
       const isFutureA = isFutureAppointment(a);
       const isFutureB = isFutureAppointment(b);
-      if (isFutureA && !isFutureB) return -1;
       if (!isFutureA && isFutureB) return 1;
       return new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`);
     }) : [];
@@ -525,6 +540,7 @@ function AppointmentsContent() {
             <div>
               <h4 className="text-sm font-medium mb-2" style={{ color: currentTheme.text.secondary }}>Patient Information</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
                 <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>PID: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.pid}</span></div>
                 <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Client Name(s): </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.clientNames}</span></div>
                 <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Phone: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phones}</span></div>
@@ -533,6 +549,38 @@ function AppointmentsContent() {
                 <div><span className="font-medium" style={{ color: currentTheme.text.primary }}>Total Consultations: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.consultationCount}</span></div>
                 <div className="sm:col-span-2"><span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistories}</span></div>
                 <div className="sm:col-span-2"><span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History Notes: </span><span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistoryMessages}</span></div>
+               <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>PID: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.pid}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Client Name(s): </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.clientNames}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Phone: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.phones}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Email: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.emails}</span>
+                </div>
+                <div>
+                  <span className="Favoritesfont-medium" style={{ color: currentTheme.text.primary }}>Age: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.ages}</span>
+                </div>
+                <div>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Total Consultations: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.consultationCount}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistories}</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Medical History Notes: </span>
+                  <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.medicalHistoryMessages}</span>
+                </div>
               </div>
             </div>
             <div>
@@ -726,6 +774,7 @@ function AppointmentsContent() {
                 >
                   {filteredAppointments.map((appointmentData) => {
                     const latestAppointment = appointmentData.appointments[0];
+                    const consultationCount = appointmentData.consultationCount || 0;
                     return (
                       <tr key={appointmentData.pid} id={appointmentData.pid}>
                         <td className="px-4 py-2">{appointmentData.clientNames || 'Unknown'}</td>

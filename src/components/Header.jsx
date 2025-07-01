@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
@@ -133,11 +134,11 @@ function Header() {
       setIsUserMenuOpen(false);
       setShowLogoutSuccess(true);
       localStorage.removeItem("redirectAfterLogin");
-      navigate("/", { replace: true }); // Navigate immediately
+      navigate("/", { replace: true });
       window.scrollTo(0, 0);
       setTimeout(() => {
         setShowLogoutSuccess(false);
-      }, 2000); // Hide message after 2 seconds
+      }, 2000);
     } catch (error) {
       console.error("Logout error:", error);
     }
@@ -161,9 +162,10 @@ function Header() {
       <button
         onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
         className="flex items-center gap-2 font-medium transition-colors duration-300 text-sm sm:text-base"
-        style={{ color: isTransparentHeader && theme === "dark" ? "#000000" : getTextColor() }}
+        style={{ color: getTextColor() }}
       >
-        <User className="w-4 sm:w-5 h-5" />
+             <User className="w-4  sm:w-5 h-5" style={{ color: theme === "light" ? "#1f2937" : "#ffffff" }} />
+
       </button>
       {isUserMenuOpen && (
         <div
@@ -197,10 +199,10 @@ function Header() {
     <Link
       to="/login"
       className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline text-sm sm:text-base"
-      style={{ color: isTransparentHeader && theme === "light" ? "#000000" : getTextColor() }}
+      style={{ color: getTextColor() }}
       onClick={() => setIsMenuOpen(false)}
     >
-      <UserCircle className="w-4 sm:w-5 h-5" />
+      <UserCircle className="w-4 sm:w-5 h-5" style={{ color: theme === "light" ? "#1f2937" : "#ffffff" }} />
     </Link>
   );
 
@@ -439,7 +441,7 @@ function Header() {
                 style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
                 onClick={() => setIsMenuOpen(false)}
               >
-                <UserCircle className="w-4 sm:w-5 h-5" />
+                <UserCircle className="w-4 sm:w-5 h-5" style={{ color: theme === "light" ? "#1f2937" : "#ffffff" }} />
                 Login
               </Link>
             )}

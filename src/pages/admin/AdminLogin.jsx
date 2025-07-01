@@ -234,10 +234,6 @@ const AdminLogin = () => {
             {loading ? "Signing in..." : "Sign in"}
           </CustomButton>
         </form>
-        <div>
-          <h6>Email: Admin@srinishtha.com</h6>
-          <h6>Password: admin@123</h6>
-        </div>
       </div>
     </div>
   );
