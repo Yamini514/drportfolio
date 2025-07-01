@@ -794,8 +794,7 @@ function AppointmentsContent() {
                           )}
                           </td>
                         </td>
-
-                      </tr>
+                        </tr>
 
                     );
                   })}
