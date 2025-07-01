@@ -17,7 +17,7 @@ function Home() {
     if (location.state?.scrollTo) {
       const section = document.getElementById(location.state.scrollTo);
       if (section) {
-        const sectionTop = section.getBoundingClientRect().top + window.scrollY - 75;
+        const sectionTop = section.getBoundingClientRect().top + window.scrollY - 50;
         window.scrollTo({ top: sectionTop, behavior: "smooth" });
       }
     }
