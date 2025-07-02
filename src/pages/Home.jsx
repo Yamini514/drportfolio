@@ -9,13 +9,27 @@ import Gallery from "./Gallery";
 import ContactMe from "./ContactMe";
 
 function Home() {
+
+  
+  // Scroll to section if specified in location.state
+  // Remove this useEffect
+  // React.useEffect(() => {
+  //   if (location.state?.sectionId) {
+  //     const section = document.getElementById(location.state.sectionId);
+  //     if (section) {
+  //       const headerHeight = document.querySelector("header")?.offsetHeight || 75;
+  //       const contentTop = section.getBoundingClientRect().top + window.scrollY - headerHeight;
+  //       window.scrollTo({ top: contentTop, behavior: "smooth" });
+  //     }
+  //   }
+  // }, [location]);
   return (
     <>
       <div>
         <Hero id="hero" />
         <About id="about" />
         <Services id="services" />
-        <Testimonials id="review" />
+        <Testimonials />
         <Gallery id="gallery" />
         <Video />
         <ContactMe id="contact" />

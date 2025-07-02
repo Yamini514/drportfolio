@@ -86,9 +86,7 @@ function Gallery({ id }) {
 
   const albumImages = images.filter((image) => image.category === activeAlbum);
 
-  useEffect(() => {
-    console.log(`Gallery section with id "${id}" mounted`);
-  }, [id]);
+
 
   if (loading) {
     return (
@@ -102,10 +100,10 @@ function Gallery({ id }) {
   }
 
   return (
-    <section id={id}>
-      <div className="px-5 pb-10 md:px-12 md:pb-12 lg:px-16" style={{ backgroundColor: currentTheme.background }}>
+    <section id="gallery">
+      <div className="px-5 pb-10 mt-20 md:px-12 md:pb-12 lg:px-16" style={{ backgroundColor: currentTheme.background }}>
         <div className="container mx-auto max-w-7xl">
-          <div className="text-center mb-12 pt-8">
+          <div className="text-center mb-12">
             <h1 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: currentTheme.text.primary }}>
               Gallery
             </h1>

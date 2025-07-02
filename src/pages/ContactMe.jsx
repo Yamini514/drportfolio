@@ -6,7 +6,7 @@ import { FaPhone, FaWhatsapp, FaEnvelope } from "react-icons/fa";
 import emailjs from "@emailjs/browser";
 import { useLocation } from "react-router-dom";
 
-function ContactMe({ id }) {
+function ContactMe({id}) {
   const { currentTheme } = useTheme();
   const [showSuccess, setShowSuccess] = useState(false);
   const [formData, setFormData] = useState({
@@ -28,13 +28,7 @@ function ContactMe({ id }) {
     emailjs.init("2pSuAO6tF3T-sejH-");
   }, []);
 
-  useEffect(() => {
-    console.log(`Contact section with id "${id}" mounted`);
-  }, [id]);
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [location]);
+ 
 
   const validatePhone = (phone) => {
     const phoneRegex = /^[6-9]\d{9}$/;
@@ -174,8 +168,8 @@ function ContactMe({ id }) {
   };
 
   return (
-    <section id={id}>
-      <div className="px-5 md:px-15 pb-12 mt-5 md:pb-10 lg:px-20 p-8" style={{ backgroundColor: currentTheme.background }}>
+    <section id="contact">
+      <div className="px-5  mt-50 md:px-15 pb-12 md:pb-10 lg:px-20 p-8" style={{ backgroundColor: currentTheme.background }}>
         <div className="container mx-auto">
           {showSuccess && (
             <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-md shadow-lg z-50 animate-fade-in-out">
