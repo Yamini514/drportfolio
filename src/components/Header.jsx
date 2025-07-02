@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
@@ -19,11 +20,26 @@ function Header() {
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
   const headerRef = useRef(null);
+  const scrollTimeoutRef = useRef(null);
+  const isScrollingRef = useRef(false);
 
   const isHomePage = location.pathname === "/" || location.pathname === "";
   const isTransparentHeader = isHomePage && !isScrolled && !isMenuOpen;
 
-  console.log("isTransparentHeader:", isTransparentHeader, "isScrolled:", isScrolled, "isMenuOpen:", isMenuOpen, "theme:", theme, "currentTheme.background:", currentTheme.background, "isResearchDropdownOpen:", isResearchDropdownOpen);
+  console.log(
+    "isTransparentHeader:",
+    isTransparentHeader,
+    "isScrolled:",
+    isScrolled,
+    "isMenuOpen:",
+    isMenuOpen,
+    "theme:",
+    theme,
+    "currentTheme.background:",
+    currentTheme.background,
+    "isResearchDropdownOpen:",
+    isResearchDropdownOpen
+  );
 
   const navLinks = [
     { name: "Home", href: "/", sectionId: "hero" },
@@ -31,7 +47,7 @@ function Header() {
     { name: "Services", href: "/#services", sectionId: "services" },
     { name: "Testimonials", href: "/review", sectionId: null },
     { name: "Gallery", href: "/#gallery", sectionId: "gallery" },
-    { name: "Contact", href: "/#contact", sectionId: "contact" },
+    { name: "Contact", href: "/#contact", sectionId: "contact" }, // Change to "reach-us" if section ID is <section id="reach-us">
     {
       name: "Research",
       dropdownItems: [
@@ -104,26 +120,52 @@ function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isHomePage]);
 
-  const scrollToSection = (sectionId, maxRetries = 50, retryDelay = 100) => {
+  const scrollToSection = useCallback((sectionId, maxRetries = 30, retryDelay = 100) => {
+    if (isScrollingRef.current) {
+      console.log(`Scroll to ${sectionId} blocked: another scroll is in progress`);
+      return;
+    }
+
+    isScrollingRef.current = true;
+
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
     let attempts = 0;
 
     const attemptScroll = () => {
       const section = document.getElementById(sectionId);
       if (section) {
-        const headerHeight = headerRef.current ? headerRef.current.offsetHeight : 75;
-        let contentElement;
+        const headerHeight = headerRef.current?.offsetHeight || 75;
+        // Prioritize "Reach Us" heading or form, log for debugging
+        const reachUsHeading = section.querySelector("h2, h3")?.textContent === "Reach Us" ? section.querySelector("h2, h3") : null;
+        const contentElement = reachUsHeading || section.querySelector("form, [class*='contact'], [class*='reach']") || section;
+        console.log(`Targeting element for ${sectionId}:`, contentElement.tagName, contentElement.className, "Text:", reachUsHeading?.textContent || "N/A");
+        const contentTop = contentElement.getBoundingClientRect().top + window.scrollY + headerHeight - 125; // Increased offset to -100
 
-        // Generalized selector for section content
-        contentElement = section.querySelector("h1.text-3xl, h1.text-4xl, h2, form, .container.mx-auto") || section;
+        window.history.replaceState(null, null, `#${sectionId}`);
+        window.scrollTo({ top: contentTop, behavior: "smooth" });
 
-        if (contentElement) {
-          const contentTop = contentElement.getBoundingClientRect().top + window.scrollY - headerHeight - 20;
-          window.scrollTo({ top: contentTop, behavior: "smooth" });
-          console.log(`Scrolled to ${sectionId}, contentTop: ${contentTop}, headerHeight: ${headerHeight}, contentElement:`, contentElement);
-          return true;
-        }
-        console.warn(`Content element for ${sectionId} not found, retrying... (Attempt ${attempts + 1}/${maxRetries})`);
-        return false;
+        scrollTimeoutRef.current = setTimeout(() => {
+          const currentPosition = window.scrollY;
+          const targetRange = contentTop;
+          if (Math.abs(currentPosition - targetRange) > 20) {
+            console.warn(`Scroll to ${sectionId} not at correct position. Current: ${currentPosition}, Target: ${targetRange}`);
+            if (attempts < maxRetries) {
+              attempts++;
+              attemptScroll();
+            } else {
+              console.error(`Failed to scroll to ${sectionId} after ${maxRetries} retries`);
+              isScrollingRef.current = false;
+            }
+          } else {
+            console.log(`Successfully scrolled to ${sectionId}, contentTop: ${contentTop}, headerHeight: ${headerHeight}`);
+            isScrollingRef.current = false;
+          }
+        }, 1000);
+
+        return true;
       }
       console.warn(`Section ${sectionId} not found, retrying... (Attempt ${attempts + 1}/${maxRetries})`);
       return false;
@@ -133,48 +175,51 @@ function Header() {
       if (attempts < maxRetries) {
         if (!attemptScroll()) {
           attempts++;
-          setTimeout(tryScroll, retryDelay);
+          scrollTimeoutRef.current = setTimeout(tryScroll, retryDelay);
         }
       } else {
-        console.error(`Failed to find section or content for ${sectionId} after ${maxRetries} retries`);
+        console.error(`Failed to find section ${sectionId} after ${maxRetries} retries`);
+        isScrollingRef.current = false;
       }
     };
 
     tryScroll();
-  };
+  }, []);
 
   useEffect(() => {
     if (isHomePage && location.hash) {
       const sectionId = location.hash.replace("#", "");
       console.log("Hash detected, triggering scroll to:", sectionId);
-      const timer = setTimeout(() => scrollToSection(sectionId), 200);
+      window.scrollTo(0, 0);
+      const timer = setTimeout(() => {
+        scrollToSection(sectionId);
+      }, 500);
       return () => clearTimeout(timer);
     }
-  }, [location.pathname, location.hash, isHomePage]);
+  }, [location.pathname, location.hash, isHomePage, scrollToSection]);
 
-  const handleNavClick = (href, sectionId, e) => {
+  const handleNavClick = useCallback((href, sectionId, e) => {
     e.preventDefault();
     setIsMenuOpen(false);
     setIsResearchDropdownOpen(false);
 
-    if (href.startsWith("/#")) {
-      const sectionId = href.replace("/#", "");
+    if (href.startsWith("/#") && sectionId) {
       console.log("Navigating to section:", sectionId);
       if (!isHomePage) {
         navigate("/", { scrollRestoration: "manual" });
         setTimeout(() => {
-          window.location.hash = sectionId;
+          window.history.replaceState(null, null, `#${sectionId}`);
           scrollToSection(sectionId);
-        }, 400);
+        }, 600);
       } else {
-        window.location.hash = sectionId;
+        window.history.replaceState(null, null, `#${sectionId}`);
         scrollToSection(sectionId);
       }
     } else {
       navigate(href, { scrollRestoration: "manual" });
       window.scrollTo(0, 0);
     }
-  };
+  }, [navigate, isHomePage, scrollToSection]);
 
   const handleNameClick = () => {
     setIsMenuOpen(false);
