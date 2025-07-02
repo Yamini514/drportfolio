@@ -1,92 +1,89 @@
-import React, { useState, useEffect } from 'react';
-import { useTheme } from '../context/ThemeContext';
-import { addDoc, collection } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { FaPhone, FaWhatsapp, FaEnvelope } from 'react-icons/fa';
-import emailjs from '@emailjs/browser';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from "react";
+import { useTheme } from "../context/ThemeContext";
+import { addDoc, collection } from "firebase/firestore";
+import { db } from "../firebase/config";
+import { FaPhone, FaWhatsapp, FaEnvelope } from "react-icons/fa";
+import emailjs from "@emailjs/browser";
+import { useLocation } from "react-router-dom";
 
-function ContactMe() {
+function ContactMe({ id }) {
   const { currentTheme } = useTheme();
   const [showSuccess, setShowSuccess] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    message: '',
+    fullName: "",
+    email: "",
+    phone: "",
+    message: "",
     timestamp: null,
   });
   const [errors, setErrors] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    message: '',
+    fullName: "",
+    email: "",
+    phone: "",
+    message: "",
   });
   const location = useLocation();
 
-  // Initialize EmailJS
   useEffect(() => {
-    emailjs.init('2pSuAO6tF3T-sejH-');
+    emailjs.init("2pSuAO6tF3T-sejH-");
   }, []);
 
-  // Scroll to top if directed by location state
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    console.log(`Contact section with id "${id}" mounted`);
+  }, [id]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, [location]);
 
-  // Phone validation: 10 digits starting with 6-9
   const validatePhone = (phone) => {
     const phoneRegex = /^[6-9]\d{9}$/;
     return phoneRegex.test(phone);
   };
 
-  // Name validation: letters, spaces, and basic punctuation
   const validateName = (name) => {
     const nameRegex = /^[A-Za-z\s'.\-]+$/;
     return nameRegex.test(name);
   };
 
-  // Email validation: standard email format
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
-  // Validate form fields
   const validateField = (name, value) => {
     switch (name) {
-      case 'fullName':
-        if (value.length > 25) return 'Name cannot exceed 25 characters';
-        if (value && !validateName(value)) return 'Only letters, spaces, and basic punctuation are allowed';
-        if (!value) return 'Name is required';
-        return '';
-      case 'email':
-        if (!value) return 'Email is required';
-        if (!validateEmail(value)) return 'Please enter a valid email address';
-        return '';
-      case 'phone':
-        if (!value) return 'Phone number is required';
-        if (!validatePhone(value)) return 'Please enter a valid 10-digit mobile number starting with 6-9';
-        return '';
-      case 'message':
-        if (value.length > 200) return 'Message cannot exceed 200 characters';
-        if (!value) return 'Message is required';
-        return '';
+      case "fullName":
+        if (value.length > 25) return "Name cannot exceed 25 characters";
+        if (value && !validateName(value)) return "Only letters, spaces, and basic punctuation are allowed";
+        if (!value) return "Name is required";
+        return "";
+      case "email":
+        if (!value) return "Email is required";
+        if (!validateEmail(value)) return "Please enter a valid email address";
+        return "";
+      case "phone":
+        if (!value) return "Phone number is required";
+        if (!validatePhone(value)) return "Please enter a valid 10-digit mobile number starting with 6-9";
+        return "";
+      case "message":
+        if (value.length > 200) return "Message cannot exceed 200 characters";
+        if (!value) return "Message is required";
+        return "";
       default:
-        return '';
+        return "";
     }
   };
 
-  // Handle input changes with validation
   const handleChange = (e) => {
     const { name, value } = e.target;
     let processedValue = value;
 
-    if (name === 'fullName') {
-      processedValue = value.replace(/[^A-Za-z\s'.\-]/g, '').slice(0, 25);
-    } else if (name === 'phone') {
-      processedValue = value.replace(/[^0-9]/g, '').slice(0, 10);
-    } else if (name === 'message') {
+    if (name === "fullName") {
+      processedValue = value.replace(/[^A-Za-z\s'.\-]/g, "").slice(0, 25);
+    } else if (name === "phone") {
+      processedValue = value.replace(/[^0-9]/g, "").slice(0, 10);
+    } else if (name === "message") {
       processedValue = value.slice(0, 200);
     }
 
@@ -101,7 +98,6 @@ function ContactMe() {
     }));
   };
 
-  // Handle blur validation
   const handleBlur = (e) => {
     const { name, value } = e.target;
     setErrors((prev) => ({
@@ -110,22 +106,21 @@ function ContactMe() {
     }));
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
+    console.log("Form submitted:", formData);
 
     const newErrors = {
-      fullName: validateField('fullName', formData.fullName),
-      email: validateField('email', formData.email),
-      phone: validateField('phone', formData.phone),
-      message: validateField('message', formData.message),
+      fullName: validateField("fullName", formData.fullName),
+      email: validateField("email", formData.email),
+      phone: validateField("phone", formData.phone),
+      message: validateField("message", formData.message),
     };
 
     setErrors(newErrors);
 
     if (Object.values(newErrors).some((error) => error)) {
-      console.log('Validation errors:', newErrors);
+      console.log("Validation errors:", newErrors);
       return;
     }
 
@@ -135,11 +130,11 @@ function ContactMe() {
         timestamp: new Date(),
       };
 
-      console.log('Saving to Firestore...', dataToSubmit);
-      await addDoc(collection(db, 'contacts'), dataToSubmit);
-      console.log('Firestore save successful');
+      console.log("Saving to Firestore...", dataToSubmit);
+      await addDoc(collection(db, "contacts"), dataToSubmit);
+      console.log("Firestore save successful");
 
-      console.log('Preparing email parameters...');
+      console.log("Preparing email parameters...");
       const emailParams = {
         name: formData.fullName,
         email: formData.email,
@@ -147,43 +142,39 @@ function ContactMe() {
         message: formData.message,
         subject: "We've received your message",
       };
-      console.log('Email parameters:', emailParams);
+      console.log("Email parameters:", emailParams);
 
-      console.log('Sending EmailJS...');
-      const response = await emailjs.send(
-        'service_l920egs',
-        'template_4t5xy58',
-        emailParams
-      );
-      console.log('EmailJS sent successfully:', response);
+      console.log("Sending EmailJS...");
+      const response = await emailjs.send("service_l920egs", "template_4t5xy58", emailParams);
+      console.log("EmailJS sent successfully:", response);
 
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
         setFormData({
-          fullName: '',
-          email: '',
-          phone: '',
-          message: '',
+          fullName: "",
+          email: "",
+          phone: "",
+          message: "",
           timestamp: null,
         });
         setErrors({
-          fullName: '',
-          email: '',
-          phone: '',
-          message: '',
+          fullName: "",
+          email: "",
+          phone: "",
+          message: "",
         });
       }, 3000);
     } catch (error) {
-      console.error('Error submitting form or sending notifications:', error);
-      const errorMessage = error.text || error.message || JSON.stringify(error) || 'Unknown error';
+      console.error("Error submitting form or sending notifications:", error);
+      const errorMessage = error.text || error.message || JSON.stringify(error) || "Unknown error";
       alert(`There was an error submitting your message. Please try again. Details: ${errorMessage}`);
-      console.log('Error details:', error);
+      console.log("Error details:", error);
     }
   };
 
   return (
-    <section id="contact">
+    <section id={id}>
       <div className="px-5 md:px-15 pb-12 mt-5 md:pb-10 lg:px-20 p-8" style={{ backgroundColor: currentTheme.background }}>
         <div className="container mx-auto">
           {showSuccess && (
@@ -212,7 +203,7 @@ function ContactMe() {
                     onBlur={handleBlur}
                     style={{
                       backgroundColor: currentTheme.background,
-                      borderColor: errors.fullName ? 'red' : currentTheme.border,
+                      borderColor: errors.fullName ? "red" : currentTheme.border,
                       color: currentTheme.text.primary,
                     }}
                     className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
@@ -232,7 +223,7 @@ function ContactMe() {
                     onBlur={handleBlur}
                     style={{
                       backgroundColor: currentTheme.background,
-                      borderColor: errors.email ? 'red' : currentTheme.border,
+                      borderColor: errors.email ? "red" : currentTheme.border,
                       color: currentTheme.text.primary,
                     }}
                     className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
@@ -251,7 +242,7 @@ function ContactMe() {
                     onBlur={handleBlur}
                     style={{
                       backgroundColor: currentTheme.background,
-                      borderColor: errors.phone ? 'red' : currentTheme.border,
+                      borderColor: errors.phone ? "red" : currentTheme.border,
                       color: currentTheme.text.primary,
                     }}
                     className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
@@ -271,7 +262,7 @@ function ContactMe() {
                     onBlur={handleBlur}
                     style={{
                       backgroundColor: currentTheme.background,
-                      borderColor: errors.message ? 'red' : currentTheme.border,
+                      borderColor: errors.message ? "red" : currentTheme.border,
                       color: currentTheme.text.primary,
                     }}
                     className="w-full px-4 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
@@ -340,7 +331,7 @@ function ContactMe() {
                       href="mailto:laxminadh.sivaraju@gmail.com"
                       className="flex items-center gap-2 hover:text-primary transition-colors"
                     >
-                      <FaEnvelope className="textLg" style={{ color: currentTheme.text.primary }} />
+                      <FaEnvelope className="text-lg" style={{ color: currentTheme.text.primary }} />
                       <span>laxminadh.sivaraju@gmail.com</span>
                     </a>
                   </p>
