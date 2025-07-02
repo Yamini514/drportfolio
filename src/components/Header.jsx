@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
@@ -20,34 +19,17 @@ function Header() {
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
   const headerRef = useRef(null);
-  const scrollTimeoutRef = useRef(null);
-  const isScrollingRef = useRef(false);
 
   const isHomePage = location.pathname === "/" || location.pathname === "";
   const isTransparentHeader = isHomePage && !isScrolled && !isMenuOpen;
 
-  console.log(
-    "isTransparentHeader:",
-    isTransparentHeader,
-    "isScrolled:",
-    isScrolled,
-    "isMenuOpen:",
-    isMenuOpen,
-    "theme:",
-    theme,
-    "currentTheme.background:",
-    currentTheme.background,
-    "isResearchDropdownOpen:",
-    isResearchDropdownOpen
-  );
-
   const navLinks = [
     { name: "Home", href: "/", sectionId: "hero" },
-    { name: "About", href: "/#about", sectionId: "about" },
-    { name: "Services", href: "/#services", sectionId: "services" },
+    { name: "About", href: "/", sectionId: "about" }, // Updated href to "/"
+    { name: "Services", href: "/", sectionId: "services" }, // Updated href to "/"
     { name: "Testimonials", href: "/review", sectionId: null },
-    { name: "Gallery", href: "/#gallery", sectionId: "gallery" },
-    { name: "Contact", href: "/#contact", sectionId: "contact" }, // Change to "reach-us" if section ID is <section id="reach-us">
+    { name: "Gallery", href: "/", sectionId: "gallery" }, // Updated href to "/"
+    { name: "Contact", href: "/", sectionId: "contact" }, // Updated href to "/"
     {
       name: "Research",
       dropdownItems: [
@@ -68,6 +50,15 @@ function Header() {
       ? "#ffffff"
       : "#000000";
   }, [theme, isHomePage, isScrolled, isMenuOpen]);
+
+  // Debounce function to limit scroll event frequency
+  const debounce = (func, wait) => {
+    let timeout;
+    return (...args) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
+    };
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -109,122 +100,61 @@ function Header() {
   }, []);
 
   useEffect(() => {
-    const handleScroll = () => {
+    const handleScroll = debounce(() => {
       const scrolled = window.scrollY > 0;
       setIsScrolled(scrolled);
-      console.log("Scroll detected, isScrolled:", scrolled);
-    };
+    }, 100);
+
     setIsScrolled(window.scrollY > 0);
     if (!isHomePage) setIsScrolled(true);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isHomePage]);
 
-  const scrollToSection = useCallback((sectionId, maxRetries = 30, retryDelay = 100) => {
-    if (isScrollingRef.current) {
-      console.log(`Scroll to ${sectionId} blocked: another scroll is in progress`);
-      return;
-    }
+  // For Home page scroll
+  const handleNavClick = useCallback(
+    (href, sectionId, e) => {
+      e.preventDefault();
+      setIsMenuOpen(false);
+      setIsResearchDropdownOpen(false);
 
-    isScrollingRef.current = true;
+      const scrollToSection = (retryCount = 0, maxRetries = 10, delay = 200) => {
+        const section = document.getElementById(sectionId);
+        if (section) {
+          requestAnimationFrame(() => {
+            const headerHeight = headerRef.current?.offsetHeight || 75;
+            const contentTop = section.getBoundingClientRect().top + window.scrollY - headerHeight;
+            window.scrollTo({ top: contentTop, behavior: "smooth" });
+          });
+        } else if (retryCount < maxRetries) {
+          setTimeout(() => scrollToSection(retryCount + 1, maxRetries, delay), delay);
+        } else {
+          console.warn(`Section ${sectionId} not found after ${maxRetries} retries`);
+        }
+      };
 
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-
-    let attempts = 0;
-
-    const attemptScroll = () => {
-      const section = document.getElementById(sectionId);
-      if (section) {
-        const headerHeight = headerRef.current?.offsetHeight || 75;
-        // Prioritize "Reach Us" heading or form, log for debugging
-        const reachUsHeading = section.querySelector("h2, h3")?.textContent === "Reach Us" ? section.querySelector("h2, h3") : null;
-        const contentElement = reachUsHeading || section.querySelector("form, [class*='contact'], [class*='reach']") || section;
-        console.log(`Targeting element for ${sectionId}:`, contentElement.tagName, contentElement.className, "Text:", reachUsHeading?.textContent || "N/A");
-        const contentTop = contentElement.getBoundingClientRect().top + window.scrollY + headerHeight - 125; // Increased offset to -100
-
-        window.history.replaceState(null, null, `#${sectionId}`);
-        window.scrollTo({ top: contentTop, behavior: "smooth" });
-
-        scrollTimeoutRef.current = setTimeout(() => {
-          const currentPosition = window.scrollY;
-          const targetRange = contentTop;
-          if (Math.abs(currentPosition - targetRange) > 20) {
-            console.warn(`Scroll to ${sectionId} not at correct position. Current: ${currentPosition}, Target: ${targetRange}`);
-            if (attempts < maxRetries) {
-              attempts++;
-              attemptScroll();
-            } else {
-              console.error(`Failed to scroll to ${sectionId} after ${maxRetries} retries`);
-              isScrollingRef.current = false;
-            }
-          } else {
-            console.log(`Successfully scrolled to ${sectionId}, contentTop: ${contentTop}, headerHeight: ${headerHeight}`);
-            isScrollingRef.current = false;
-          }
-        }, 1000);
-
-        return true;
-      }
-      console.warn(`Section ${sectionId} not found, retrying... (Attempt ${attempts + 1}/${maxRetries})`);
-      return false;
-    };
-
-    const tryScroll = () => {
-      if (attempts < maxRetries) {
-        if (!attemptScroll()) {
-          attempts++;
-          scrollTimeoutRef.current = setTimeout(tryScroll, retryDelay);
+      if (href === "/" && sectionId) {
+        if (location.pathname !== "/") {
+          navigate("/");
+          // Increased initial delay to ensure DOM is ready
+          setTimeout(() => scrollToSection(0, 10, 200), 800);
+        } else {
+          scrollToSection();
         }
       } else {
-        console.error(`Failed to find section ${sectionId} after ${maxRetries} retries`);
-        isScrollingRef.current = false;
+        navigate(href);
+        if (sectionId) {
+          setTimeout(() => scrollToSection(0, 10, 200), 800);
+        }
       }
-    };
-
-    tryScroll();
-  }, []);
-
-  useEffect(() => {
-    if (isHomePage && location.hash) {
-      const sectionId = location.hash.replace("#", "");
-      console.log("Hash detected, triggering scroll to:", sectionId);
-      window.scrollTo(0, 0);
-      const timer = setTimeout(() => {
-        scrollToSection(sectionId);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [location.pathname, location.hash, isHomePage, scrollToSection]);
-
-  const handleNavClick = useCallback((href, sectionId, e) => {
-    e.preventDefault();
-    setIsMenuOpen(false);
-    setIsResearchDropdownOpen(false);
-
-    if (href.startsWith("/#") && sectionId) {
-      console.log("Navigating to section:", sectionId);
-      if (!isHomePage) {
-        navigate("/", { scrollRestoration: "manual" });
-        setTimeout(() => {
-          window.history.replaceState(null, null, `#${sectionId}`);
-          scrollToSection(sectionId);
-        }, 600);
-      } else {
-        window.history.replaceState(null, null, `#${sectionId}`);
-        scrollToSection(sectionId);
-      }
-    } else {
-      navigate(href, { scrollRestoration: "manual" });
-      window.scrollTo(0, 0);
-    }
-  }, [navigate, isHomePage, scrollToSection]);
+    },
+    [navigate, location.pathname]
+  );
 
   const handleNameClick = () => {
     setIsMenuOpen(false);
     setIsResearchDropdownOpen(false);
-    navigate("/", { scrollRestoration: "manual" });
+    navigate("/");
     window.scrollTo(0, 0);
   };
 
@@ -237,7 +167,7 @@ function Header() {
       setIsResearchDropdownOpen(false);
       setShowLogoutSuccess(true);
       localStorage.removeItem("redirectAfterLogin");
-      navigate("/", { replace: true, scrollRestoration: "manual" });
+      navigate("/");
       window.scrollTo(0, 0);
       setTimeout(() => setShowLogoutSuccess(false), 2000);
     } catch (error) {
@@ -248,9 +178,9 @@ function Header() {
   const handleBookAppointmentClick = () => {
     if (!user) {
       localStorage.setItem("redirectAfterLogin", "/bookappointment");
-      navigate("/login", { state: { redirectTo: "/bookappointment" }, scrollRestoration: "manual" });
+      navigate("/login", { state: { redirectTo: "/bookappointment" } });
     } else {
-      navigate("/bookappointment", { scrollRestoration: "manual" });
+      navigate("/bookappointment");
     }
     window.scrollTo(0, 0);
     setIsMenuOpen(false);
@@ -307,7 +237,6 @@ function Header() {
 
   const handleResearchToggle = () => {
     setIsResearchDropdownOpen(!isResearchDropdownOpen);
-    console.log("Toggled Research dropdown, isResearchDropdownOpen:", !isResearchDropdownOpen);
   };
 
   return (

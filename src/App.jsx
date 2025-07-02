@@ -58,7 +58,7 @@ function App() {
             {/* <Route path="testimonials" element={<Testimonials />} /> */}
             <Route path="contact" element={<ContactMe />} />
             <Route path="gallery" element={<Gallery />} />
-            <Route path='review' element={<Review />}/>
+            <Route path='/review' element={<Review />}/>
             <Route path='bookappointment' element={<BookAppointment />}/>
             <Route path='publications' element={<Publications />}/>
             <Route path='articles' element={<Articles />}/>

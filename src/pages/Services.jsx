@@ -58,7 +58,7 @@ function Services({id}) {
 
   return (
     <section id="services" >
-    <div className=" px-5 mt-2 pb-10 md:px-15 md:pb-20 p-8" style={{ backgroundColor: currentTheme.background }}>
+    <div className=" px-5  pb-10 md:px-15 md:pb-20 p-8" style={{ backgroundColor: currentTheme.background }}>
         {/* Header Section */}
         <div className="text-center mb-12">
           <h1 className="text-3xl md:text-4xl font-bold mb-4">My Services</h1>
