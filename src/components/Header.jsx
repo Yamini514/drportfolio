@@ -14,10 +14,11 @@ function Header() {
   const [pid, setPid] = useState(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
-  const [isResearchDropdownOpen, setIsResearchDropdownOpen] = useState(false); // New state for Research dropdown
+  const [isResearchDropdownOpen, setIsResearchDropdownOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
+  const headerRef = useRef(null);
 
   const isHomePage = location.pathname === "/" || location.pathname === "";
   const isTransparentHeader = isHomePage && !isScrolled && !isMenuOpen;
@@ -25,10 +26,10 @@ function Header() {
   console.log("isTransparentHeader:", isTransparentHeader, "isScrolled:", isScrolled, "isMenuOpen:", isMenuOpen, "theme:", theme, "currentTheme.background:", currentTheme.background, "isResearchDropdownOpen:", isResearchDropdownOpen);
 
   const navLinks = [
-    { name: "Home", href: "/#hero", sectionId: "hero" },
+    { name: "Home", href: "/", sectionId: "hero" },
     { name: "About", href: "/#about", sectionId: "about" },
     { name: "Services", href: "/#services", sectionId: "services" },
-    { name: "Testimonials", href: "/review", sectionId: "" },
+    { name: "Testimonials", href: "/review", sectionId: null },
     { name: "Gallery", href: "/#gallery", sectionId: "gallery" },
     { name: "Contact", href: "/#contact", sectionId: "contact" },
     {
@@ -57,7 +58,6 @@ function Header() {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setIsUserMenuOpen(false);
       }
-      // Close Research dropdown on outside click
       if (!event.target.closest(".research-dropdown") && isResearchDropdownOpen) {
         setIsResearchDropdownOpen(false);
       }
@@ -104,18 +104,28 @@ function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isHomePage]);
 
-  const scrollToSection = (sectionId, maxRetries = 30, retryDelay = 200) => {
+  const scrollToSection = (sectionId, maxRetries = 50, retryDelay = 100) => {
     let attempts = 0;
 
     const attemptScroll = () => {
       const section = document.getElementById(sectionId);
       if (section) {
-        const sectionTop = section.getBoundingClientRect().top + window.scrollY - 75;
-        window.scrollTo({ top: sectionTop, behavior: "smooth" });
-        console.log(`Scrolled to ${sectionId}`);
-        return true;
+        const headerHeight = headerRef.current ? headerRef.current.offsetHeight : 75;
+        let contentElement;
+
+        // Generalized selector for section content
+        contentElement = section.querySelector("h1.text-3xl, h1.text-4xl, h2, form, .container.mx-auto") || section;
+
+        if (contentElement) {
+          const contentTop = contentElement.getBoundingClientRect().top + window.scrollY - headerHeight - 20;
+          window.scrollTo({ top: contentTop, behavior: "smooth" });
+          console.log(`Scrolled to ${sectionId}, contentTop: ${contentTop}, headerHeight: ${headerHeight}, contentElement:`, contentElement);
+          return true;
+        }
+        console.warn(`Content element for ${sectionId} not found, retrying... (Attempt ${attempts + 1}/${maxRetries})`);
+        return false;
       }
-      console.warn(`Section ${sectionId} not found, retrying... (${attempts + 1}/${maxRetries})`);
+      console.warn(`Section ${sectionId} not found, retrying... (Attempt ${attempts + 1}/${maxRetries})`);
       return false;
     };
 
@@ -126,7 +136,7 @@ function Header() {
           setTimeout(tryScroll, retryDelay);
         }
       } else {
-        console.error(`Failed to find section ${sectionId} after ${maxRetries} retries`);
+        console.error(`Failed to find section or content for ${sectionId} after ${maxRetries} retries`);
       }
     };
 
@@ -136,27 +146,31 @@ function Header() {
   useEffect(() => {
     if (isHomePage && location.hash) {
       const sectionId = location.hash.replace("#", "");
-      console.log("Hash detected:", location.hash, "sectionId:", sectionId);
-      scrollToSection(sectionId);
+      console.log("Hash detected, triggering scroll to:", sectionId);
+      const timer = setTimeout(() => scrollToSection(sectionId), 200);
+      return () => clearTimeout(timer);
     }
   }, [location.pathname, location.hash, isHomePage]);
 
   const handleNavClick = (href, sectionId, e) => {
     e.preventDefault();
     setIsMenuOpen(false);
-    setIsResearchDropdownOpen(false); // Close Research dropdown on navigation
-    console.log(`Navigating to href: ${href}, sectionId: ${sectionId}, isHomePage: ${isHomePage}`);
-    if (sectionId) {
+    setIsResearchDropdownOpen(false);
+
+    if (href.startsWith("/#")) {
+      const sectionId = href.replace("/#", "");
+      console.log("Navigating to section:", sectionId);
       if (!isHomePage) {
-        console.log(`Navigating to ${href}`);
-        navigate(href, { scrollRestoration: "manual" });
-        setTimeout(() => scrollToSection(sectionId), 100);
+        navigate("/", { scrollRestoration: "manual" });
+        setTimeout(() => {
+          window.location.hash = sectionId;
+          scrollToSection(sectionId);
+        }, 400);
       } else {
-        console.log(`Scrolling to ${sectionId}`);
+        window.location.hash = sectionId;
         scrollToSection(sectionId);
       }
     } else {
-      console.log(`Navigating to ${href}`);
       navigate(href, { scrollRestoration: "manual" });
       window.scrollTo(0, 0);
     }
@@ -164,7 +178,7 @@ function Header() {
 
   const handleNameClick = () => {
     setIsMenuOpen(false);
-    setIsResearchDropdownOpen(false); // Close Research dropdown
+    setIsResearchDropdownOpen(false);
     navigate("/", { scrollRestoration: "manual" });
     window.scrollTo(0, 0);
   };
@@ -175,7 +189,7 @@ function Header() {
       setUser(null);
       setPid(null);
       setIsUserMenuOpen(false);
-      setIsResearchDropdownOpen(false); // Close Research dropdown
+      setIsResearchDropdownOpen(false);
       setShowLogoutSuccess(true);
       localStorage.removeItem("redirectAfterLogin");
       navigate("/", { replace: true, scrollRestoration: "manual" });
@@ -195,7 +209,7 @@ function Header() {
     }
     window.scrollTo(0, 0);
     setIsMenuOpen(false);
-    setIsResearchDropdownOpen(false); // Close Research dropdown
+    setIsResearchDropdownOpen(false);
   };
 
   const userMenu = user ? (
@@ -277,19 +291,19 @@ function Header() {
           color: ${theme === "light" ? "#000000" : "#e5e7eb"} !important;
         }
         .dropdown-menu {
-          z-index: 1000 !important; /* Increased z-index */
+          z-index: 1000 !important;
           opacity: 0;
           visibility: hidden;
           transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
           transform: translateY(-10px);
         }
-        .group:hover .dropdown-menu { /* Fixed typo from .. to single space */
+        .group:hover .dropdown-menu {
           opacity: 1 !important;
           visibility: visible !important;
           transform: translateY(0);
         }
         .research-dropdown .dropdown-menu {
-          display: ${isResearchDropdownOpen ? "block" : "none"}; /* State-based display for touch */
+          display: ${isResearchDropdownOpen ? "block" : "none"};
         }
         .research-button {
           color: ${getResearchTextColor()} !important;
@@ -318,6 +332,7 @@ function Header() {
         }
       `}</style>
       <header
+        ref={headerRef}
         key={theme}
         className={`px-4 sm:px-6 md:px-8 py-3 sm:py-4 fixed w-full top-0 ${isTransparentHeader ? "home-header-transparent" : "header-colored"}`}
         style={{
@@ -336,11 +351,11 @@ function Header() {
             Dr. Laxminadh Sivaraju
           </Link>
           <nav className="hidden md:flex items-center gap-4 lg:gap-8">
-            {navLinks.map((link) => (
+            {navLinks.map((link) =>
               link.dropdownItems ? (
                 <div key={link.name} className="relative group research-dropdown">
                   <button
-                    onClick={handleResearchToggle} // Add click handler for toggle
+                    onClick={handleResearchToggle}
                     className={`font-medium transition-colors duration-300 flex items-center gap-1 text-sm lg:text-base ${link.name === "Research" ? "research-button" : ""}`}
                   >
                     {link.name}
@@ -379,12 +394,12 @@ function Header() {
                     className="absolute inset-x-0 bottom-0 h-0.5 transform transition-transform duration-300 scale-x-0 group-hover:scale-x-100"
                     style={{
                       backgroundColor: currentTheme.primary || "#7c3aed",
-                      transform: location.pathname === link.href ? "scaleX(1)" : "scaleX(0)",
+                      transform: location.pathname === link.href || (link.href.startsWith("/#") && location.hash === link.href.replace("/#", "")) ? "scaleX(1)" : "scaleX(0)",
                     }}
                   ></span>
                 </Link>
               )
-            ))}
+            )}
             <CustomButton
               variant="primary"
               onClick={handleBookAppointmentClick}
@@ -434,17 +449,17 @@ function Header() {
         </div>
         {isMenuOpen && (
           <nav className="md:hidden pt-4 pb-2" style={{ backgroundColor: currentTheme.background || (theme === "dark" ? "#1a1a1a" : "#ffffff") }}>
-            {navLinks.map((link) => (
+            {navLinks.map((link) =>
               link.dropdownItems ? (
                 <div key={link.name}>
                   <div
-                    onClick={handleResearchToggle} // Toggle on mobile menu
+                    onClick={handleResearchToggle}
                     className="px-4 py-2 font-medium text-sm sm:text-base"
                     style={{ color: theme === "light" ? "#000000" : "#e5e7eb", cursor: "pointer" }}
                   >
                     {link.name}
                   </div>
-                  {isResearchDropdownOpen && (
+                  {isResearchDropdownOpen &&
                     link.dropdownItems.map((item) => (
                       <Link
                         key={item.name}
@@ -455,8 +470,7 @@ function Header() {
                       >
                         {item.name}
                       </Link>
-                    ))
-                  )}
+                    ))}
                 </div>
               ) : (
                 <Link
@@ -469,7 +483,7 @@ function Header() {
                   {link.name}
                 </Link>
               )
-            ))}
+            )}
             {user ? (
               <div className="px-4 py-2">
                 <div className="px-4 py-2 text-sm" style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}>
