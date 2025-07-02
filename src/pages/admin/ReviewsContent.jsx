@@ -166,7 +166,7 @@ function ReviewsContent() {
             Verified:{' '}
           </span>
           <span style={{ color: review.verified ? currentTheme.success : currentTheme.error }}>
-            {review.verified ? 'Yes' : 'No'}
+            {review.verified ? 'No' : 'Yes'}
           </span>
         </div>
         <div>
@@ -322,7 +322,7 @@ function ReviewsContent() {
                     }}
                     title={review.verified ? 'Unverify Review' : 'Verify Review'}
                   >
-                    {review.verified ? <XCircle size={18} /> : <CheckCircle size={18} />}
+                    {review.verified ?  <CheckCircle size={18} />: <XCircle size={18} />}
                   </button>
                 </div>
               </td>
