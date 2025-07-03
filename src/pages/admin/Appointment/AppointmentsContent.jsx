@@ -47,21 +47,30 @@ function AppointmentsContent() {
     emailjs.init('2pSuAO6tF3T-sejH-');
   }, []);
 
+  // Robust email validation
+  const isValidEmail = useCallback((email) => {
+    if (!email || typeof email !== 'string') return false;
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(trimmedEmail) && trimmedEmail !== 'noreply@gmail.com';
+  }, []);
+
   // Format date to DD-MMM-YYYY
   const formatDate = useCallback((dateStr) => {
     try {
       const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
+      if (isNaN(date.getTime())) return dateStr || 'Invalid Date';
       return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
     } catch (error) {
       console.error('Error formatting date:', error);
-      return dateStr;
+      return dateStr || 'Invalid Date';
     }
   }, []);
 
   // Check if appointment is in the future
   const isFutureAppointment = useCallback((appointment) => {
     try {
+      if (!appointment?.date || !appointment?.time) return false;
       const appointmentDateTime = new Date(`${appointment.date} ${appointment.time}`);
       return appointmentDateTime > new Date();
     } catch (error) {
@@ -72,9 +81,9 @@ function AppointmentsContent() {
 
   // Check if slot is available after deletion
   const checkSlotAvailability = useCallback(async (date, time, location) => {
-    if (!location || location === 'Unknown') {
-      console.warn('Missing location for slot availability check:', { date, time });
-      setNotification({ message: 'Cannot verify slot availability: missing location.', type: 'error' });
+    if (!date || !time || !location || location === 'Unknown') {
+      console.warn('Missing data for slot availability check:', { date, time, location });
+      setNotification({ message: 'Cannot verify slot availability: missing data.', type: 'error' });
       setTimeout(() => setNotification(null), 5000);
       return false;
     }
@@ -97,8 +106,12 @@ function AppointmentsContent() {
     }
   }, []);
 
-  // Check if date is blocked (aligned with TimingSchedular)
+  // Check if date is blocked
   const checkIfDateIsBlocked = useCallback(async (dateStr) => {
+    if (!dateStr) {
+      console.warn('No date provided for blocked date check');
+      return { blocked: false, reason: '' };
+    }
     try {
       const blockedPeriodsDoc = await getDoc(doc(db, 'settings', 'blockedPeriods'));
       if (blockedPeriodsDoc.exists()) {
@@ -121,7 +134,7 @@ function AppointmentsContent() {
       return { blocked: false, reason: '' };
     } catch (error) {
       console.error('Error checking blocked date:', error);
-      setNotification({ message: 'Failed to check date availability. Please try again.', type: 'error' });
+      setNotification({ message: 'Failed to check date availability.', type: 'error' });
       setTimeout(() => setNotification(null), 5000);
       return { blocked: false, reason: '' };
     }
@@ -129,6 +142,10 @@ function AppointmentsContent() {
 
   // Delete blocked schedule
   const deleteBlockedSchedule = useCallback(async (date) => {
+    if (!date) {
+      console.warn('No date provided for deleting blocked schedule');
+      return;
+    }
     try {
       const scheduleRef = collection(db, 'appointments/data/schedule');
       const q = query(scheduleRef, where('date', '==', date));
@@ -149,61 +166,108 @@ function AppointmentsContent() {
 
   // Simulate sending phone notification
   const sendPhoneNotification = useCallback((appointment, action) => {
+    if (!appointment?.phone || appointment.phone === 'Unknown') {
+      console.warn(`No valid phone number for appointment ${appointment.id}`);
+      return;
+    }
     const message = action === 'confirmed'
       ? `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been confirmed.`
       : `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been ${action === 'deleted' ? 'deleted' : 'cancelled'} and the slot is now available.`;
     
-    console.log(`Sending SMS to ${appointment.phone || 'unknown phone'}: ${message}`);
+    console.log(`Sending SMS to ${appointment.phone}: ${message}`);
     setNotification({
-      message: `Notified patient: ${message}`,
+      message: `Notified patient via SMS: ${message}`,
       type: 'success'
     });
     setTimeout(() => setNotification(null), 5000);
   }, [formatDate]);
 
-  // Cancel appointment and send email
-  const cancelAppointmentAndSendEmail = useCallback(async (appointment) => {
-    try {
-      if (!appointment.email || appointment.email === 'noreply@gmail.com') {
-        console.warn(`No valid email for appointment ${appointment.id}`);
-        setNotification({
-          message: `Cannot send cancellation email: No valid email address for ${appointment.clientName}.`,
-          type: 'error'
-        });
-        setTimeout(() => setNotification(null), 5000);
-        return;
-      }
-
-      const appointmentRef = doc(db, 'appointments/data/bookings', appointment.id);
-      await updateDoc(appointmentRef, { status: 'cancelled', cancelledAt: new Date().toISOString() });
-
-      // Send cancellation email using EmailJS
-      const emailParams = {
-        name: appointment.clientName || 'Unknown',
-        date: formatDate(appointment.date),
-        time: appointment.time,
-        reason: (await checkIfDateIsBlocked(appointment.date)).reason || 'The appointment date has been blocked.',
-        to_email: appointment.email,
-      };
-
-      await emailjs.send('service_l920egs', 'template_iremp8a', emailParams);
-      console.log(`Email sent to ${appointment.email} for cancelled appointment:`, emailParams);
-
-      sendPhoneNotification(appointment, 'cancelled');
-      setNotification({
-        message: `Appointment on ${formatDate(appointment.date)} at ${appointment.time} cancelled and patient notified.`,
-        type: 'success'
-      });
+  // Send email notification
+  const sendEmailNotification = useCallback(async (appointment, action) => {
+    if (!appointment?.id || !appointment?.email) {
+      console.error('Invalid appointment data for email notification:', { id: appointment?.id, email: appointment?.email });
+      setNotification({ message: 'Cannot send email: Missing appointment data or email.', type: 'error' });
       setTimeout(() => setNotification(null), 5000);
-    } catch (error) {
-      console.error('Error cancelling appointment or sending email:', error);
+      return false;
+    }
+
+    const trimmedEmail = appointment.email.trim();
+    if (!trimmedEmail || !isValidEmail(trimmedEmail)) {
+      console.warn(`Invalid or empty email for appointment ${appointment.id}: ${appointment.email}`);
       setNotification({
-        message: `Failed to cancel appointment or send email: ${error.message}`,
+        message: `Cannot send ${action} email: Invalid or empty email for ${appointment.clientName || 'Unknown'}.`,
         type: 'error'
       });
       setTimeout(() => setNotification(null), 5000);
+      return false;
     }
-  }, [formatDate, sendPhoneNotification, checkIfDateIsBlocked]);
+
+    try {
+      const emailParams = {
+        name: appointment.clientName || 'Unknown',
+        date: formatDate(appointment.date) || 'Unknown',
+        time: appointment.time || 'Unknown',
+        to_email: appointment.email.trim(),
+        email: appointment.email.trim(),
+        action: action === 'confirmed' ? 'confirmed' : action === 'deleted' ? 'deleted' : 'cancelled',
+        reason: action === 'cancelled' ? (await checkIfDateIsBlocked(appointment.date)).reason || 'The appointment date has been blocked.' : '',
+      };
+
+      if (!emailParams.to_email || !emailParams.email) {
+        throw new Error('Email address is empty after processing');
+      }
+
+      await emailjs.send('service_l920egs', 'template_iremp8a', emailParams);
+      console.log(`Email sent to ${trimmedEmail} for ${action} appointment:`, emailParams);
+      setNotification({
+        message: `Email sent to ${trimmedEmail} for ${action} appointment.`,
+        type: 'success'
+      });
+      setTimeout(() => setNotification(null), 5000);
+      return true;
+    } catch (error) {
+      console.error(`Error sending ${action} email:`, error);
+      setNotification({
+        message: `Failed to send ${action} email: ${error.message}`,
+        type: 'error'
+      });
+      setTimeout(() => setNotification(null), 5000);
+      return false;
+    }
+  }, [formatDate, isValidEmail, checkIfDateIsBlocked]);
+
+  // Cancel appointment and send email
+  const cancelAppointmentAndSendEmail = useCallback(async (appointment) => {
+    if (!appointment?.id) {
+      console.error('Invalid appointment data for cancellation');
+      setNotification({ message: 'Cannot cancel appointment: Invalid data.', type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
+      return false;
+    }
+
+    try {
+      const appointmentRef = doc(db, 'appointments/data/bookings', appointment.id);
+      await updateDoc(appointmentRef, { status: 'cancelled', cancelledAt: new Date().toISOString() });
+      const emailSent = await sendEmailNotification(appointment, 'cancelled');
+      if (emailSent) {
+        sendPhoneNotification(appointment, 'cancelled');
+        setNotification({
+          message: `Appointment on ${formatDate(appointment.date)} at ${appointment.time} cancelled and patient notified.`,
+          type: 'success'
+        });
+        setTimeout(() => setNotification(null), 5000);
+      }
+      return emailSent;
+    } catch (error) {
+      console.error('Error cancelling appointment:', error);
+      setNotification({
+        message: `Failed to cancel appointment: ${error.message}`,
+        type: 'error'
+      });
+      setTimeout(() => setNotification(null), 5000);
+      return false;
+    }
+  }, [formatDate, sendPhoneNotification, sendEmailNotification]);
 
   // Calculate PID data
   const calculatePidData = useCallback((appointmentsList) => {
@@ -225,8 +289,8 @@ function AppointmentsContent() {
           location: app.location || 'Unknown',
         };
       }
-      acc[pid].clientNames.add(app.clientName);
-      if (app.email) acc[pid].emails.add(app.email);
+      acc[pid].clientNames.add(app.clientName || 'Unknown');
+      if (app.email && isValidEmail(app.email)) acc[pid].emails.add(app.email);
       acc[pid].phones.add(app.phone || 'Unknown');
       if (app.age) acc[pid].ages.add(app.age);
       if (app.medicalHistory) acc[pid].medicalHistories.add(app.medicalHistory);
@@ -246,7 +310,7 @@ function AppointmentsContent() {
       medicalHistoryMessages: Array.from(data.medicalHistoryMessages).join('; ') || 'None',
       appointments: data.appointments.sort((a, b) => new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`))
     }));
-  }, [formatDate]);
+  }, [formatDate, isValidEmail]);
 
   // Fetch appointments
   useEffect(() => {
@@ -279,12 +343,7 @@ function AppointmentsContent() {
         setAppointments(calculatePidData(appointmentsList));
       } catch (error) {
         console.error('Error fetching appointments:', error);
-        const errorMessage = error.code === 'permission-denied'
-          ? 'Permission denied: Please check your authentication.'
-          : error.code === 'unavailable'
-          ? 'Network error: Please check your internet connection.'
-          : `Failed to fetch appointments: ${error.message}`;
-        setNotification({ message: errorMessage, type: 'error' });
+        setNotification({ message: `Failed to fetch appointments: ${error.message}`, type: 'error' });
       } finally {
         setLoading(false);
       }
@@ -301,8 +360,6 @@ function AppointmentsContent() {
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const appointmentsList = snapshot.docs.map(doc => {
         const data = doc.data();
-        if (!data.pid) console.warn('Missing PID for booking:', doc.id);
-        if (!data.location) console.warn('Missing location for booking:', doc.id);
         return {
           id: doc.id,
           clientName: data.name || 'Unknown',
@@ -327,10 +384,9 @@ function AppointmentsContent() {
         return;
       }
 
-      // Check for blocked dates and cancel appointments
       const uniqueDates = [...new Set(appointmentsList.map(app => app.date))];
       for (const date of uniqueDates) {
-        const { blocked, reason } = await checkIfDateIsBlocked(date);
+        const { blocked } = await checkIfDateIsBlocked(date);
         if (blocked) {
           await deleteBlockedSchedule(date);
           const affectedAppointments = appointmentsList.filter(app => app.date === date && app.status !== 'cancelled' && app.status !== 'deleted');
@@ -355,12 +411,7 @@ function AppointmentsContent() {
       });
     }, (error) => {
       console.error('Error in real-time listener:', error);
-      const errorMessage = error.code === 'permission-denied'
-        ? 'Permission denied: Please check your authentication.'
-        : error.code === 'unavailable'
-        ? 'Network error: Please check your internet connection.'
-        : `Error receiving real-time updates: ${error.message}`;
-      setNotification({ message: errorMessage, type: 'error' });
+      setNotification({ message: `Error receiving real-time updates: ${error.message}`, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     });
 
@@ -406,11 +457,8 @@ function AppointmentsContent() {
       }
     }, (error) => {
       console.error('Error in blocked periods listener:', error);
-      setNotification({
-        message: `Error monitoring blocked periods: ${error.message}`,
-        type: 'error'
-      });
-      setTimeout(setNotification(null), 5000);
+      setNotification({ message: `Error monitoring blocked periods: ${error.message}`, type: 'error' });
+      setTimeout(() => setNotification(null), 5000);
     });
 
     return () => unsubscribe();
@@ -419,45 +467,49 @@ function AppointmentsContent() {
   // Handle status update
   const handleStatusUpdate = useCallback(async (appointmentId, newStatus) => {
     try {
-      const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
-      await updateDoc(appointmentRef, { status: newStatus });
-      setAppointments(prev => calculatePidData(
-        prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: newStatus } : app)
-      ));
       const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
       if (!appointment) {
         setNotification({ message: 'Appointment not found.', type: 'error' });
         setTimeout(() => setNotification(null), 5000);
         return;
       }
-      if (newStatus === 'confirmed') {
-        if (!appointment.email || appointment.email === 'noreply@gmail.com') {
-          console.warn(`No valid email for appointment ${appointment.id}`);
-          setNotification({ message: `Cannot send confirmation email: No valid email address for ${appointment.clientName}.`, type: 'error' });
-          setTimeout(() => setNotification(null), 5000);
-          return;
-        }
-        const emailParams = {
-          name: appointment.clientName || 'Unknown',
-          date: formatDate(appointment.date),
-          time: appointment.time,
-          to_email: appointment.email,
-        };
-        await emailjs.send('service_l920egs', 'template_iremp8a', emailParams);
-        console.log(`Email sent to ${appointment.email} for confirmed appointment:`, emailParams);
-        sendPhoneNotification(appointment, 'confirmed');
+
+      if (newStatus === 'confirmed' && !isValidEmail(appointment.email)) {
+        setNotification({
+          message: `Cannot confirm appointment: Invalid or missing email for ${appointment.clientName || 'Unknown'}.`,
+          type: 'error'
+        });
+        setTimeout(() => setNotification(null), 5000);
+        return;
       }
+
+      const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
+      await updateDoc(appointmentRef, { status: newStatus });
+      setAppointments(prev => calculatePidData(
+        prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: newStatus } : app)
+      ));
+
+      if (newStatus === 'confirmed') {
+        const emailSent = await sendEmailNotification(appointment, 'confirmed');
+        if (emailSent) {
+          sendPhoneNotification(appointment, 'confirmed');
+        }
+      }
+
+      setNotification({
+        message: `Appointment status updated to ${newStatus}.`,
+        type: 'success'
+      });
+      setTimeout(() => setNotification(null), 5000);
     } catch (error) {
       console.error('Error updating appointment status:', error);
-      const errorMessage = error.code === 'permission-denied'
-        ? 'Permission denied: Please check your authentication.'
-        : error.code === 'unavailable'
-        ? 'Network error: Please check your internet connection.'
-        : `Failed to update appointment status: ${error.message}`;
-      setNotification({ message: errorMessage, type: 'error' });
+      setNotification({
+        message: `Failed to update appointment status: ${error.message}`,
+        type: 'error'
+      });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [appointments, calculatePidData, sendPhoneNotification, formatDate]);
+  }, [appointments, calculatePidData, sendPhoneNotification, sendEmailNotification]);
 
   // Handle soft delete
   const handleDelete = useCallback(async (appointmentId) => {
@@ -473,94 +525,122 @@ function AppointmentsContent() {
         setTimeout(() => setNotification(null), 5000);
         return;
       }
-      const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
-      await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
-  
-      const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
-      setAppointments(prev => calculatePidData(
-        prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: 'deleted' } : app)
-      ));
-      sendPhoneNotification(appointment, 'deleted');
-      if (isSlotAvailable) {
+      if (!isValidEmail(appointment.email)) {
         setNotification({
-          message: `Appointment deleted and slot ${appointment.time} on ${formatDate(appointment.date)} is now available.`,
-          type: 'success'
+          message: `Cannot delete appointment: Invalid or missing email for ${appointment.clientName || 'Unknown'}.`,
+          type: 'error'
         });
         setTimeout(() => setNotification(null), 5000);
+        return;
       }
-      if (selectedPid === appointment.pid) setSelectedPid(null);
-      if (selectedPatientDetails && selectedPatientDetails.pid === appointment.pid) setSelectedPatientDetails(null);
-      setDeleteConfirmation({ isOpen: false, appointmentId: null });
+
+      const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
+      await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
+
+      const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
+      const emailSent = await sendEmailNotification(appointment, 'deleted');
+      if (emailSent) {
+        setAppointments(prev => calculatePidData(
+          prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: 'deleted' } : app)
+        ));
+
+        sendPhoneNotification(appointment, 'deleted');
+        if (isSlotAvailable) {
+          setNotification({
+            message: `Appointment deleted and slot ${appointment.time} on ${formatDate(appointment.date)} is now available.`,
+            type: 'success'
+          });
+          setTimeout(() => setNotification(null), 5000);
+        }
+        if (selectedPid === appointment.pid) setSelectedPid(null);
+        if (selectedPatientDetails && selectedPatientDetails.pid === appointment.pid) setSelectedPatientDetails(null);
+        setDeleteConfirmation({ isOpen: false, appointmentId: null });
+      }
     } catch (error) {
       console.error('Error marking appointment as deleted:', error);
-      const errorMessage = error.code === 'permission-denied'
-        ? 'Permission denied: Please check your authentication.'
-        : error.code === 'unavailable'
-        ? 'Network error: Please check your internet connection.'
-        : `Failed to delete appointment: ${error.message}`;
-      setNotification({ message: errorMessage, type: 'error' });
+      setNotification({ message: `Failed to delete appointment: ${error.message}`, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate]);
+  }, [appointments, calculatePidData, isFutureAppointment, selectedPid, selectedPatientDetails, sendPhoneNotification, checkSlotAvailability, formatDate, sendEmailNotification]);
 
   // Handle bulk delete
   const handleBulkDelete = useCallback(async (ids) => {
     try {
-      const allAppointments = appointments.semiflatMap(data => data.appointments);
-      const futureAppointmentIds = ids.filter(id => {
-        const app = allAppointments.find(app => app.id === id);
-        return app && isFutureAppointment(app);
-      });
-      if (!futureAppointmentIds.length) {
-        setNotification({ message: 'Cannot delete past appointments.', type: 'error' });
+      const allAppointments = appointments.flatMap(data => data.appointments);
+      const validAppointments = ids.map(id => allAppointments.find(app => app.id === id)).filter(app => app);
+      const futureAppointments = validAppointments.filter(app => isFutureAppointment(app) && isValidEmail(app.email));
+      
+      if (!futureAppointments.length) {
+        setNotification({
+          message: 'No valid future appointments with valid emails selected for deletion.',
+          type: 'error'
+        });
         setTimeout(() => setNotification(null), 5000);
         return;
       }
+
       const deletedSlots = [];
-      await Promise.all(futureAppointmentIds.map(async id => {
-        const appointment = allAppointments.find(app => app.id === id);
-        if (!appointment) return;
-        await updateDoc(doc(db, 'appointments/data/bookings', id), { status: 'deleted', deletedAt: new Date().toISOString() });
-        const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
-        if (isSlotAvailable) {
-          deletedSlots.push(`${appointment.time} on ${formatDate(appointment.date)}`);
+      const failedDeletions = [];
+      await Promise.all(futureAppointments.map(async appointment => {
+        try {
+          const appointmentRef = doc(db, 'appointments/data/bookings', appointment.id);
+          await updateDoc(appointmentRef, { status: 'deleted', deletedAt: new Date().toISOString() });
+          const isSlotAvailable = await checkSlotAvailability(appointment.date, appointment.time, appointment.location);
+          const emailSent = await sendEmailNotification(appointment, 'deleted');
+          if (emailSent) {
+            if (isSlotAvailable) {
+              deletedSlots.push(`${appointment.time} on ${formatDate(appointment.date)}`);
+            }
+            sendPhoneNotification(appointment, 'deleted');
+          } else {
+            failedDeletions.push(appointment.clientName || 'Unknown');
+          }
+        } catch (error) {
+          console.error(`Error deleting appointment ${appointment.id}:`, error);
+          failedDeletions.push(appointment.clientName || 'Unknown');
         }
-        sendPhoneNotification(appointment, 'deleted');
       }));
+
+      if (failedDeletions.length > 0) {
+        setNotification({
+          message: `Failed to delete appointments for ${failedDeletions.join(', ')} due to email issues.`,
+          type: 'error'
+        });
+        setTimeout(() => setNotification(null), 5000);
+        return;
+      }
+
       setAppointments(prev => calculatePidData(
-        prev.flatMap(data => data.appointments).map(app => futureAppointmentIds.includes(app.id) ? { ...app, status: 'deleted' } : app)
+        prev.flatMap(data => data.appointments).map(app => ids.includes(app.id) ? { ...app, status: 'deleted' } : app)
       ));
       setDeleteConfirmation({ isOpen: false, appointmentId: null });
       setNotification({
-        message: `Successfully marked ${futureAppointmentIds.length} appointment(s) as deleted. ${deletedSlots.length > 0 ? `Slots ${deletedSlots.join(', ')} are now available.` : ''}`,
+        message: `Successfully marked ${futureAppointments.length} appointment(s) as deleted. ${deletedSlots.length > 0 ? `Slots ${deletedSlots.join(', ')} are now available.` : ''}`,
         type: 'success'
       });
       setTimeout(() => setNotification(null), 5000);
     } catch (error) {
       console.error('Error marking appointments as deleted:', error);
-      const errorMessage = error.code === 'permission-denied'
-        ? 'Permission denied: Please check your authentication.'
-        : error.code === 'unavailable'
-        ? 'Network error: Please check your internet connection.'
-        : `Failed to delete appointments: ${error.message}`;
-      setNotification({ message: errorMessage, type: 'error' });
+      setNotification({ message: `Failed to delete appointments: ${error.message}`, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification, checkSlotAvailability, formatDate]);
+  }, [appointments, calculatePidData, isFutureAppointment, sendPhoneNotification, checkSlotAvailability, formatDate, sendEmailNotification]);
 
   // Handle view details and patient details
   const handleViewDetails = useCallback((pid) => {
-    if (pid === 'Unknown') return;
+    if (pid === 'Unknown' || !pid) return;
     setSelectedPid(pid);
   }, []);
+
   const handleViewPatientDetails = useCallback((pid) => {
-    if (pid === 'Unknown') return;
+    if (pid === 'Unknown' || !pid) return;
     const patientData = appointments.find(data => data.pid === pid);
     if (patientData) {
       setSelectedPatientDetails(patientData);
       setSelectedPid(null);
     }
   }, [appointments]);
+
   const handleBackToList = useCallback(() => {
     setSelectedPid(null);
     setSelectedPatientDetails(null);
@@ -644,7 +724,7 @@ function AppointmentsContent() {
         className="p-1 text-green-600 hover:opacity-80 transition-opacity"
         title="Approve Appointment"
         aria-label="Approve Appointment"
-        disabled={appointment.status === 'deleted'}
+        disabled={appointment.status === 'deleted' || !isValidEmail(appointment.email)}
       >
         <ThumbsUp size={20} />
       </button>
@@ -655,6 +735,7 @@ function AppointmentsContent() {
           title="Delete Appointment"
           aria-label="Delete Appointment"
           style={{ color: currentTheme.destructive }}
+          disabled={!isValidEmail(appointment.email)}
         >
           <Trash2 size={20} />
         </button>
@@ -713,7 +794,7 @@ function AppointmentsContent() {
                   <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.emails}</span>
                 </div>
                 <div>
-                  <span className="Favoritesfont-medium" style={{ color: currentTheme.text.primary }}>Age: </span>
+                  <span className="font-medium" style={{ color: currentTheme.text.primary }}>Age: </span>
                   <span style={{ color: currentTheme.text.secondary }}>{selectedPatientDetails.ages}</span>
                 </div>
                 <div>
