@@ -27,7 +27,7 @@ const structuredData = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "Dr. Laxminadh Sivaraju",
-  url: "https://www.drlaxminadhsivaraju.com", // Replace with actual domain
+  url: "https://www.drlaxminadhsivaraju.com",
   potentialAction: {
     "@type": "SearchAction",
     target: "https://www.drlaxminadhsivaraju.com/search?q={search_term_string}",
@@ -44,7 +44,7 @@ function Header() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
   const [isResearchDropdownOpen, setIsResearchDropdownOpen] = useState(false);
-  const [error, setError] = useState(null); // SEO: Error handling for better UX
+  const [error, setError] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
@@ -58,7 +58,7 @@ function Header() {
     const meta = {
       title: "Dr. Laxminadh Sivaraju - Neurosurgeon",
       description: "Expert neurosurgery services by Dr. Laxminadh Sivaraju.",
-      ogImage: "https://www.drlaxminadhsivaraju.com/og-image.jpg", // Replace with actual image URL
+      ogImage: "https://www.drlaxminadhsivaraju.com/og-image.jpg",
     };
     switch (location.pathname) {
       case "/bookappointment":
@@ -91,7 +91,7 @@ function Header() {
     return meta;
   }, [location.pathname, location.hash]);
 
-  // SEO: Update document meta tags
+  // SEO: Update document meta tags and scroll to top
   useEffect(() => {
     const { title, description, ogImage } = getPageMeta();
     document.title = title;
@@ -143,7 +143,10 @@ function Header() {
       document.head.appendChild(script);
     }
     script.textContent = JSON.stringify(structuredData);
-  }, [getPageMeta]);
+
+    // Scroll to top on page navigation
+    window.scrollTo(0, 0);
+  }, [getPageMeta, location.pathname]);
 
   const getTextColor = useCallback(() => {
     return isHomePage && !isScrolled && !isMenuOpen
@@ -240,12 +243,13 @@ function Header() {
       if (href === "/" && sectionId) {
         if (location.pathname !== "/") {
           navigate("/");
-          setTimeout(() => scrollToSection(0, 15, 300), 1000); // Increased delay for cross-page navigation
+          setTimeout(() => scrollToSection(0, 15, 300), 1000);
         } else {
           scrollToSection();
         }
       } else {
         navigate(href);
+        window.scrollTo(0, 0);
         if (sectionId) {
           setTimeout(() => scrollToSection(0, 15, 300), 1000);
         }
@@ -295,7 +299,7 @@ function Header() {
     <div className="relative group" ref={userMenuRef}>
       <button
         onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-        className="flex items-center gap-2 font-medium transition-colors duration-300 text-sm sm:text-base"
+        className="flex items-center gap-2 font-medium transition-colors duration-300 text-sm sm:text-base cursor-pointer"
         style={{ color: getTextColor() }}
         aria-label="User menu"
       >
@@ -342,7 +346,7 @@ function Header() {
   ) : (
     <Link
       to="/login"
-      className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline text-sm sm:text-base"
+      className="flex items-center gap-2 font-medium transition-colors duration-300 hover:underline text-sm sm:text-base cursor-pointer"
       style={{ color: getTextColor() }}
       onClick={() => setIsMenuOpen(false)}
       aria-label="Login to your account"
@@ -397,13 +401,16 @@ function Header() {
           transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
           transform: translateY(-10px);
         }
-        .group:hover .dropdown-menu {
+        .group:hover .dropdown-menu:not(.research-dropdown .dropdown-menu) {
           opacity: 1 !important;
           visibility: visible !important;
           transform: translateY(0);
         }
         .research-dropdown .dropdown-menu {
           display: ${isResearchDropdownOpen ? "block" : "none"};
+          opacity: ${isResearchDropdownOpen ? "1" : "0"};
+          visibility: ${isResearchDropdownOpen ? "visible" : "hidden"};
+          transform: ${isResearchDropdownOpen ? "translateY(0)" : "translateY(-10px)"};
         }
         .research-button {
           color: ${getResearchTextColor()} !important;
@@ -696,7 +703,7 @@ function Header() {
             ) : (
               <Link
                 to="/login"
-                className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
+                className="flex items-center gap-2 py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base cursor-pointer"
                 style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
                 onClick={() => setIsMenuOpen(false)}
                 role="menuitem"
