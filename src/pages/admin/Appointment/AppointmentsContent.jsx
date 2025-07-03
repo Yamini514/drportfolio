@@ -177,7 +177,7 @@ function AppointmentsContent() {
       const appointmentRef = doc(db, 'appointments/data/bookings', appointment.id);
       await updateDoc(appointmentRef, { status: 'cancelled', cancelledAt: new Date().toISOString() });
 
-      // Send email using EmailJS
+      // Send cancellation email using EmailJS
       const emailParams = {
         name: appointment.clientName || 'Unknown',
         date: formatDate(appointment.date),
@@ -424,13 +424,27 @@ function AppointmentsContent() {
       setAppointments(prev => calculatePidData(
         prev.flatMap(data => data.appointments).map(app => app.id === appointmentId ? { ...app, status: newStatus } : app)
       ));
+      const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
+      if (!appointment) {
+        setNotification({ message: 'Appointment not found.', type: 'error' });
+        setTimeout(() => setNotification(null), 5000);
+        return;
+      }
       if (newStatus === 'confirmed') {
-        const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
-        if (!appointment) {
-          setNotification({ message: 'Appointment not found.', type: 'error' });
+        if (!appointment.email || appointment.email === 'noreply@gmail.com') {
+          console.warn(`No valid email for appointment ${appointment.id}`);
+          setNotification({ message: `Cannot send confirmation email: No valid email address for ${appointment.clientName}.`, type: 'error' });
           setTimeout(() => setNotification(null), 5000);
           return;
         }
+        const emailParams = {
+          name: appointment.clientName || 'Unknown',
+          date: formatDate(appointment.date),
+          time: appointment.time,
+          to_email: appointment.email,
+        };
+        await emailjs.send('service_l920egs', 'template_iremp8a', emailParams);
+        console.log(`Email sent to ${appointment.email} for confirmed appointment:`, emailParams);
         sendPhoneNotification(appointment, 'confirmed');
       }
     } catch (error) {
@@ -443,7 +457,7 @@ function AppointmentsContent() {
       setNotification({ message: errorMessage, type: 'error' });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [appointments, calculatePidData, sendPhoneNotification]);
+  }, [appointments, calculatePidData, sendPhoneNotification, formatDate]);
 
   // Handle soft delete
   const handleDelete = useCallback(async (appointmentId) => {
