@@ -226,7 +226,8 @@ const SelfBookingForm = ({
               id="pid"
               name="pid"
               value={formData.pid}
-              readOnly
+              onChange={handleInputChange}
+              required
               className="w-full p-2 rounded-md border"
               style={{
                 borderColor: errors.pid ? 'rgb(239, 68, 68)' : currentTheme.border,
