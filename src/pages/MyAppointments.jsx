@@ -1,30 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { db, auth } from '../firebase/config';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { onAuthStateChanged } from 'firebase/auth';
 
-function MyAppointments() {
-  const { currentTheme } = useTheme();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+const MyAppointments = () => {
+  const { currentTheme } = useTheme() || { currentTheme: { background: '#fff', surface: '#fff', border: '#ccc', text: { primary: '#000', secondary: '#666' } } };
   const [appointments, setAppointments] = useState([]);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setIsAuthenticated(!!user);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
+    let unsubscribe;
     const fetchAppointments = async () => {
-      if (!auth.currentUser) return;
-      
+      if (!auth.currentUser) {
+        setError('No authenticated user found.');
+        setLoadingAppointments(false);
+        return;
+      }
+
       try {
         const appointmentsRef = collection(db, 'appointments/data/bookings');
         const q = query(
@@ -32,28 +27,39 @@ function MyAppointments() {
           where('email', '==', auth.currentUser.email),
           orderBy('date', 'desc')
         );
-        
         const querySnapshot = await getDocs(q);
         const appointmentsList = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
-        
+        console.log('Fetched appointments:', appointmentsList);
         setAppointments(appointmentsList);
+
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const updatedAppointments = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          console.log('Real-time update:', updatedAppointments);
+          setAppointments(updatedAppointments);
+        }, (error) => {
+          console.error('Real-time error:', error);
+          setError('Failed to update appointments in real-time.');
+        });
       } catch (error) {
         console.error('Error fetching appointments:', error);
+        setError('Failed to load appointments. Check console for details.');
       } finally {
         setLoadingAppointments(false);
       }
     };
 
-    if (isAuthenticated) {
-      fetchAppointments();
-    }
-  }, [isAuthenticated]);
+    fetchAppointments();
+    return () => unsubscribe && unsubscribe();
+  }, []);
 
   const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'confirmed':
         return 'text-green-500';
       case 'deleted':
@@ -65,7 +71,21 @@ function MyAppointments() {
     }
   };
 
-  if (loading || loadingAppointments) {
+  const handleDeleteAppointment = async (appointmentId, date, time, location) => {
+    if (window.confirm('Are you sure you want to cancel this appointment?')) {
+      try {
+        const appointmentRef = doc(db, 'appointments/data/bookings', appointmentId);
+        await deleteDoc(appointmentRef);
+        setAppointments(appointments.filter(apt => apt.id !== appointmentId));
+        console.log('Appointment canceled:', appointmentId);
+      } catch (error) {
+        console.error('Error canceling appointment:', error);
+        setError('Failed to cancel appointment. Check console for details.');
+      }
+    }
+  };
+
+  if (loadingAppointments) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: currentTheme.background }}>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: currentTheme.primary }}></div>
@@ -73,8 +93,16 @@ function MyAppointments() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen p-4 sm:p-6 lg:p-8 flex items-center justify-center" style={{ backgroundColor: currentTheme.background }}>
+        <p className="text-center text-red-500" style={{ color: currentTheme.text.primary }}>{error}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen p-4 sm:p-6 lg:p-8" style={{ backgroundColor: currentTheme.background }}>
+    <div className="min-h-screen p-4 sm:p-6 lg:p-8" style={{ backgroundColor: currentTheme.background }} role="main" aria-label="My Appointments List">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold mb-6 text-center" style={{ color: currentTheme.text.primary }}>
           My Appointments
@@ -89,28 +117,35 @@ function MyAppointments() {
             {appointments.map((appointment) => (
               <div
                 key={appointment.id}
-                className="p-4 rounded-lg shadow-md"
+                className="p-4 rounded-lg shadow-md flex justify-between items-start"
                 style={{ 
                   backgroundColor: currentTheme.surface,
                   borderColor: currentTheme.border,
                   color: currentTheme.text.primary
                 }}
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-semibold">Date: {format(new Date(appointment.date), 'MMMM d, yyyy')}</p>
-                    <p>Time: {appointment.time}</p>
-                    <p>Location: {appointment.location}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`font-semibold capitalize ${getStatusColor(appointment.status)}`}>
-                      Status: {appointment.status}
-                    </p>
-                    <p>Type: {appointment.appointmentType}</p>
-                    <p className="mt-2 text-sm" style={{ color: currentTheme.text.secondary }}>
-                      Reason: {appointment.reasonForVisit}
-                    </p>
-                  </div>
+                <div>
+                  <p className="font-semibold">Date: {format(new Date(appointment.date), 'MMMM d, yyyy')}</p>
+                  <p>Time: {appointment.time || 'N/A'}</p>
+                  <p>Location: {appointment.location || 'N/A'}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`font-semibold capitalize ${getStatusColor(appointment.status)}`}>
+                    Status: {appointment.status || 'Unknown'}
+                  </p>
+                  <p>Type: {appointment.appointmentType || 'N/A'}</p>
+                  <p className="mt-2 text-sm" style={{ color: currentTheme.text.secondary }}>
+                    Reason: {appointment.reasonForVisit || 'Not specified'}
+                  </p>
+                  {appointment.status?.toLowerCase() !== 'deleted' && (
+                    <button
+                      onClick={() => handleDeleteAppointment(appointment.id, appointment.date, appointment.time, appointment.location)}
+                      className="mt-2 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      aria-label={`Cancel appointment on ${format(new Date(appointment.date), 'MMMM d, yyyy')} at ${appointment.time || 'N/A'}`}
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -119,6 +154,7 @@ function MyAppointments() {
       </div>
     </div>
   );
-}
+};
 
 export default MyAppointments;
+console.log('MyAppointments defined:', typeof MyAppointments === 'function');

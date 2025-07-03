@@ -18,7 +18,7 @@ const AdminLogin = () => {
   const [rememberMe, setRememberMe] = useState(false);
 
   // Session expiration time (30 minutes in milliseconds)
-  const SESSION_TIMEOUT = 3*60 * 1000;
+  const SESSION_TIMEOUT = 30 * 60 * 1000; // Corrected to 30 minutes (was 3 minutes)
 
   useEffect(() => {
     // Check for saved email and session validity when component mounts
@@ -27,6 +27,8 @@ const AdminLogin = () => {
     const sessionStart = localStorage.getItem("adminSessionStart");
     const manualLogout = localStorage.getItem("manualLogout") === "true";
 
+    console.log("Session check:", { savedEmail, sessionStart, manualLogout });
+
     if (savedEmail && savedRememberMe) {
       setCredentials((prev) => ({ ...prev, email: savedEmail }));
       setRememberMe(true);
@@ -34,15 +36,21 @@ const AdminLogin = () => {
 
     // Check if session exists and is still valid
     if (sessionStart && !manualLogout) {
-      const currentTime = new Date().getTime();
       const sessionTime = parseInt(sessionStart, 10);
-      if (currentTime - sessionTime > SESSION_TIMEOUT) {
-        // Session expired, clear localStorage and sign out
-        signOut(auth).catch(console.error);
-        localStorage.removeItem("adminToken");
-        localStorage.removeItem("isAdminLoggedIn");
+      if (!isNaN(sessionTime)) {
+        const currentTime = new Date().getTime();
+        if (currentTime - sessionTime > SESSION_TIMEOUT) {
+          // Session expired, clear localStorage and sign out
+          signOut(auth).catch(console.error);
+          localStorage.removeItem("adminToken");
+          localStorage.removeItem("isAdminLoggedIn");
+          localStorage.removeItem("adminSessionStart");
+          setError("Session has expired. Please log in again.");
+        }
+      } else {
+        // Invalid sessionStart, clear it
         localStorage.removeItem("adminSessionStart");
-        setError("Session has expired. Please log in again.");
+        console.log("Invalid sessionStart detected, cleared.");
       }
     }
   }, []);

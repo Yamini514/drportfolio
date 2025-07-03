@@ -1,27 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
-import {
-  auth,
-  db,
-} from '../../firebase/config';
-import {
-  createUserWithEmailAndPassword,
-  fetchSignInMethodsForEmail,
-  signInWithEmailAndPassword,
-} from 'firebase/auth';
-import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  setDoc,
-  where,
-} from 'firebase/firestore';
+import { auth, db } from '../../firebase/config';
+import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
 import CustomButton from '../../components/CustomButton';
 import CustomInput from '../../components/CustomInput';
 import emailjs from '@emailjs/browser';
-import bcrypt from 'bcryptjs';
 
 // Constants
 const INITIAL_FORM_DATA = {
@@ -49,8 +34,6 @@ const UserRegister = () => {
   const [loading, setLoading] = useState(false);
   const [pid, setPid] = useState('');
   const [showWhatsAppPrompt, setShowWhatsAppPrompt] = useState(false);
-
-  // Hooks
   const navigate = useNavigate();
   const { currentTheme } = useTheme();
 
@@ -61,7 +44,7 @@ const UserRegister = () => {
       name: formData.name,
       pid: pid,
       email: email || `${formData.phone}@example.com`,
-      content: `Hi ${formData.name},\nYour PID (${pid})\n${formData.content || ''}\nWarm regards,\nDr. LakshmiNadh Sivraju`,
+      content: `Hi ${formData.name},\nYour PID (${pid})\nThank you for registering!\nWarm regards,\nDr. Laxminadh Sivaraju`,
     };
 
     try {
@@ -71,7 +54,7 @@ const UserRegister = () => {
     }
   };
 
-  // Helper Functions
+  // Generate unique PID
   const generatePID = async () => {
     const currentYear = new Date().getFullYear();
     const maxAttempts = 5;
@@ -96,6 +79,7 @@ const UserRegister = () => {
     return pid;
   };
 
+  // Validate form inputs
   const validateForm = async () => {
     const newErrors = { ...INITIAL_ERRORS };
     let isValid = true;
@@ -121,7 +105,7 @@ const UserRegister = () => {
       isValid = false;
     }
 
-    // Email validation
+    // Email validation (optional)
     if (formData.email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
@@ -148,6 +132,7 @@ const UserRegister = () => {
     return isValid;
   };
 
+  // Handle Firebase errors
   const handleFirebaseError = (error) => {
     switch (error.code) {
       case 'auth/email-already-in-use':
@@ -163,7 +148,7 @@ const UserRegister = () => {
     }
   };
 
-  // Event Handlers
+  // Handle form input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -171,6 +156,7 @@ const UserRegister = () => {
     setSuccess('');
   };
 
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!(await validateForm())) return;
@@ -215,29 +201,19 @@ const UserRegister = () => {
       const generatedPid = await generatePID();
       setPid(generatedPid);
 
-      // Hash the password
-      const salt = bcrypt.genSaltSync(10);
-      const hashedPassword = bcrypt.hashSync(formData.password, salt);
-
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        authEmail,
-        formData.password,
-      );
-
+      const userCredential = await createUserWithEmailAndPassword(auth, authEmail, formData.password);
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         name: formData.name,
         email: formData.email || null,
         phone: formData.phone,
         pid: generatedPid,
-        password: hashedPassword, // Store hashed password
         createdAt: new Date().toISOString(),
         registrationDate: new Date().toISOString(),
         role: 'user',
       });
 
       await sendRegistrationEmail(generatedPid, formData.email);
-      setSuccess(`Your PID is <strong>${generatedPid}</strong>`);
+      setSuccess(`Registration successful! Your PID is <strong>${generatedPid}</strong>`);
       setShowWhatsAppPrompt(true);
 
       await signInWithEmailAndPassword(auth, authEmail, formData.password);
@@ -249,6 +225,7 @@ const UserRegister = () => {
     }
   };
 
+  // Handle WhatsApp confirmation
   const handleWhatsAppConfirm = () => {
     const message = `Hi ${formData.name}, Your PID is ${pid}. Thank you for registering!`;
     const encodedMessage = encodeURIComponent(message);
@@ -260,176 +237,319 @@ const UserRegister = () => {
     navigate('/login', { state: { phone: formData.phone } });
   };
 
+  // Handle WhatsApp decline
   const handleWhatsAppDecline = () => {
     setShowWhatsAppPrompt(false);
     navigate('/login', { state: { phone: formData.phone } });
   };
 
-  // Effects
+  // Redirect after success
   useEffect(() => {
     if (success && !showWhatsAppPrompt) {
       const timer = setTimeout(() => {
         setSuccess('');
         navigate('/login', { state: { phone: formData.phone } });
-      }, 30000);
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [success, navigate, formData.phone, showWhatsAppPrompt]);
 
-  // Render
+  // Add structured data for SEO
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      'name': 'User Registration - Dr. Laxminadh Sivaraju',
+      'description': 'Register for Dr. Laxminadh Sivaraju’s patient portal to access neurosurgery services.',
+      'url': window.location.href,
+      'publisher': {
+        '@type': 'Person',
+        'name': 'Dr. Laxminadh Sivaraju',
+      },
+    });
+    document.head.appendChild(script);
+
+    // Cleanup
+    return () => {
+      document.head.removeChild(script);
+    };
+  }, []);
+
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ backgroundColor: currentTheme.background.primary }}
-    >
-      <div
-        className="max-w-md w-full space-y-8 p-8 rounded-xl shadow-lg border-2"
+    <>
+      {/* SEO Meta Tags */}
+      <meta
+        name="description"
+        content="Register for Dr. Laxminadh Sivaraju’s patient portal to access neurosurgery services."
+      />
+      <meta
+        name="keywords"
+        content="user registration, Dr. Laxminadh Sivaraju, neurosurgeon, patient portal, Care Hospital"
+      />
+      <meta name="author" content="Dr. Laxminadh Sivaraju" />
+
+      {/* Open Graph Meta Tags for SMO */}
+      <meta
+        property="og:title"
+        content="User Registration - Dr. Laxminadh Sivaraju"
+      />
+      <meta
+        property="og:description"
+        content="Create an account to access patient services provided by Dr. Laxminadh Sivaraju."
+      />
+      <meta property="og:image" content="/assets/drimg.png" />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content={window.location.href} />
+
+      {/* Twitter Card Meta Tags for SMO */}
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta
+        name="twitter:title"
+        content="User Registration - Dr. Laxminadh Sivaraju"
+      />
+      <meta
+        name="twitter:description"
+        content="Register for Dr. Laxminadh Sivaraju’s patient portal."
+      />
+      <meta name="twitter:image" content="/assets/drimg.png" />
+
+      <section
+        className="min-h-screen flex items-center justify-center p-4 sm:p-6"
         style={{
-          backgroundColor: currentTheme.surface,
-          borderColor: currentTheme.primary || '#8B5CF6',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
+          backgroundColor: currentTheme.background || '#f9fafb',
+          color: currentTheme.text?.primary || '#111827',
         }}
+        aria-labelledby="register-heading"
       >
-        <h2
-          className="text-3xl font-bold text-center mb-8"
-          style={{ color: currentTheme.text.primary }}
+        <div
+          className="w-full max-w-md space-y-8 p-8 sm:p-10 rounded-lg shadow-md border"
+          style={{
+            backgroundColor: currentTheme.surface || '#ffffff',
+            borderColor: currentTheme.border || '#d1d5db',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          }}
         >
-          Create Account
-        </h2>
-        <form className="grid gap-6" onSubmit={handleSubmit}>
-          <div className="grid gap-6">
-            <div>
-              <CustomInput
-                label="Name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-              />
-              {errors.name && (
-                <p className="text-red-500 text-xs mt-1">{errors.name}</p>
-              )}
-            </div>
-            <div>
-              <CustomInput
-                label="Phone Number"
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                required
-                pattern="\d{10}"
-              />
-              {errors.phone && (
-                <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
-              )}
-            </div>
-            <div>
-              <CustomInput
-                label="Email (Optional)"
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-              />
-              {errors.email && (
-                <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-              )}
-            </div>
-            <div>
-              <CustomInput
-                label="Password"
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                required
-              />
-              {errors.password && (
-                <p className="text-red-500 text-xs mt-1">{errors.password}</p>
-              )}
-            </div>
-            <div>
-              <CustomInput
-                label="Confirm Password"
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                required
-              />
-              {errors.confirmPassword && (
-                <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>
-              )}
-            </div>
-          </div>
-          {errors.general && (
-            <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-md">
-              {errors.general}
-            </p>
-          )}
-          {success && (
-            <p
-              className="text-green-500 text-sm text-center bg-green-50 p-2 rounded-md"
-              dangerouslySetInnerHTML={{ __html: success }}
-            />
-          )}
-          {showWhatsAppPrompt && (
-            <div
-              className="text-center p-6 rounded-lg shadow-md"
-              style={{
-                backgroundColor: currentTheme.background.secondary || '#F3F4F6',
-                border: `1px solid ${currentTheme.primary || '#8B5CF6'}`,
-              }}
+          <header className="text-center">
+            <h1
+              id="register-heading"
+              className="text-3xl font-bold mb-6"
+              style={{ color: currentTheme.text?.primary || '#111827' }}
             >
-              <p
-                className="text-lg font-semibold mb-4"
-                style={{ color: currentTheme.text.primary }}
+              Create Account
+            </h1>
+            {errors.general && (
+              <div
+                className="text-sm mb-6 p-3 rounded-md"
+                style={{
+                  backgroundColor: currentTheme.background?.error || '#fee2e2',
+                  color: currentTheme.text?.error || '#b91c1c',
+                }}
+                role="alert"
+                aria-live="assertive"
               >
-                Save Your PID on WhatsApp?
-              </p>
-              <p
-                className="text-sm mb-6"
-                style={{ color: currentTheme.text.secondary }}
-              >
-                Would you like to receive your PID via WhatsApp for easy access?
-              </p>
-              <div className="flex justify-center space-x-4">
-                <CustomButton
-                  onClick={handleWhatsAppConfirm}
-                  className="justify-center bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-                >
-                  Yes, Send to WhatsApp
-                </CustomButton>
-                <CustomButton
-                  onClick={handleWhatsAppDecline}
-                  className="justify-center bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-                >
-                  No, Skip
-                </CustomButton>
+                {errors.general}
               </div>
-            </div>
-          )}
-          <div className="flex flex-col space-y-4">
-            <CustomButton type="submit" disabled={loading} className="justify-center">
-              {loading ? 'Processing...' : 'Register'}
-            </CustomButton>
-            <p className="text-center text-sm" style={{ color: currentTheme.text.secondary }}>
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => navigate('/login')}
-                className="font-medium hover:underline"
-                style={{ color: currentTheme.primary }}
+            )}
+            {success && (
+              <div
+                className="text-sm mb-6 p-3 rounded-md"
+                style={{
+                  backgroundColor: currentTheme.background?.success || '#d1fae5',
+                  color: currentTheme.text?.success || '#065f46',
+                }}
+                role="alert"
+                aria-live="assertive"
+                dangerouslySetInnerHTML={{ __html: success }}
+              />
+            )}
+          </header>
+          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
+            <CustomInput
+              label="Name"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              placeholder="Enter your full name"
+              style={{
+                color: currentTheme.text?.primary || '#111827',
+                backgroundColor: currentTheme.inputBackground || '#f9fafb',
+                borderColor: errors.name ? '#dc2626' : currentTheme.border || '#d1d5db',
+              }}
+              aria-describedby={errors.name ? 'name-error' : undefined}
+            />
+            {errors.name && (
+              <p id="name-error" className="text-sm" style={{ color: currentTheme.text?.error || '#dc2626' }}>
+                {errors.name}
+              </p>
+            )}
+            <CustomInput
+              label="Phone Number"
+              type="tel"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              required
+              placeholder="Enter your 10-digit phone number"
+              pattern="\d{10}"
+              style={{
+                color: currentTheme.text?.primary || '#111827',
+                backgroundColor: currentTheme.inputBackground || '#f9fafb',
+                borderColor: errors.phone ? '#dc2626' : currentTheme.border || '#d1d5db',
+              }}
+              aria-describedby={errors.phone ? 'phone-error' : undefined}
+            />
+            {errors.phone && (
+              <p id="phone-error" className="text-sm" style={{ color: currentTheme.text?.error || '#dc2626' }}>
+                {errors.phone}
+              </p>
+            )}
+            <CustomInput
+              label="Email (Optional)"
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="Enter your email address"
+              style={{
+                color: currentTheme.text?.primary || '#111827',
+                backgroundColor: currentTheme.inputBackground || '#f9fafb',
+                borderColor: errors.email ? '#dc2626' : currentTheme.border || '#d1d5db',
+              }}
+              aria-describedby={errors.email ? 'email-error' : undefined}
+            />
+            {errors.email && (
+              <p id="email-error" className="text-sm" style={{ color: currentTheme.text?.error || '#dc2626' }}>
+                {errors.email}
+              </p>
+            )}
+            <CustomInput
+              label="Password"
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              placeholder="Enter your password"
+              style={{
+                color: currentTheme.text?.primary || '#111827',
+                backgroundColor: currentTheme.inputBackground || '#f9fafb',
+                borderColor: errors.password ? '#dc2626' : currentTheme.border || '#d1d5db',
+              }}
+              aria-describedby={errors.password ? 'password-error' : undefined}
+            />
+            {errors.password && (
+              <p id="password-error" className="text-sm" style={{ color: currentTheme.text?.error || '#dc2626' }}>
+                {errors.password}
+              </p>
+            )}
+            <CustomInput
+              label="Confirm Password"
+              type="password"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              required
+              placeholder="Confirm your password"
+              style={{
+                color: currentTheme.text?.primary || '#111827',
+                backgroundColor: currentTheme.inputBackground || '#f9fafb',
+                borderColor: errors.confirmPassword ? '#dc2626' : currentTheme.border || '#d1d5db',
+              }}
+              aria-describedby={errors.confirmPassword ? 'confirmPassword-error' : undefined}
+            />
+            {errors.confirmPassword && (
+              <p id="confirmPassword-error" className="text-sm" style={{ color: currentTheme.text?.error || '#dc2626' }}>
+                {errors.confirmPassword}
+              </p>
+            )}
+            {showWhatsAppPrompt && (
+              <div
+                className="text-center p-6 rounded-lg shadow-md"
+                style={{
+                  backgroundColor: currentTheme.background?.secondary || '#f3f4f6',
+                  border: `1px solid ${currentTheme.primary || '#6366f1'}`,
+                }}
+                role="dialog"
+                aria-labelledby="whatsapp-prompt-heading"
               >
-                Login
-              </button>
-            </p>
-          </div>
-        </form>
-      </div>
-    </div>
+                <h2
+                  id="whatsapp-prompt-heading"
+                  className="text-lg font-semibold mb-4"
+                  style={{ color: currentTheme.text?.primary || '#111827' }}
+                >
+                  Save Your PID on WhatsApp?
+                </h2>
+                <p
+                  className="text-sm mb-6"
+                  style={{ color: currentTheme.text?.secondary || '#6b7280' }}
+                >
+                  Would you like to receive your PID via WhatsApp for easy access?
+                </p>
+                <div className="flex justify-center space-x-4">
+                  <CustomButton
+                    onClick={handleWhatsAppConfirm}
+                    className="justify-center py-2 px-4 text-sm font-medium transition-colors duration-200 hover:bg-opacity-90"
+                    style={{
+                      backgroundColor: currentTheme.success || '#10b981',
+                      color: currentTheme.text?.button || '#ffffff',
+                    }}
+                    aria-label="Send PID to WhatsApp"
+                  >
+                    Yes, Send to WhatsApp
+                  </CustomButton>
+                  <CustomButton
+                    onClick={handleWhatsAppDecline}
+                    className="justify-center py-2 px-4 text-sm font-medium transition-colors duration-200 hover:bg-opacity-90"
+                    style={{
+                      backgroundColor: currentTheme.secondary || '#6b7280',
+                      color: currentTheme.text?.button || '#ffffff',
+                    }}
+                    aria-label="Skip WhatsApp prompt"
+                  >
+                    No, Skip
+                  </CustomButton>
+                </div>
+              </div>
+            )}
+            <div className="space-y-4">
+              <CustomButton
+                type="submit"
+                disabled={loading}
+                className="w-full justify-center py-3 text-lg font-medium transition-colors duration-200 hover:bg-opacity-90"
+                style={{
+                  backgroundColor: loading
+                    ? currentTheme.disabled || '#9ca3af'
+                    : currentTheme.primary || '#6366f1',
+                  color: currentTheme.text?.button || '#ffffff',
+                }}
+                aria-label={loading ? 'Processing registration' : 'Register'}
+              >
+                {loading ? 'Processing...' : 'Register'}
+              </CustomButton>
+              <p
+                className="text-center text-sm"
+                style={{ color: currentTheme.text?.secondary || '#6b7280' }}
+              >
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/login')}
+                  className="font-medium hover:underline transition-colors duration-200"
+                  style={{ color: currentTheme.primary || '#6366f1' }}
+                  aria-label="Navigate to login page"
+                >
+                  Login
+                </button>
+              </p>
+            </div>
+          </form>
+        </div>
+      </section>
+    </>
   );
 };
 
-export default UserRegister;
+export default memo(UserRegister);
