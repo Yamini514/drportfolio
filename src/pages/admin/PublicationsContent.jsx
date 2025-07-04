@@ -226,7 +226,7 @@ function PublicationsContent() {
               setShowForm(true);
             }}
           >
-            Add New Publication
+            Add New Publication 
           </CustomButton>
         )}
       </div>
