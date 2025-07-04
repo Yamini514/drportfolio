@@ -15,7 +15,7 @@ const UserLogin = () => {
   const [errors, setErrors] = useState({ loginId: '', password: '', general: '' });
   const [loading, setLoading] = useState(false);
   const timeoutRef = useRef(null);
-  const SESSION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+  const SESSION_TIMEOUT =  10* 60 * 1000; // 10 minutes
 
   // Reset session timeout on user activity
   const resetTimeout = () => {
