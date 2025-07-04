@@ -177,7 +177,7 @@ function AddAppointment() {
       if (!user) {
         setBookingMessage("Authentication required. Please log in to book an appointment.");
         localStorage.setItem("redirectAfterLogin", "/addappointment");
-        navigate("/login", { state: { redirectTo: "/addappointment" } });
+        navigate("/admin", { state: { redirectTo: "/addappointment" } });
       }
     });
     return () => unsubscribe();
