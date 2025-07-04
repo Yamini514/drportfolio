@@ -322,6 +322,14 @@ function PublicationsContent() {
               placeholder="YYYY"
               required
             />
+            <CustomInput
+              label="Publication URL"
+              name="url"
+              value={formData.url}
+              onChange={handleFormChange}
+              type="url"
+              placeholder="https://example.com"
+            />
             <div className="flex justify-end gap-2">
               <CustomButton
                 variant="secondary"
