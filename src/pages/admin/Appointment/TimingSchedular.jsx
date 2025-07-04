@@ -20,7 +20,7 @@ const TimingSchedular = React.memo(() => {
   const [selectedTab, setSelectedTab] = useState("schedule");
   const [notification, setNotification] = useState({ show: false, message: "", type: "" });
   const [formErrors, setFormErrors] = useState({ name: "", startDate: "", endDate: "", startTime: "", endTime: "", days: "" });
-  const [timeFormErrors, setTimeFormErrors] = useState({ startDate: "", endDate: "", startTime: "", endTime: "", scheduleConflict: "" });
+  const [timeFormErrors, setTimeFormErrors] = useState({ startDate: "", endDate: "", startTime: "", endTime: "", scheduleConflict: "", days: "" });
   const [schedule, setSchedule] = useState({ locations: [], defaultTimes: { startTime: "09:00", endTime: "17:00" } });
   const [newSchedule, setNewSchedule] = useState({
     name: "",
@@ -41,7 +41,8 @@ const TimingSchedular = React.memo(() => {
   const [showAddScheduleForm, setShowAddScheduleForm] = useState(false);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [showTimeUpdateModal, setShowTimeUpdateModal] = useState(false);
-  const [timeUpdate, setTimeUpdate] = useState({ startDate: "", endDate: "", startTime: "", endTime: "" });
+  const [timeUpdate, setTimeUpdate] = useState({ startDate: "", endDate: "", startTime: "", endTime: "", days: { monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false } });
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // Added to force data refresh
 
   const getTodayString = useCallback(() => new Date().toISOString().split("T")[0], []);
   const getMaxDateString = useCallback(() => {
@@ -56,7 +57,7 @@ const TimingSchedular = React.memo(() => {
   };
 
   const parseTimeToMinutes = (time) => {
-    if (!time) return 0;
+    if (!time || !/^\d{2}:\d{2}$/.test(time)) return 0;
     const [hours, minutes] = time.split(":").map(Number);
     return hours * 60 + minutes;
   };
@@ -119,7 +120,6 @@ const TimingSchedular = React.memo(() => {
     const maxDate = new Date(getMaxDateString());
     const originalSchedule = editingIndex !== null ? schedule.locations[editingIndex] : null;
 
-    // Validate only required fields or changed fields
     if (!newSchedule.name.trim()) {
       errors.name = "Location name is required";
     } else if (newSchedule.name.trim().length < 3 && (!originalSchedule || newSchedule.name !== originalSchedule.name)) {
@@ -189,35 +189,61 @@ const TimingSchedular = React.memo(() => {
     today.setHours(0, 0, 0, 0);
     const maxDate = new Date(getMaxDateString());
 
-    if (!timeUpdate.startDate) errors.startDate = "Start date is required";
-    else {
+    if (!timeUpdate.startDate) {
+      errors.startDate = "Start date is required";
+    } else {
       const startDate = new Date(timeUpdate.startDate);
-      if (startDate < today) errors.startDate = "Cannot select past dates";
-      else if (startDate > maxDate) errors.startDate = "Start date exceeds maximum limit";
-      else if (blockedPeriods.some(period => {
+      if (startDate < today) {
+        errors.startDate = "Cannot select past dates";
+      } else if (startDate > maxDate) {
+        errors.startDate = "Start date exceeds maximum limit";
+      } else if (blockedPeriods.some(period => {
         const blockStart = new Date(period.startDate);
         return period.type === "day" ? blockStart.toDateString() === startDate.toDateString() : startDate >= blockStart && startDate <= new Date(period.endDate);
-      })) errors.startDate = "Selected start date is blocked";
+      })) {
+        errors.startDate = "Selected start date is blocked";
+      }
     }
 
-    if (timeUpdate.endDate && !timeUpdate.isEndDateUserDefined) {
+    if (timeUpdate.endDate) {
       const startDate = new Date(timeUpdate.startDate);
       const endDate = new Date(timeUpdate.endDate);
-      if (endDate < startDate) errors.endDate = "End date cannot be before start date";
-      else if (endDate > maxDate) errors.endDate = "End date exceeds maximum limit";
-      else if (blockedPeriods.some(period => {
+      if (endDate < startDate) {
+        errors.endDate = "End date cannot be before start date";
+      } else if (endDate > maxDate) {
+        errors.endDate = "End date exceeds maximum limit";
+      } else if (blockedPeriods.some(period => {
         const blockStart = new Date(period.startDate);
         return period.type === "day" ? blockStart.toDateString() === endDate.toDateString() : endDate >= blockStart && endDate <= new Date(period.endDate);
-      })) errors.endDate = "Selected end date is blocked";
+      })) {
+        errors.endDate = "Selected end date is blocked";
+      }
     }
 
-    if (!timeUpdate.startTime) errors.startTime = "Start time is required";
-    if (!timeUpdate.endTime) errors.endTime = "End time is required";
-    else if (timeUpdate.startTime >= timeUpdate.endTime) errors.endTime = "End time must be after start time";
+    if (!timeUpdate.startTime) {
+      errors.startTime = "Start time is required";
+    }
+    if (!timeUpdate.endTime) {
+      errors.endTime = "End time is required";
+    } else if (timeUpdate.startTime >= timeUpdate.endTime) {
+      errors.endTime = "End time must be after start time";
+    }
+
+    const hasSelectedDays = Object.values(timeUpdate.days).some(day => day);
+    if (!timeUpdate.endDate && !hasSelectedDays) {
+      errors.days = "Please select either an end date or specific days";
+    }
 
     const location = schedule.locations[editingTimeIndex];
     if (location) {
-      const checkSchedule = { ...location, startDate: timeUpdate.startDate || location.startDate, endDate: timeUpdate.endDate || location.endDate, startTime: timeUpdate.startTime, endTime: timeUpdate.endTime };
+      const checkSchedule = {
+        ...location,
+        startDate: timeUpdate.startDate || location.startDate,
+        endDate: timeUpdate.endDate || location.endDate,
+        startTime: timeUpdate.startTime,
+        endTime: timeUpdate.endTime,
+        days: timeUpdate.days,
+      };
       const conflicts = checkScheduleConflicts(checkSchedule, editingTimeIndex);
       if (conflicts.length > 0) {
         errors.scheduleConflict = `There is an overlapping schedule at ${conflicts[0].location} on ${conflicts[0].day}, ${formatDate(conflicts[0].date)} from ${conflicts[0].startTime} to ${conflicts[0].endTime}. Adjust the time to resolve.`;
@@ -229,7 +255,10 @@ const TimingSchedular = React.memo(() => {
   }, [timeUpdate, editingTimeIndex, schedule.locations, checkScheduleConflicts, blockedPeriods, getMaxDateString, formatDate]);
 
   const createTimeSlots = useCallback((location) => {
-    if (!location?.startTime || !location?.endTime) return [];
+    if (!location?.startTime || !location?.endTime || !/^\d{2}:\d{2}$/.test(location.startTime) || !/^\d{2}:\d{2}$/.test(location.endTime)) {
+      console.error("Invalid time format in createTimeSlots:", location.startTime, location.endTime);
+      return [];
+    }
     const slots = [];
     const [startHour, startMinute] = location.startTime.split(":").map(Number);
     const [endHour, endMinute] = location.endTime.split(":").map(Number);
@@ -246,10 +275,12 @@ const TimingSchedular = React.memo(() => {
         currentMinute = 0;
       }
     }
+    console.log("Generated slots for location:", location.name, slots);
     return slots;
   }, []);
 
   const mergeTimeSlots = useCallback((schedules) => {
+    console.log("Merging time slots for schedules:", schedules);
     const timeRanges = schedules.map(schedule => ({
       startTime: parseTimeToMinutes(schedule.startTime),
       endTime: parseTimeToMinutes(schedule.endTime),
@@ -279,12 +310,14 @@ const TimingSchedular = React.memo(() => {
       mergedRanges.push({ startTime: currentRange.startTimeStr, endTime: currentRange.endTimeStr });
     }
 
+    console.log("Merged time ranges:", mergedRanges);
     return mergedRanges.flatMap(range => createTimeSlots(range));
   }, [createTimeSlots]);
 
   const generateScheduleDocuments = useCallback(async (location) => {
     setLoading(true);
     try {
+      console.log("Generating schedule documents for location:", JSON.stringify(location, null, 2));
       const dataDocRef = doc(db, "appointments", "data");
       if (!(await getDoc(dataDocRef)).exists()) {
         await setDoc(dataDocRef, { createdAt: new Date(), description: "Container for appointment data" });
@@ -294,35 +327,47 @@ const TimingSchedular = React.memo(() => {
       const currentDate = new Date();
       currentDate.setHours(0, 0, 0, 0);
 
-      if (!location.startDate) return false;
+      if (!location.startDate) {
+        console.error("Invalid startDate for location:", location.startDate);
+        setError("Invalid start date for schedule generation");
+        return false;
+      }
 
       const startDate = new Date(location.startDate);
       const endDate = new Date(location.endDate || location.startDate);
       const hasSelectedDays = Object.values(location.days).some(day => day);
 
-      if (startDate < currentDate) return false;
+      console.log("Processing schedule with days:", location.days, "hasSelectedDays:", hasSelectedDays);
+
+      if (startDate < currentDate) {
+        console.error("Start date is in the past:", location.startDate);
+        setError("Cannot generate schedule for past dates");
+        return false;
+      }
 
       if (hasSelectedDays && !location.isEndDateUserDefined) {
         endDate.setFullYear(startDate.getFullYear() + 1);
+        console.log("Extended endDate for recurring schedule:", endDate.toISOString().split("T")[0]);
       }
 
       const relevantSchedules = schedule.locations.filter(loc => 
-        loc.name === location.name
-      );
+        loc.name === location.name && loc.id !== location.id
+      ).concat([location]); // Include the current location
 
-      if (!relevantSchedules.some(loc => loc.id === location.id)) {
-        relevantSchedules.push(location);
-      }
+      console.log("Relevant schedules for", location.name, ":", relevantSchedules);
 
       const allStartDate = new Date(Math.min(...relevantSchedules.map(loc => new Date(loc.startDate))));
       const allEndDate = new Date(Math.max(...relevantSchedules.map(loc => new Date(loc.endDate || loc.startDate))));
 
       const batch = writeBatch(db);
 
+      // Delete existing documents for this location
       const existingDocsQuery = query(scheduleRef, where("location", "==", location.name));
       const existingDocsSnapshot = await getDocs(existingDocsQuery);
+      console.log("Deleting existing schedule docs for", location.name, ":", existingDocsSnapshot.docs.map(doc => doc.id));
       existingDocsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
 
+      let generatedDocs = 0;
       for (let currentDate = new Date(allStartDate); currentDate <= allEndDate; currentDate.setDate(currentDate.getDate() + 1)) {
         const dateString = currentDate.toISOString().split("T")[0];
         const dayName = currentDate.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
@@ -332,7 +377,10 @@ const TimingSchedular = React.memo(() => {
           return period.type === "day" ? 
             blockStart.toDateString() === currentDate.toDateString() : 
             currentDate >= blockStart && currentDate <= new Date(period.endDate);
-        })) continue;
+        })) {
+          console.log(`Skipping ${dateString} due to blocked period`);
+          continue;
+        }
 
         const activeSchedules = relevantSchedules.filter(loc => {
           const locStart = new Date(loc.startDate);
@@ -341,8 +389,11 @@ const TimingSchedular = React.memo(() => {
           return currentDate >= locStart && currentDate <= locEnd && (locHasDays ? loc.days[dayName] : true);
         });
 
+        console.log(`Active schedules for ${dateString}:`, activeSchedules);
+
         if (activeSchedules.length > 0) {
           const timeSlots = mergeTimeSlots(activeSchedules);
+          console.log(`Generated time slots for ${dateString}:`, timeSlots);
           if (timeSlots.length > 0) {
             batch.set(doc(scheduleRef), {
               date: dateString,
@@ -353,14 +404,19 @@ const TimingSchedular = React.memo(() => {
               isBooked: false,
               createdAt: new Date(),
             });
+            generatedDocs++;
+          } else {
+            console.warn(`No time slots generated for ${dateString}`);
           }
         }
       }
 
+      console.log(`Committing batch with ${generatedDocs} schedule documents`);
       await batch.commit();
+      console.log("Schedule documents batch committed successfully");
       return true;
     } catch (error) {
-      console.error("Error generating schedule documents:", error);
+      console.error("Error generating schedule documents:", error.code, error.message);
       setError("Failed to generate schedule documents: " + error.message);
       return false;
     } finally {
@@ -406,7 +462,7 @@ const TimingSchedular = React.memo(() => {
       await batch.commit();
 
       await generateScheduleDocuments(scheduleData);
-      setSchedule(prev => ({ ...prev, locations: updatedLocations }));
+      setSchedule(prev => ({ ...prev, locations: [...updatedLocations] }));
       setLastSavedSchedule(scheduleData);
       setShowConfirmationModal(true);
       setNewSchedule({
@@ -420,9 +476,10 @@ const TimingSchedular = React.memo(() => {
         days: { monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false },
       });
       setShowAddScheduleForm(false);
+      setRefreshTrigger(prev => prev + 1); // Trigger data refresh
       showNotification("Schedule saved successfully");
     } catch (error) {
-      console.error("Error saving schedule:", error);
+      console.error("Error saving schedule:", error.code, error.message);
       showNotification("Error saving schedule: " + error.message, "error");
     } finally {
       setIsSaving(false);
@@ -441,24 +498,25 @@ const TimingSchedular = React.memo(() => {
       }
 
       const updatedSchedule = {
-        ...originalSchedule, // Preserve unchanged fields
+        ...originalSchedule,
         name: newSchedule.name || originalSchedule.name,
         startTime: newSchedule.startTime || originalSchedule.startTime,
         endTime: newSchedule.endTime || originalSchedule.endTime,
         startDate: newSchedule.startDate || originalSchedule.startDate,
-        endDate: newSchedule.endDate || originalSchedule.endDate,
         isActive: newSchedule.isActive !== undefined ? newSchedule.isActive : originalSchedule.isActive,
         isEndDateUserDefined: newSchedule.isEndDateUserDefined !== undefined ? newSchedule.isEndDateUserDefined : originalSchedule.isEndDateUserDefined,
         days: Object.keys(newSchedule.days).reduce((acc, day) => ({
           ...acc,
           [day]: newSchedule.days[day] !== undefined ? newSchedule.days[day] : originalSchedule.days[day],
         }), {}),
-        endDate: endDate.toISOString().split("T")[0],
-        id: originalSchedule.id || Date.now().toString(),
-        createdAt: originalSchedule.createdAt || new Date().toISOString(),
         isMultipleDays: endDate.getTime() !== startDate.getTime(),
         updatedAt: new Date().toISOString(),
+        id: originalSchedule.id || Date.now().toString(),
+        createdAt: originalSchedule.createdAt || new Date().toISOString(),
+        endDate: endDate.toISOString().split("T")[0],
       };
+
+      console.log("Updating schedule with:", JSON.stringify(updatedSchedule, null, 2));
 
       const updatedLocations = schedule.locations.map((loc, idx) => (idx === editingIndex ? updatedSchedule : loc));
       const batch = writeBatch(db);
@@ -472,14 +530,20 @@ const TimingSchedular = React.memo(() => {
       const scheduleRef = collection(db, "appointments", "data", "schedule");
       const q = query(scheduleRef, where("location", "==", originalSchedule.name));
       const querySnapshot = await getDocs(q);
+      console.log("Updating existing schedule docs:", querySnapshot.docs.map(doc => doc.id));
       querySnapshot.docs.forEach(doc => {
         batch.update(doc.ref, { location: updatedSchedule.name });
       });
 
       await batch.commit();
+      console.log("Location update batch committed successfully");
 
-      await generateScheduleDocuments(updatedSchedule);
-      setSchedule(prev => ({ ...prev, locations: updatedLocations }));
+      const success = await generateScheduleDocuments(updatedSchedule);
+      if (!success) {
+        throw new Error("Failed to generate schedule documents");
+      }
+
+      setSchedule(prev => ({ ...prev, locations: [...updatedLocations] }));
       setLastSavedSchedule(updatedSchedule);
       setShowConfirmationModal(true);
       setShowAddScheduleForm(false);
@@ -494,9 +558,10 @@ const TimingSchedular = React.memo(() => {
         isEndDateUserDefined: false,
         days: { monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false },
       });
+      setRefreshTrigger(prev => prev + 1); // Trigger data refresh
       showNotification("Schedule updated successfully");
     } catch (error) {
-      console.error("Error updating schedule:", error);
+      console.error("Error updating schedule:", error.code, error.message);
       showNotification("Error updating schedule: " + error.message, "error");
     } finally {
       setIsSaving(false);
@@ -504,18 +569,34 @@ const TimingSchedular = React.memo(() => {
   }, [newSchedule, schedule.locations, editingIndex, validateForm, generateScheduleDocuments]);
 
   const handleTimeUpdate = useCallback(async () => {
-    if (!validateTimeForm()) return;
+    if (!validateTimeForm()) {
+      console.log("Validation failed:", timeFormErrors);
+      return;
+    }
     setIsSaving(true);
     try {
       const location = schedule.locations[editingTimeIndex];
+      console.log("Updating location:", JSON.stringify(location, null, 2));
+      const startDate = new Date(timeUpdate.startDate || location.startDate);
+      let endDate = timeUpdate.endDate ? new Date(timeUpdate.endDate) : new Date(startDate);
+      if (Object.values(timeUpdate.days).some(day => day) && !timeUpdate.endDate) {
+        endDate.setFullYear(startDate.getFullYear() + 1);
+        console.log("Extended endDate for recurring schedule:", endDate.toISOString().split("T")[0]);
+      }
+
       const updatedSchedule = {
         ...location,
         startDate: timeUpdate.startDate || location.startDate,
-        endDate: timeUpdate.endDate || location.endDate,
+        endDate: endDate.toISOString().split("T")[0],
         startTime: timeUpdate.startTime,
         endTime: timeUpdate.endTime,
+        days: { ...timeUpdate.days }, // Ensure deep copy
+        isEndDateUserDefined: !!timeUpdate.endDate,
+        isMultipleDays: endDate.getTime() !== startDate.getTime(),
         updatedAt: new Date().toISOString(),
       };
+
+      console.log("Updating time schedule with:", JSON.stringify(updatedSchedule, null, 2));
 
       const updatedLocations = schedule.locations.map((loc, idx) => (idx === editingTimeIndex ? updatedSchedule : loc));
       const batch = writeBatch(db);
@@ -529,20 +610,34 @@ const TimingSchedular = React.memo(() => {
       const scheduleRef = collection(db, "appointments", "data", "schedule");
       const q = query(scheduleRef, where("location", "==", location.name));
       const querySnapshot = await getDocs(q);
+      console.log("Deleting existing schedule docs for", location.name, ":", querySnapshot.docs.map(doc => doc.id));
       querySnapshot.docs.forEach(doc => batch.delete(doc.ref));
 
       await batch.commit();
+      console.log("Time update batch committed successfully");
 
-      await generateScheduleDocuments(updatedSchedule);
-      setSchedule(prev => ({ ...prev, locations: updatedLocations }));
+      console.log("Generating new schedule documents for:", JSON.stringify(updatedSchedule, null, 2));
+      const success = await generateScheduleDocuments(updatedSchedule);
+      if (!success) {
+        throw new Error("Failed to generate schedule documents");
+      }
+
+      setSchedule(prev => ({ ...prev, locations: [...updatedLocations] }));
       setLastSavedSchedule(updatedSchedule);
       setShowConfirmationModal(true);
       setShowTimeUpdateModal(false);
       setEditingTimeIndex(null);
-      setTimeUpdate({ startDate: "", endDate: "", startTime: "", endTime: "" });
+      setTimeUpdate({
+        startDate: "",
+        endDate: "",
+        startTime: "",
+        endTime: "",
+        days: { monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false },
+      });
+      setRefreshTrigger(prev => prev + 1); // Trigger data refresh
       showNotification("Schedule updated successfully");
     } catch (error) {
-      console.error("Error updating schedule:", error);
+      console.error("Error in handleTimeUpdate:", error.code, error.message);
       showNotification("Error updating schedule: " + error.message, "error");
     } finally {
       setIsSaving(false);
@@ -591,6 +686,7 @@ const TimingSchedular = React.memo(() => {
 
       setSchedule(prev => ({ ...prev, locations: updatedLocations }));
       setDeleteConfirmation({ show: false, periodId: null, locationIndex: null, scheduleId: null, bookedSlotsCount: 0 });
+      setRefreshTrigger(prev => prev + 1); // Trigger data refresh
       showNotification("Schedule deleted successfully");
     } catch (error) {
       console.error("Error deleting schedule:", error);
@@ -620,6 +716,7 @@ const TimingSchedular = React.memo(() => {
       endDate: location.endDate,
       startTime: location.startTime,
       endTime: location.endTime,
+      days: { ...location.days },
     });
     setShowTimeUpdateModal(true);
   }, [schedule.locations]);
@@ -687,6 +784,7 @@ const TimingSchedular = React.memo(() => {
       setBlockedPeriods(prev => [...prev, newPeriod]);
       setNewBlock({ type: "day", startDate: "", endDate: "", reason: "" });
       setError("");
+      setRefreshTrigger(prev => prev + 1); // Trigger data refresh
       showNotification("Blocked period added successfully");
     } catch (error) {
       console.error("Error adding blocked period:", error);
@@ -703,6 +801,7 @@ const TimingSchedular = React.memo(() => {
       await setDoc(doc(db, "settings", "blockedPeriods"), { periods: updatedPeriods, updatedAt: new Date().toISOString() });
       setBlockedPeriods(updatedPeriods);
       setDeleteConfirmation({ show: false, periodId: null, locationIndex: null, scheduleId: null, bookedSlotsCount: 0 });
+      setRefreshTrigger(prev => prev + 1); // Trigger data refresh
       showNotification("Blocked period removed successfully");
     } catch (error) {
       console.error("Error removing blocked period:", error);
@@ -788,31 +887,8 @@ const TimingSchedular = React.memo(() => {
             <label className="font-medium" style={{ color: currentTheme.text.primary }}>Location Name</label>
             <p className="text-sm mt-1" style={{ color: currentTheme.text.secondary }}>{location?.name}</p>
           </div>
-          <div className="mb-4">
-            <label className="font-medium" style={{ color: currentTheme.text.primary }}>
-              {hasSelectedDays && !location?.isEndDateUserDefined ? "Starting From" : "Date Range"}
-            </label>
-            <p className="text-sm mt-1" style={{ color: currentTheme.text.secondary }}>
-              {hasSelectedDays && !location?.isEndDateUserDefined
-                ? `${formatDate(location?.startDate)} (Weekly for 1 year)`
-                : `${formatDate(location?.startDate)} - ${formatDate(location?.endDate)}`}
-              {hasSelectedDays && location?.isEndDateUserDefined && location?.isMultipleDays && " (Recurring on selected days)"}
-            </p>
-          </div>
-          <div className="mb-4">
-            <label className="font-medium" style={{ color: currentTheme.text.primary }}>Available Days</label>
-            <div className="flex gap-2 mt-1">
-              {dayOrder.map(day => (
-                <span key={day} className="px-2 py-1 rounded text-sm" style={{
-                  backgroundColor: location?.days[day] ? currentTheme.success.light : currentTheme.error.light,
-                  color: location?.days[day] ? currentTheme.success.dark : currentTheme.error.dark,
-                }}>
-                  {day.charAt(0).toUpperCase() + day.slice(1)}
-                </span>
-              ))}
-            </div>
-          </div>
           {timeFormErrors.scheduleConflict && <p className="text-red-500 text-sm mb-4">{timeFormErrors.scheduleConflict}</p>}
+          {timeFormErrors.days && <p className="text-red-500 text-sm mb-4">{timeFormErrors.days}</p>}
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <CustomInput
@@ -835,7 +911,7 @@ const TimingSchedular = React.memo(() => {
                 type="date"
                 label="End Date (Optional)"
                 value={timeUpdate.endDate}
-                onChange={e => setTimeUpdate(prev => ({ ...prev, endDate: e.target.value, isEndDateUserDefined: e.target.value !== "" }))}
+                onChange={e => setTimeUpdate(prev => ({ ...prev, endDate: e.target.value }))}
                 icon={<Calendar size={20} />}
                 min={timeUpdate.startDate || getTodayString()}
                 max={getMaxDateString()}
@@ -874,7 +950,29 @@ const TimingSchedular = React.memo(() => {
               {timeFormErrors.endTime && <p id="endTime-error" className="text-red-500 text-sm mt-1">{timeFormErrors.endTime}</p>}
             </div>
           </div>
-          <div className="flex justify-end gap-3">
+          <div className="mt-4">
+            <label className="block mb-2" style={{ color: currentTheme.text.primary }} aria-label="Available Days">
+              Available Days (Optional if end date is selected)
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {dayOrder.map(day => (
+                <button
+                  key={day}
+                  onClick={() => setTimeUpdate(prev => ({
+                    ...prev,
+                    days: { ...prev.days, [day]: !prev.days[day] },
+                  }))}
+                  className={`px-3 py-1 rounded-full ${timeUpdate.days[day] ? "bg-primary text-white" : "bg-gray-200 text-black"}`}
+                  style={timeUpdate.days[day] ? { backgroundColor: currentTheme.primary } : {}}
+                  aria-pressed={timeUpdate.days[day]}
+                  aria-label={`Toggle ${day} availability`}
+                >
+                  {day.charAt(0).toUpperCase() + day.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
             <CustomButton onClick={() => setShowTimeUpdateModal(false)} variant="outlined">
               Cancel
             </CustomButton>
@@ -912,7 +1010,7 @@ const TimingSchedular = React.memo(() => {
       }
     };
     loadData();
-  }, []);
+  }, [refreshTrigger]); // Refresh data when refreshTrigger changes
 
   useEffect(() => {
     if (notification.show) {
