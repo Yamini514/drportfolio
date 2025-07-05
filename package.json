@@ -12,6 +12,7 @@
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "@tailwindcss/vite": "^4.1.4",
+    "@tanstack/react-query": "^5.81.5",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "date-fns": "^4.1.0",
@@ -19,6 +20,7 @@
     "dotenv": "^16.5.0",
     "emailjs": "^4.0.3",
     "firebase": "^11.8.1",
+    "lodash": "^4.17.21",
     "lucide-react": "^0.488.0",
     "react": "^18.3.1",
     "react-datepicker": "^8.4.0",
