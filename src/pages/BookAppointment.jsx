@@ -10,7 +10,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { Clock } from "lucide-react";
 import emailjs from "@emailjs/browser";
 import SelfBookingForm from "../pages/admin/Appointment/SelfBookingForm";
-import { format, isSameDay, parse, isValid } from "date-fns";
+import { format, isSameDay, parse, isValid, isSameMonth } from "date-fns";
 import { useNavigate } from "react-router-dom";
 
 // Inline Card Component
@@ -309,7 +309,7 @@ function BookAppointment() {
         bookingsRef,
         where("date", "==", date),
         where("location", "==", selectedLocation),
-        where("status", "!=", "deleted")
+        where("status", "!=", "canceled")
       );
       const bookingsSnapshot = await getDocs(bookingsQuery);
       const bookedSlots = bookingsSnapshot.docs.map((doc) => doc.data().time);
@@ -367,7 +367,7 @@ function BookAppointment() {
         where("date", "==", date),
         where("time", "==", slot),
         where("location", "==", selectedLocation),
-        where("status", "!=", "deleted")
+        where("status", "!=", "canceled")
       );
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
@@ -676,7 +676,7 @@ We appreciate your trust in our care and look forward to assisting you.
         const counts = {};
         snapshot.forEach((doc) => {
           const { date, location, status } = doc.data();
-          if (status !== "deleted") {
+          if (status !== "canceled") {
             const key = `${date}|${location}`;
             counts[key] = (counts[key] || 0) + 1;
           }
@@ -701,7 +701,7 @@ We appreciate your trust in our care and look forward to assisting you.
         const slots = {};
         querySnapshot.forEach((doc) => {
           const appointment = doc.data();
-          if (appointment.status !== "deleted") {
+          if (appointment.status !== "canceled") {
             const key = `${appointment.date}|${appointment.location}`;
             if (!slots[key]) slots[key] = [];
             slots[key].push(appointment.time);
@@ -758,7 +758,7 @@ We appreciate your trust in our care and look forward to assisting you.
       bookingsRef,
       where("date", "==", selectedDate),
       where("location", "==", selectedLocation),
-      where("status", "!=", "deleted")
+      where("status", "!=", "canceled")
     );
     const unsubscribe = onSnapshot(
       q,
@@ -829,6 +829,11 @@ We appreciate your trust in our care and look forward to assisting you.
                 showPopperArrow={false}
                 dateFormat="dd-MM-yyyy"
                 onKeyDown={(e) => e.preventDefault()}
+                renderDayContents={(day, date) => {
+                  const currentMonth = selectedDate ? new Date(selectedDate).getMonth() : new Date().getMonth();
+                  return isSameMonth(date, new Date(selectedDate || new Date())) ? day : null;
+                }}
+                showFixedNumberOfWeeks={false}
               />
             </div>
           </div>
