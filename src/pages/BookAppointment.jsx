@@ -198,13 +198,12 @@ function BookAppointment() {
       const locationDates = querySnapshot.docs.map((doc) => doc.data().date);
 
       const validDates = [];
-      for (const dateStr of locationDates) {
-        const isUnavailable = isDateUnavailable(dateStr);
-        const { blocked } = await checkIfDateIsBlocked(dateStr, new Date(dateStr).toLocaleDateString("en-US", { weekday: "long" }));
-        if (!isUnavailable && !blocked) {
-          validDates.push(dateStr);
-        }
-      }
+for (const dateStr of locationDates) {
+  const isUnavailable = isDateUnavailable(dateStr);
+  if (!isUnavailable) {
+    validDates.push(dateStr);
+  }
+}
 
       if (validDates.length === 0) {
         setBookingMessage(`No dates are available for ${location}. Please select another location.`);
@@ -214,7 +213,7 @@ function BookAppointment() {
         setBookingMessage("");
       }
     } catch (error) {
-      console.error("Error checking date availability for location:", error.message || "Unknown error");
+      console.error("Error checking availability for location:", error.message || "Unknown error");
       setBookingMessage("Failed to check date availability. Please try again.");
       setHasAvailableDates(false);
     } finally {
@@ -251,6 +250,8 @@ function BookAppointment() {
     setIsDateBlocked(false);
     setBlockReason("");
     setLocationMismatch(false);
+    setTimeSlots([]); // Reset time slots when changing date
+    setDaySchedule(null);
 
     if (dateStr) {
       const selectedDateObj = new Date(dateStr);
@@ -279,31 +280,29 @@ function BookAppointment() {
   const fetchTimeSlots = async (date, dayName) => {
     setIsLoading(true);
     try {
-      const { blocked, reason } = await checkIfDateIsBlocked(date, dayName);
-      if (blocked) {
-        setIsDateBlocked(true);
-        setBlockReason(reason);
-        setTimeSlots([]);
-        setDaySchedule(null);
-        setBookingMessage(reason || "This date is unavailable for bookings. Please select another date.");
-        return;
-      }
-      setIsDateBlocked(false);
-      setBlockReason("");
       const scheduleRef = collection(db, "appointments/data/schedule");
       const q = query(scheduleRef, where("date", "==", date), where("location", "==", selectedLocation));
       const querySnapshot = await getDocs(q);
+
       if (querySnapshot.empty) {
         setTimeSlots([]);
         setDaySchedule({ isOpen: false });
         setLocationMismatch(true);
         setBookingMessage(`There are no active slots available on this date at ${selectedLocation}. Please select another date or location.`);
+        setIsLoading(false);
         return;
       }
-      const docData = querySnapshot.docs[0].data();
-      const storedSlots = Array.isArray(docData.timeSlots)
-        ? docData.timeSlots.map((slot) => slot.replace(/["']/g, "").trim())
-        : [];
+
+      // Merge time slots from all schedule documents for the same date and location
+      let allSlots = [];
+      querySnapshot.forEach((doc) => {
+        const docData = doc.data();
+        const storedSlots = Array.isArray(docData.timeSlots)
+          ? docData.timeSlots.map((slot) => slot.replace(/["']/g, "").trim())
+          : [];
+        allSlots = [...new Set([...allSlots, ...storedSlots])]; // Remove duplicates
+      });
+
       const bookingsRef = collection(db, "appointments/data/bookings");
       const bookingsQuery = query(
         bookingsRef,
@@ -312,36 +311,60 @@ function BookAppointment() {
         where("status", "!=", "canceled")
       );
       const bookingsSnapshot = await getDocs(bookingsQuery);
-      const bookedSlots = bookingsSnapshot.docs.map((doc) => doc.data().time);
+      const bookedSlotsList = bookingsSnapshot.docs.map((doc) => doc.data().time);
+
+      const blockedSlots = await checkBlockedSlots(date, dayName, selectedLocation, allSlots);
+
       const currentTime = getCurrentTimeInIST();
       const selectedDateObj = new Date(date);
       const now = new Date();
       const isToday = isSameDay(selectedDateObj, now);
-      const availableSlots = storedSlots.filter((slot) => {
-        if (!bookedSlots.includes(slot)) {
-          if (!isToday) return true;
-          const [time, period] = slot.split(" ");
-          const [slotHour, slotMinute] = time.split(":").map(Number);
-          let slotHour24 = period === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
-          if (period === "AM" && slotHour === 12) slotHour24 = 0;
-          const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
-          const [currentHour, currentMinute, currentPeriod] = currentTime.split(/[:\s]/).map((part, index) => (index < 2 ? Number(part) : part));
-          const currentTimeInMinutes =
-            (currentPeriod === "PM" && currentHour !== 12 ? currentHour + 12 : currentHour === 12 && currentPeriod === "AM" ? 0 : currentHour) * 60 +
-            currentMinute;
-          return slotTimeInMinutes > currentTimeInMinutes;
+
+      const availableSlots = allSlots.filter((slot) => {
+        if (blockedSlots.includes(slot) || bookedSlotsList.includes(slot)) {
+          return false;
         }
-        return false;
+        if (!isToday) return true;
+
+        const [time, period] = slot.split(" ");
+        const [slotHour, slotMinute] = time.split(":").map(Number);
+        let slotHour24 = period === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
+        if (period === "AM" && slotHour === 12) slotHour24 = 0;
+        const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
+
+        const [currentHour, currentMinute, currentPeriod] = currentTime.split(/[:\s]/).map((part, index) => (index < 2 ? Number(part) : part));
+        const currentTimeInMinutes =
+          (currentPeriod === "PM" && currentHour !== 12 ? currentHour + 12 : currentHour === 12 && currentPeriod === "AM" ? 0 : currentHour) * 60 +
+          currentMinute;
+
+        return slotTimeInMinutes > currentTimeInMinutes;
       });
+
       const sortedSlots = availableSlots.sort((a, b) => {
         const timeA = parse(a, "h:mm a", new Date());
         const timeB = parse(b, "h:mm a", new Date());
         return timeA - timeB;
       });
+
+      // Check if the date is fully blocked
+      const { blocked, reason } = await checkIfDateIsBlocked(date, dayName, selectedLocation, sortedSlots);
+      if (blocked) {
+        setIsDateBlocked(true);
+        setBlockReason(reason);
+        setTimeSlots([]);
+        setDaySchedule(null);
+        setBookingMessage(reason || "This date is fully blocked for bookings. Please select another date.");
+        setIsLoading(false);
+        return;
+      }
+
+      setIsDateBlocked(false);
+      setBlockReason("");
       setTimeSlots(sortedSlots);
       setDaySchedule({ isOpen: sortedSlots.length > 0 });
-      if (sortedSlots.length === 0 && !isDateBlocked && !isSunday && !locationMismatch) {
-        setBookingMessage(`All slots are booked for this day at ${selectedLocation}. Please select another date or location.`);
+
+      if (sortedSlots.length === 0 && !isSunday && !locationMismatch) {
+        setBookingMessage(`All slots are booked or blocked for this day at ${selectedLocation}. Please select another date or location.`);
       } else if (sortedSlots.length > 0) {
         setBookingMessage("");
       }
@@ -359,6 +382,127 @@ function BookAppointment() {
     }
   };
 
+  const checkBlockedSlots = async (date, dayName, location, slots) => {
+  try {
+    const blockedPeriodsDoc = await getDoc(doc(db, "settings", "blockedPeriods"));
+    const blockedSlots = [];
+    if (blockedPeriodsDoc.exists()) {
+      const periods = blockedPeriodsDoc.data().periods || [];
+      
+      // If no periods exist, return empty array
+      if (periods.length === 0) {
+        return [];
+      }
+      
+      for (const period of periods) {
+        if (period.location !== location) continue;
+        const blockStartDate = new Date(period.startDate);
+        const blockEndDate = period.endDate ? new Date(period.endDate) : blockStartDate;
+        const selectedDate = new Date(date);
+        
+        // Only apply block if the selected date matches the blocked period's date range
+        if (isSameDay(selectedDate, blockStartDate) || (selectedDate >= blockStartDate && selectedDate <= blockEndDate)) {
+          const blockStartTime = parseTimeToMinutes(period.startTime);
+          const blockEndTime = parseTimeToMinutes(period.endTime);
+          slots.forEach((slot) => {
+            const [slotTime, slotPeriod] = slot.split(" ");
+            const [slotHour, slotMinute] = slotTime.split(":").map(Number);
+            let slotHour24 = slotPeriod === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
+            if (slotPeriod === "AM" && slotHour === 12) slotHour24 = 0;
+            const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
+            if (slotTimeInMinutes >= blockStartTime && slotTimeInMinutes <= blockEndTime) {
+              blockedSlots.push(slot);
+            }
+          });
+        }
+      }
+    }
+    return blockedSlots;
+  } catch (error) {
+    console.error("Error checking blocked slots:", error.message || "Unknown error");
+    return [];
+  }
+};
+
+const checkIfDateIsBlocked = async (dateStr, dayName, location, slots = null) => {
+  try {
+    const blockedPeriodsDoc = await getDoc(doc(db, "settings", "blockedPeriods"));
+    
+    // If document doesn't exist or periods array is empty, date is not blocked
+    if (!blockedPeriodsDoc.exists() || !blockedPeriodsDoc.data()?.periods || blockedPeriodsDoc.data().periods.length === 0) {
+      return { blocked: false, reason: "" };
+    }
+ 
+    const periods = blockedPeriodsDoc.data().periods || [];
+    
+    // If no slots provided, fetch them
+    if (!slots) {
+      const scheduleRef = collection(db, "appointments/data/schedule");
+      const q = query(scheduleRef, where("date", "==", dateStr), where("location", "==", location));
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) {
+        return { blocked: false, reason: "" };
+      }
+      let allSlots = [];
+      querySnapshot.forEach((doc) => {
+        const docData = doc.data();
+        const storedSlots = Array.isArray(docData.timeSlots)
+          ? docData.timeSlots.map((slot) => slot.replace(/["']/g, "").trim())
+          : [];
+        allSlots = [...new Set([...allSlots, ...storedSlots])];
+      });
+      slots = allSlots;
+    }
+ 
+    const selectedDate = new Date(dateStr);
+    // Find periods that affect this specific date and location
+    const relevantPeriods = periods.filter(period => {
+      if (period.location !== location) return false;
+      const blockStartDate = new Date(period.startDate);
+      const blockEndDate = period.endDate ? new Date(period.endDate) : blockStartDate;
+      return isSameDay(selectedDate, blockStartDate) || (selectedDate >= blockStartDate && selectedDate <= blockEndDate);
+    });
+ 
+    // If no relevant periods found, date is not blocked
+    if (relevantPeriods.length === 0) {
+      return { blocked: false, reason: "" };
+    }
+ 
+    // Check if ALL slots are blocked by the relevant periods
+    let availableSlots = [...slots];
+    let blockReason = "This date is fully blocked.";
+ 
+    for (const period of relevantPeriods) {
+      const blockStartTime = parseTimeToMinutes(period.startTime);
+      const blockEndTime = parseTimeToMinutes(period.endTime);
+      blockReason = period.reason || blockReason;
+ 
+      // Remove slots that fall within this blocked period
+      availableSlots = availableSlots.filter(slot => {
+        const [slotTime, slotPeriod] = slot.split(" ");
+        const [slotHour, slotMinute] = slotTime.split(":").map(Number);
+        let slotHour24 = slotPeriod === "PM" && slotHour !== 12 ? slotHour + 12 : slotHour;
+        if (slotPeriod === "AM" && slotHour === 12) slotHour24 = 0;
+        const slotTimeInMinutes = slotHour24 * 60 + slotMinute;
+        // Keep slot if it's outside the blocked time range
+        return slotTimeInMinutes < blockStartTime || slotTimeInMinutes > blockEndTime;
+      });
+    }
+ 
+    // If no slots remain available, the date is fully blocked
+    if (availableSlots.length === 0) {
+      return { blocked: true, reason: blockReason };
+    }
+ 
+    return { blocked: false, reason: "" };
+  } catch (error) {
+    console.error("Error checking blocked date:", error.message || "Unknown error");
+    setBookingMessage("Failed to check date availability. Please try again.");
+    return { blocked: false, reason: "" };
+  }
+};
+
+
   const checkSlotAvailability = async (date, slot) => {
     try {
       const bookingsRef = collection(db, "appointments/data/bookings");
@@ -372,6 +516,11 @@ function BookAppointment() {
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
         setBookingMessage("This time slot is already booked. Please choose another slot.");
+        return false;
+      }
+      const blockedSlots = await checkBlockedSlots(date, new Date(date).toLocaleDateString("en-US", { weekday: "long" }), selectedLocation, [slot]);
+      if (blockedSlots.includes(slot)) {
+        setBookingMessage("This time slot is blocked. Please choose another slot.");
         return false;
       }
       return true;
@@ -490,7 +639,9 @@ function BookAppointment() {
         const message = `Dear ${formData.name}, your appointment is confirmed for ${format(
           new Date(selectedDate),
           "MMMM d, yyyy"
-        )} at ${selectedSlot} at ${selectedLocation}. Appointment Type: ${formData.appointmentType}. PID: ${formData.pid}.`;
+        )} at ${selectedSlot} at ${selectedLocation}. Appointmentалина
+
+System: Appointment Type: ${formData.appointmentType}. PID: ${formData.pid}.`;
         window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
       }
 
@@ -604,48 +755,48 @@ We appreciate your trust in our care and look forward to assisting you.
     return `${hour}:${minute} ${period}`;
   };
 
-  const checkIfDateIsBlocked = async (dateStr, dayName) => {
+  const parseTimeToMinutes = (timeStr) => {
     try {
-      const blockedPeriodsDoc = await getDoc(doc(db, "settings", "blockedPeriods"));
-      if (blockedPeriodsDoc.exists()) {
-        const periods = blockedPeriodsDoc.data().periods || [];
-        for (const period of periods) {
-          if (period.type === "day" && period.day === dayName.toLowerCase()) {
-            const blockDate = new Date(period.startDate);
-            if (blockDate.toDateString() === new Date(dateStr).toDateString()) {
-              return { blocked: true, reason: period.reason || "This date is blocked." };
-            }
-          } else if (period.type === "week" || period.type === "month") {
-            const blockStart = new Date(period.startDate);
-            const blockEnd = new Date(period.endDate);
-            if (new Date(dateStr) >= blockStart && new Date(dateStr) <= blockEnd) {
-              return { blocked: true, reason: period.reason || "This period is blocked." };
-            }
-          }
-        }
-      }
-      return { blocked: false, reason: "" };
+      const [time, period] = timeStr.split(" ");
+      const [hour, minute] = time.split(":").map(Number);
+      let hour24 = period === "PM" && hour !== 12 ? hour + 12 : hour;
+      if (period === "AM" && hour === 12) hour24 = 0;
+      return hour24 * 60 + minute;
     } catch (error) {
-      console.error("Error checking blocked date:", error.message || "Unknown error");
-      setBookingMessage("Failed to check date availability. Please try again.");
-      return { blocked: false, reason: "" };
+      console.error("Error parsing time:", error.message || "Unknown error");
+      return 0;
     }
   };
 
   const isDateUnavailable = (dateStr) => {
-    const date = new Date(dateStr);
-    const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
-    return dayName === "Sunday" || date < new Date(today);
+    try {
+      const date = new Date(dateStr);
+      const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
+      return dayName === "Sunday" || date < new Date(today);
+    } catch (error) {
+      console.error("Error checking date availability:", error.message || "Unknown error");
+      return true;
+    }
   };
 
   const isDateAvailable = (date) => {
-    const dateStr = format(date, "yyyy-MM-dd");
-    return availableDates.some((d) => d.date === dateStr && d.location.toLowerCase() === selectedLocation.toLowerCase()) && !isDateUnavailable(dateStr);
+    try {
+      const dateStr = format(date, "yyyy-MM-dd");
+      return availableDates.some((d) => d.date === dateStr && d.location.toLowerCase() === selectedLocation.toLowerCase()) && !isDateUnavailable(dateStr);
+    } catch (error) {
+      console.error("Error checking date availability:", error.message || "Unknown error");
+      return false;
+    }
   };
 
   const filterUnavailableDates = (date) => {
-    const dateStr = format(date, "yyyy-MM-dd");
-    return !isDateUnavailable(dateStr) && isDateAvailable(date);
+    try {
+      const dateStr = format(date, "yyyy-MM-dd");
+      return !isDateUnavailable(dateStr) && isDateAvailable(date);
+    } catch (error) {
+      console.error("Error filtering date:", error.message || "Unknown error");
+      return false;
+    }
   };
 
   useEffect(() => {
@@ -750,6 +901,48 @@ We appreciate your trust in our care and look forward to assisting you.
     });
     return () => unsubscribe();
   }, []);
+
+  // Listener for blocked periods changes
+  useEffect(() => {
+    if (!selectedDate || !selectedLocation) return;
+    const blockedPeriodsRef = doc(db, "settings", "blockedPeriods");
+    const unsubscribe = onSnapshot(
+      blockedPeriodsRef,
+      async (doc) => {
+        if (!doc.exists()) {
+          // If no blocked periods exist, reset and refresh
+          setIsDateBlocked(false);
+          setBlockReason("");
+          setBookingMessage("");
+          fetchTimeSlots(selectedDate, selectedDayName);
+          return;
+        }
+
+        const periods = doc.data().periods || [];
+        const selectedDateObj = new Date(selectedDate);
+        // Check if any blocked period affects the selected date and location
+        const isRelevantChange = periods.some((period) => {
+          if (period.location !== selectedLocation) return false;
+          const blockStartDate = new Date(period.startDate);
+          const blockEndDate = period.endDate ? new Date(period.endDate) : blockStartDate;
+          return isSameDay(selectedDateObj, blockStartDate) || (selectedDateObj >= blockStartDate && selectedDateObj <= blockEndDate);
+        });
+
+        if (isRelevantChange) {
+          // Only refresh if the change affects the selected date and location
+          setIsDateBlocked(false);
+          setBlockReason("");
+          setBookingMessage("");
+          fetchTimeSlots(selectedDate, selectedDayName);
+        }
+      },
+      (error) => {
+        console.error("Error in real-time blocked periods listener:", error.message || "Unknown error");
+        setBookingMessage("Failed to update blocked periods. Please try again.");
+      }
+    );
+    return () => unsubscribe();
+  }, [selectedDate, selectedLocation, selectedDayName]);
 
   useEffect(() => {
     if (!selectedDate || !selectedLocation) return;

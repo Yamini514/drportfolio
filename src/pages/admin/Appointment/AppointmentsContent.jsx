@@ -202,22 +202,35 @@ function AppointmentsContent() {
       return false;
     }
 
+    const emailParams = {
+      name: appointment.clientName || 'Unknown',
+      date: formatDate(appointment.date) || 'Unknown',
+      time: appointment.time || 'Unknown',
+      to_email: trimmedEmail,
+      email: trimmedEmail,
+      phone: appointment.phone || 'Unknown',
+      websiteURL: appointment.websiteURL || 'https://dr-laxminadh.com',
+      cityState: appointment.cityState || 'Hyderabad, Telangana',
+      reason: action === 'cancelled' ? (await checkIfDateIsBlocked(appointment.date)).reason || 'The appointment date has been blocked.' : '',
+    };
+
+    let templateId, subject;
+    if (action === 'cancelled') {
+      subject = 'Appointment Cancellation Notice';
+      templateId = 'template_iremp8a_cancel';
+      emailParams.message = `We regret to inform you that your appointment scheduled for ${emailParams.date} at ${emailParams.time} has been cancelled. The reason for this cancellation is: ${emailParams.reason}. We apologize for any inconvenience caused. Please feel free to reschedule your appointment by contacting us at ${emailParams.phone} or visiting our website at ${emailParams.websiteURL}.`;
+    } else if (action === 'deleted') {
+      subject = 'Appointment Deletion Notification';
+      templateId = 'template_iremp8a_delete';
+      emailParams.message = `This is to notify you that your appointment on ${emailParams.date} at ${emailParams.time} has been marked as deleted. The slot is now available for booking again. If you have any questions or need to reschedule, please reach out to us at ${emailParams.phone} or visit ${emailParams.websiteURL}.`;
+    } else if (action === 'confirmed') {
+      subject = 'Appointment Confirmation';
+      templateId = 'template_iremp8a_confirm';
+      emailParams.message = `We are pleased to confirm your appointment scheduled for ${emailParams.date} at ${emailParams.time} on 12:12 PM IST, Monday, July 07, 2025. We look forward to assisting you. Should you need to reschedule or have any queries, please contact us at ${emailParams.phone} or visit ${emailParams.websiteURL}.`;
+    }
+
     try {
-      const emailParams = {
-        name: appointment.clientName || 'Unknown',
-        date: formatDate(appointment.date) || 'Unknown',
-        time: appointment.time || 'Unknown',
-        to_email: appointment.email.trim(),
-        email: appointment.email.trim(),
-        action: action === 'confirmed' ? 'confirmed' : action === 'deleted' ? 'deleted' : 'cancelled',
-        reason: action === 'cancelled' ? (await checkIfDateIsBlocked(appointment.date)).reason || 'The appointment date has been blocked.' : '',
-      };
-
-      if (!emailParams.to_email || !emailParams.email) {
-        throw new Error('Email address is empty after processing');
-      }
-
-      await emailjs.send('service_l920egs', 'template_iremp8a', emailParams);
+      await emailjs.send('service_l920egs', templateId, emailParams);
       console.log(`Email sent to ${trimmedEmail} for ${action} appointment:`, emailParams);
       setNotification({
         message: `Email sent to ${trimmedEmail} for ${action} appointment.`,
@@ -338,6 +351,8 @@ function AppointmentsContent() {
             medicalHistory: data.medicalHistory || '',
             medicalHistoryMessage: data.medicalHistoryMessage || '',
             location: data.location || 'Unknown',
+            cityState: data.cityState || 'Hyderabad, Telangana',
+            websiteURL: data.websiteURL || 'https://dr-laxminadh.com',
           };
         });
         setAppointments(calculatePidData(appointmentsList));
@@ -374,6 +389,8 @@ function AppointmentsContent() {
           medicalHistory: data.medicalHistory || '',
           medicalHistoryMessage: data.medicalHistoryMessage || '',
           location: data.location || 'Unknown',
+          cityState: data.cityState || 'Hyderabad, Telangana',
+          websiteURL: data.websiteURL || 'https://dr-laxminadh.com',
         };
       });
 
@@ -435,6 +452,9 @@ function AppointmentsContent() {
         email: doc.data().email || '',
         location: doc.data().location || 'Unknown',
         status: doc.data().status || 'pending',
+        cityState: doc.data().cityState || 'Hyderabad, Telangana',
+        websiteURL: doc.data().websiteURL || 'https://dr-laxminadh.com',
+        phone: doc.data().phone || 'Unknown',
       }));
 
       for (const period of periods) {
