@@ -65,8 +65,7 @@ const MyAppointments = ({ theme }) => {
       const ampm = hour >= 12 ? 'PM' : 'AM';
       const displayHour = hour % 12 || 12;
       return `${displayHour}:${minutes} ${ampm}`;
-    } catch () {
-
+    } catch (err) {
       return timeString;
     }
   };
