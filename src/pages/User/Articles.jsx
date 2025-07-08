@@ -1,5 +1,5 @@
 import React, { memo, useEffect } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const Articles = () => {
   const { currentTheme } = useTheme();

@@ -1,6 +1,5 @@
 // Testimonials.jsx - Front-end display component
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../context/ThemeContext';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Pagination, Autoplay } from 'swiper/modules';
 import 'swiper/css';
@@ -8,9 +7,10 @@ import 'swiper/css/pagination';
 import 'swiper/css/navigation';
 
 // Import default images correctly
-import patient1 from '../assets/patient1.jpg';
-import patient2 from '../assets/patient2.jpg';
-import patient3 from '../assets/patient3.jpg';
+// import patient1 from '../../assets/patient1.jpg';
+// import patient2 from '../../assets/patient2.jpg';
+// import patient3 from '../../assets/patient3.jpg';
+import { useTheme } from '../../context/ThemeContext';
 
 function Testimonials() {
   const { currentTheme } = useTheme();

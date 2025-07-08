@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme } from "../../context/ThemeContext";
 import { addDoc, collection } from "firebase/firestore";
-import { db } from "../firebase/config";
+import { db } from "../../firebase/config";
 import { FaPhone, FaWhatsapp, FaEnvelope } from "react-icons/fa";
 import emailjs from "@emailjs/browser";
 import { useLocation } from "react-router-dom";
 
-function ContactMe({id}) {
+function ContactMe() {
   const { currentTheme } = useTheme();
   const [showSuccess, setShowSuccess] = useState(false);
   const [formData, setFormData] = useState({
@@ -102,8 +102,6 @@ function ContactMe({id}) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Form submitted:", formData);
-
     const newErrors = {
       fullName: validateField("fullName", formData.fullName),
       email: validateField("email", formData.email),
@@ -114,7 +112,6 @@ function ContactMe({id}) {
     setErrors(newErrors);
 
     if (Object.values(newErrors).some((error) => error)) {
-      console.log("Validation errors:", newErrors);
       return;
     }
 
@@ -123,12 +120,7 @@ function ContactMe({id}) {
         ...formData,
         timestamp: new Date(),
       };
-
-      console.log("Saving to Firestore...", dataToSubmit);
       await addDoc(collection(db, "contacts"), dataToSubmit);
-      console.log("Firestore save successful");
-
-      console.log("Preparing email parameters...");
       const emailParams = {
         name: formData.fullName,
         email: formData.email,
@@ -136,12 +128,7 @@ function ContactMe({id}) {
         message: formData.message,
         subject: "We've received your message",
       };
-      console.log("Email parameters:", emailParams);
-
-      console.log("Sending EmailJS...");
       const response = await emailjs.send("service_l920egs", "template_4t5xy58", emailParams);
-      console.log("EmailJS sent successfully:", response);
-
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
@@ -163,7 +150,6 @@ function ContactMe({id}) {
       console.error("Error submitting form or sending notifications:", error);
       const errorMessage = error.text || error.message || JSON.stringify(error) || "Unknown error";
       alert(`There was an error submitting your message. Please try again. Details: ${errorMessage}`);
-      console.log("Error details:", error);
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, memo } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import { 
   FaBrain, 
   FaXRay, 
@@ -10,7 +10,7 @@ import {
   FaHeartbeat, 
   FaLaptopMedical 
 } from 'react-icons/fa';
-import { db } from '../firebase/config';
+import { db } from '../../firebase/config';
 import { collection, getDocs } from 'firebase/firestore';
 
 const Services = ({ id }) => {

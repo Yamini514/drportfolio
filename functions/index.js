@@ -33,7 +33,6 @@ exports.sendEmailOnFormSubmit = functions.firestore
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Email sent to ${email}`);
     } catch (error) {
       console.error('❌ Error sending email:', error);
     }

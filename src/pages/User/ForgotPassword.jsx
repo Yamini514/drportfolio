@@ -1,11 +1,11 @@
 import React, { useState, useEffect, memo } from 'react';
-import { auth, db } from '../firebase/config';
+import { auth, db } from '../../firebase/config';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../context/ThemeContext';
-import CustomInput from '../components/CustomInput';
-import CustomButton from '../components/CustomButton';
+import { useTheme } from '../../context/ThemeContext';
+import CustomInput from '../../components/CustomInput';
+import CustomButton from '../../components/CustomButton';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');

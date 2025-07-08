@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from "react";
-import { useTheme } from "../context/ThemeContext";
-import a1 from "../assets/a1.webp";
-import a2 from "../assets/a2.jpg";
-import a3 from "../assets/a3.jpg";
-import s1 from "../assets/s1.jpg";
-import s2 from "../assets/s2.jpeg";
-import s3 from "../assets/s3.jpg";
-import s4 from "../assets/s4.jpg";
-import s5 from "../assets/s5.jpeg";
+import React, { useState } from "react";
+import a1 from "../../assets/a1.webp";
+import a2 from "../../assets/a2.jpg";
+import a3 from "../../assets/a3.jpg";
+import s1 from "../../assets/s1.jpg";
+import s2 from "../../assets/s2.jpeg";
+import s3 from "../../assets/s3.jpg";
+import s4 from "../../assets/s4.jpg";
+import s5 from "../../assets/s5.jpeg";
+import { useTheme } from "../../context/ThemeContext";
 
-function Gallery({ id }) {
+function Gallery() {
   const { currentTheme } = useTheme();
 
   const defaultAlbums = {
@@ -82,22 +82,22 @@ function Gallery({ id }) {
   const [activeAlbum, setActiveAlbum] = useState("Achievements");
   const [albums] = useState(defaultAlbums);
   const [images] = useState(defaultImages);
-  const [loading, setLoading] = useState(false);
+  // const [loading, setLoading] = useState(false);
 
   const albumImages = images.filter((image) => image.category === activeAlbum);
 
 
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: currentTheme.background }}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mx-auto mb-4 mt-4" style={{ borderColor: currentTheme.primary }}></div>
-          <p style={{ color: currentTheme.text.primary }}>Loading gallery...</p>
-        </div>
-      </div>
-    );
-  }
+  // if (loading) {
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: currentTheme.background }}>
+  //       <div className="text-center">
+  //         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mx-auto mb-4 mt-4" style={{ borderColor: currentTheme.primary }}></div>
+  //         <p style={{ color: currentTheme.text.primary }}>Loading gallery...</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
     <section id="gallery">

@@ -1,15 +1,15 @@
 import React, { useEffect, useState, memo } from 'react';
-import { useTheme } from '../context/ThemeContext';
 import { FaGraduationCap, FaAward, FaBrain, FaBook } from 'react-icons/fa';
-import HeaderComponent from '../components/HeaderComponent';
-import drImage from '../assets/drimg.png';
+import drImage from '../../assets/drimg.png';
+import { useTheme } from '../../context/ThemeContext';
+import HeaderComponent from '../../components/HeaderComponent';
 
 const About = ({ id }) => {
   const { currentTheme } = useTheme();
   const [aboutData, setAboutData] = useState({
     title: "About Dr. Laxminadh Sivaraju",
     description: "Dr. Laxminadh Sivaraju is a Consultant Neuro & Spine Surgeon at Care Hospital - HITEC City Branch. Dr. Laxminadh did his five years neurosurgery residency from the Christian Medical College, Vellore which is renowned medical institute, training neurosurgeons across India for more than 7 decades. After his residency he joined and worked as consultant neurosurgeon in Sri Sathya Sai Institute of Higher Medical Sciences, Bangalore which is a well known tertiary centre for its yeoman service in health care. In his prominent career of over 12 years as a neuro surgery specialist, Dr. Laxminadh has performed more than 2000 neurosurgical procedures. He has a meritorious academic record with more than 30 publications in various international peer reviewed journals. He had given more than 10 podium presentations in national and international conferences. He was also NSI (Neurological Society of India) award winner for his work on Arnold-Chiari Malformation. He has membership in several professional and scientific societies. He had obtained trainee fellowship in Neuroendoscopy and minimal invasive neurosurgery from University of Greifswald, Germany under guidance of Prof. Henry Shroeder.",
-    image: "../assets/drimg.png",
+    image: "../../assets/drimg.png",
     achievements: [
       {
         id: 1,

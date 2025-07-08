@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { Play } from 'lucide-react';
 

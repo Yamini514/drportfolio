@@ -27,9 +27,6 @@ const AdminLogin = () => {
     const sessionStart = localStorage.getItem("adminSessionStart");
     const isLoggedIn = localStorage.getItem("isAdminLoggedIn") === "true";
     const manualLogout = localStorage.getItem("manualLogout") === "true";
-
-    console.log("Session check:", { savedEmail, sessionStart, isLoggedIn, manualLogout });
-
     if (savedEmail && savedRememberMe) {
       setCredentials((prev) => ({ ...prev, email: savedEmail }));
       setRememberMe(true);
@@ -51,14 +48,12 @@ const AdminLogin = () => {
       } else {
         // Invalid sessionStart, clear it
         localStorage.removeItem("adminSessionStart");
-        console.log("Invalid sessionStart detected, cleared.");
       }
     } else if (sessionStart && (!isLoggedIn || manualLogout)) {
       // Clear stale session data if user is not logged in or manually logged out
       localStorage.removeItem("adminSessionStart");
       localStorage.removeItem("adminToken");
       localStorage.removeItem("isAdminLoggedIn");
-      console.log("Cleared stale session data.");
     }
   }, []);
 

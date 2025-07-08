@@ -32,7 +32,6 @@ function ReviewsContent() {
           id: doc.id,
           ...doc.data(),
         }));
-        console.log('Fetched all reviews (admin):', fetchedReviews); // Debug log
         setReviews(fetchedReviews);
       } catch (error) {
         console.error('Error fetching reviews:', error);
@@ -94,10 +93,8 @@ function ReviewsContent() {
         const newReviews = prev.map((r) =>
           r.id === review.id ? { ...r, verified: newVerifiedStatus } : r
         );
-        console.log('New reviews state:', newReviews); // Debug state update
         return newReviews;
       });
-      console.log(`Toggled verification for review ${review.id} to ${newVerifiedStatus}`); // Log new status
     } catch (error) {
       console.error('Error toggling verification:', error);
       alert('Failed to update verification status.');

@@ -1,31 +1,31 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useTheme } from "../../../context/ThemeContext";
-import { db } from "../../../firebase/config";
-import { collection, getDocs, addDoc } from "firebase/firestore";
-import CustomInput from "../../../components/CustomInput";
-import CustomButton from "../../../components/CustomButton";
-import CustomSelect from "../../../components/CustomSelect";
+import { useTheme } from "../../context/ThemeContext";
+import { db, auth } from "../../firebase/config";
+import { collection, getDocs, addDoc, doc, getDoc } from "firebase/firestore";
+import CustomInput from "../../components/CustomInput";
+import CustomButton from "../../components/CustomButton";
+import CustomSelect from "../../components/CustomSelect";
 import {
-  Calendar,
   Clock,
   User,
-  Mail,
-  Phone,
   MapPin,
-  FileText,
-  Plus,
   CheckCircle,
   AlertTriangle,
   Loader,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-const AddAppointment = () => {
+function BookingForm({ onBookingSuccess, theme }) {
   const { currentTheme } = useTheme();
+  const actualTheme = theme || currentTheme;
+  const navigate = useNavigate();
+
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [availableLocations, setAvailableLocations] = useState([]);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [notification, setNotification] = useState(null);
+  const [user, setUser] = useState(null);
 
   const [formData, setFormData] = useState({
     patientName: "",
@@ -55,7 +55,70 @@ const AddAppointment = () => {
     return maxDate.toISOString().split("T")[0];
   };
 
-  // Load available locations from the schedules
+  // Authentication check and user data loading
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+      if (!currentUser) {
+        setNotification({
+          message:
+            "Authentication required. Please log in to book an appointment.",
+          type: "error",
+        });
+        localStorage.setItem("redirectAfterLogin", "/book-appointment");
+        navigate("/login", { state: { redirectTo: "/book-appointment" } });
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        // Set user data immediately from auth
+        setUser({
+          uid: currentUser.uid,
+          email: currentUser.email,
+          name: currentUser.displayName || "",
+        });
+
+        // Try to get additional user data from Firestore
+        const userRef = doc(db, "users", currentUser.uid);
+        const userDoc = await getDoc(userRef);
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setUser((prev) => ({ ...prev, ...userData }));
+          setFormData((prev) => ({
+            ...prev,
+            patientName: userData.name || currentUser.displayName || "",
+            patientEmail: userData.email || currentUser.email || "",
+            patientPhone: userData.phone || "",
+            patientAge: userData.age || "",
+          }));
+        } else {
+          // Use auth data if no Firestore user doc
+          setFormData((prev) => ({
+            ...prev,
+            patientEmail: currentUser.email || "",
+            patientName: currentUser.displayName || "",
+          }));
+        }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+        showNotification("Failed to load user data", "error");
+        // Still set basic user data so booking can proceed
+        setUser({
+          uid: currentUser.uid,
+          email: currentUser.email,
+          name: currentUser.displayName || "",
+        });
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate, showNotification]);
+
+  // Load available locations
   const loadAvailableLocations = useCallback(async () => {
     try {
       const periodsRef = collection(
@@ -102,10 +165,11 @@ const AddAppointment = () => {
           "periods"
         );
         const periodsSnapshot = await getDocs(periodsRef);
+
         if (periodsSnapshot.empty) {
           setAvailableSlots([]);
           showNotification(
-            "No schedule found. Please set up available periods first.",
+            "No schedule found. Please contact support.",
             "error"
           );
           return;
@@ -156,7 +220,7 @@ const AddAppointment = () => {
           );
           return;
         }
-        // Check for blocked periods FIRST
+        // Check for blocked periods
         const blockedPeriodsRef = collection(
           db,
           "schedules",
@@ -171,6 +235,7 @@ const AddAppointment = () => {
 
         blockedSnapshot.forEach((doc) => {
           const blockedPeriod = doc.data();
+
           const blockStartDate = new Date(blockedPeriod.startDate);
           const blockEndDate = new Date(
             blockedPeriod.endDate || blockedPeriod.startDate
@@ -197,7 +262,8 @@ const AddAppointment = () => {
               } else {
                 // Entire day blocked
                 isDateBlocked = true;
-                blockReason = blockedPeriod.reason || "This date is blocked";
+                blockReason =
+                  blockedPeriod.reason || "This date is not available";
               }
             }
           }
@@ -217,6 +283,7 @@ const AddAppointment = () => {
           const endTime = period.endTime;
           const appointmentDuration = period.appointmentDuration || 30;
           const bufferTime = period.bufferTime || 5;
+
           const [startHour, startMin] = startTime.split(":").map(Number);
           const [endHour, endMin] = endTime.split(":").map(Number);
 
@@ -250,6 +317,7 @@ const AddAppointment = () => {
           const timeB = new Date(`2000-01-01T${b}`);
           return timeA - timeB;
         });
+
         // Filter out blocked time slots
         const slotsAfterBlockFilter = allSlots.filter((slot) => {
           const [slotHour, slotMin] = slot.split(":").map(Number);
@@ -292,6 +360,7 @@ const AddAppointment = () => {
             bookedSlots.push(apt.appointmentTime);
           }
         });
+
         // Filter out booked slots and past times for today
         const now = new Date();
         const isToday = selectedDateObj.toDateString() === now.toDateString();
@@ -312,24 +381,25 @@ const AddAppointment = () => {
 
           return true;
         });
-        setAvailableSlots(availableSlots);
 
-        if (availableSlots.length === 0) {
-          if (blockedTimeRanges.length > 0) {
-            showNotification(
-              "Some time slots are blocked. No available slots remaining.",
-              "error"
-            );
-          } else {
-            showNotification(
-              "No available time slots for selected date and location",
-              "error"
-            );
-          }
-        } else {
+        // Convert to 12-hour format for display
+        const formattedSlots = availableSlots.map((slot) => {
+          const [hours, minutes] = slot.split(":").map(Number);
+          const date = new Date();
+          date.setHours(hours, minutes);
+          return date.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          });
+        });
+
+        setAvailableSlots(formattedSlots);
+
+        if (formattedSlots.length === 0) {
           showNotification(
-            `Found ${availableSlots.length} available slots`,
-            "success"
+            "No available time slots for selected date and location",
+            "error"
           );
         }
       } catch (error) {
@@ -401,8 +471,19 @@ const AddAppointment = () => {
       return;
     }
 
+    // Check authentication state
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      showNotification("Please log in to book an appointment", "error");
+      navigate("/login", { state: { redirectTo: "/book-appointment" } });
+      return;
+    }
+
     setSubmitting(true);
     try {
+      // Convert 12-hour time back to 24-hour for database consistency
+      const timeIn24Hour = convertTo24Hour(formData.appointmentTime);
+
       // Double-check slot availability
       const appointmentsRef = collection(
         db,
@@ -416,7 +497,7 @@ const AddAppointment = () => {
         const apt = doc.data();
         return (
           apt.appointmentDate === formData.appointmentDate &&
-          apt.appointmentTime === formData.appointmentTime &&
+          apt.appointmentTime === timeIn24Hour &&
           apt.location === formData.location &&
           apt.status !== "cancelled"
         );
@@ -431,39 +512,66 @@ const AddAppointment = () => {
         return;
       }
 
-      // Create appointment
-      const docRef = await addDoc(appointmentsRef, {
-        ...formData,
+      // Create appointment with correct field names and proper user ID
+      const appointmentData = {
+        patientName: formData.patientName || "",
+        patientEmail: formData.patientEmail || "",
+        patientPhone: formData.patientPhone || "",
+        patientAge: parseInt(formData.patientAge) || 0,
+        appointmentDate: formData.appointmentDate,
+        appointmentTime: timeIn24Hour,
+        location: formData.location,
+        reasonForVisit: formData.reasonForVisit || "",
+        medicalHistory: formData.medicalHistory || "",
+        appointmentType: formData.appointmentType || "Consultation",
         status: "pending",
+        bookedBy: currentUser.uid, // Use currentUser.uid directly
+        bookedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      });
-      showNotification("Appointment created successfully!");
-
+      };
+      const docRef = await addDoc(appointmentsRef, appointmentData);
+      showNotification("Appointment booked successfully!");
       // Reset form
-      setFormData({
-        patientName: "",
-        patientEmail: "",
+      setFormData((prev) => ({
+        patientName: prev.patientName,
+        patientEmail: prev.patientEmail,
         patientPhone: "",
-        patientAge: "",
+        patientAge: prev.patientAge,
         appointmentDate: "",
         appointmentTime: "",
         location: "",
         reasonForVisit: "",
         medicalHistory: "",
         appointmentType: "Consultation",
-      });
+      }));
       setErrors({});
       setAvailableSlots([]);
+
+      // Call success callback to switch to appointments tab
+      if (onBookingSuccess) {
+        setTimeout(() => {
+          onBookingSuccess();
+        }, 2000);
+      }
     } catch (error) {
       console.error("Error creating appointment:", error);
-      showNotification(
-        `Failed to create appointment: ${error.message}`,
-        "error"
-      );
+      showNotification(`Failed to book appointment: ${error.message}`, "error");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const convertTo24Hour = (time12h) => {
+    const [time, modifier] = time12h.split(" ");
+    let [hours, minutes] = time.split(":");
+    if (hours === "12") {
+      hours = "00";
+    }
+    if (modifier === "PM") {
+      hours = parseInt(hours, 10) + 12;
+    }
+    return `${hours.toString().padStart(2, "0")}:${minutes}`;
   };
 
   const handleInputChange = (e) => {
@@ -495,15 +603,26 @@ const AddAppointment = () => {
     handleDateLocationChange();
   }, [formData.appointmentDate, formData.location]);
 
+  if (!user) {
+    return (
+      <div className="flex justify-center items-center py-12">
+        <div className="text-center">
+          <Loader className="animate-spin mx-auto mb-4" size={32} />
+          <p style={{ color: actualTheme.text.secondary }}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Notification */}
       {notification && (
         <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center transition-opacity duration-300 ${
+          className={`p-4 rounded-lg flex items-center transition-opacity duration-300 ${
             notification.type === "error"
-              ? "bg-red-500 text-white"
-              : "bg-green-500 text-white"
+              ? "bg-red-100 text-red-800"
+              : "bg-green-100 text-green-800"
           }`}
         >
           {notification.type === "error" ? (
@@ -516,24 +635,135 @@ const AddAppointment = () => {
       )}
 
       {/* Form */}
-      <>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Patient Information */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Location and Date Selection */}
+        <div>
+          <h3
+            className="text-lg font-medium mb-4"
+            style={{ color: actualTheme.text.primary }}
+          >
+            <MapPin size={18} className="inline mr-2" />
+            Select Location & Date
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CustomSelect
+              label="Location *"
+              name="location"
+              value={formData.location}
+              onChange={handleInputChange}
+              options={[
+                { value: "", label: "Select location" },
+                ...availableLocations,
+              ]}
+              error={errors.location}
+            />
+
+            <CustomInput
+              label="Appointment Date *"
+              name="appointmentDate"
+              type="date"
+              value={formData.appointmentDate}
+              onChange={handleInputChange}
+              min={getTodayString()}
+              max={getMaxDateString()}
+              error={errors.appointmentDate}
+            />
+          </div>
+        </div>
+
+        {/* Time Slot Selection */}
+        {formData.location && formData.appointmentDate && (
           <div>
             <h3
               className="text-lg font-medium mb-4"
-              style={{ color: currentTheme.text.primary }}
+              style={{ color: actualTheme.text.primary }}
+            >
+              <Clock size={18} className="inline mr-2" />
+              Select Time Slot
+            </h3>
+
+            {loading ? (
+              <div className="flex justify-center py-4">
+                <Loader className="animate-spin" size={24} />
+                <span
+                  className="ml-2"
+                  style={{ color: actualTheme.text.secondary }}
+                >
+                  Loading available slots...
+                </span>
+              </div>
+            ) : availableSlots.length > 0 ? (
+              <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                {availableSlots.map((slot) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        appointmentTime: slot,
+                      }))
+                    }
+                    className={`p-3 rounded-lg border text-center transition-all ${
+                      formData.appointmentTime === slot
+                        ? "border-blue-500 bg-blue-50 text-blue-700 font-medium"
+                        : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+                    }`}
+                    style={{
+                      backgroundColor:
+                        formData.appointmentTime === slot
+                          ? undefined
+                          : actualTheme.surface,
+                      color:
+                        formData.appointmentTime === slot
+                          ? undefined
+                          : actualTheme.text.primary,
+                      borderColor:
+                        formData.appointmentTime === slot
+                          ? "#3b82f6"
+                          : actualTheme.border,
+                    }}
+                  >
+                    {slot}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p
+                style={{ color: actualTheme.text.secondary }}
+                className="text-center py-4"
+              >
+                No available slots for selected date and location.
+              </p>
+            )}
+
+            {errors.appointmentTime && (
+              <p className="text-red-500 text-sm mt-2">
+                {errors.appointmentTime}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Patient Information */}
+        {formData.appointmentTime && (
+          <div
+          >
+            <h3
+              className="text-lg font-medium mb-4"
+              style={{ color: actualTheme.text.primary }}
             >
               <User size={18} className="inline mr-2" />
               Patient Information
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <CustomInput
-                label="Patient Name *"
+                label="Full Name *"
                 name="patientName"
                 value={formData.patientName}
                 onChange={handleInputChange}
-                placeholder="Enter patient's full name"
+                placeholder="Enter full name"
                 error={errors.patientName}
               />
 
@@ -564,71 +794,8 @@ const AddAppointment = () => {
                 type="email"
                 value={formData.patientEmail}
                 onChange={handleInputChange}
-                placeholder="Enter email address (optional)"
+                placeholder="Enter email address"
                 error={errors.patientEmail}
-              />
-            </div>
-          </div>
-
-          {/* Appointment Details */}
-          <div>
-            <h3
-              className="text-lg font-medium mb-4"
-              style={{ color: currentTheme.text.primary }}
-            >
-              <Calendar size={18} className="inline mr-2" />
-              Appointment Details
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <CustomSelect
-                label="Location *"
-                name="location"
-                value={formData.location}
-                onChange={handleInputChange}
-                options={[
-                  { value: "", label: "Select location" },
-                  ...availableLocations,
-                ]}
-                error={errors.location}
-              />
-
-              <CustomInput
-                label="Appointment Date *"
-                name="appointmentDate"
-                type="date"
-                value={formData.appointmentDate}
-                onChange={handleInputChange}
-                min={getTodayString()}
-                max={getMaxDateString()}
-                error={errors.appointmentDate}
-              />
-
-              <CustomSelect
-                label="Appointment Time *"
-                name="appointmentTime"
-                value={formData.appointmentTime}
-                onChange={handleInputChange}
-                options={[
-                  {
-                    value: "",
-                    label: loading ? "Loading slots..." : "Select time slot",
-                  },
-                  ...availableSlots.map((slot) => ({
-                    value: slot,
-                    label: new Date(`2000-01-01T${slot}`).toLocaleTimeString(
-                      "en-US",
-                      {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        hour12: true,
-                      }
-                    ),
-                  })),
-                ]}
-                error={errors.appointmentTime}
-                disabled={
-                  !formData.appointmentDate || !formData.location || loading
-                }
               />
 
               <CustomSelect
@@ -644,24 +811,14 @@ const AddAppointment = () => {
                 ]}
               />
             </div>
-          </div>
 
-          {/* Additional Information */}
-          <div>
-            <h3
-              className="text-lg font-medium mb-4"
-              style={{ color: currentTheme.text.primary }}
-            >
-              <FileText size={18} className="inline mr-2" />
-              Additional Information
-            </h3>
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <CustomInput
                 label="Reason for Visit"
                 name="reasonForVisit"
                 value={formData.reasonForVisit}
                 onChange={handleInputChange}
-                placeholder="Brief description of the reason for visit"
+                placeholder="Brief description of your visit"
                 type="textarea"
                 rows="3"
               />
@@ -671,65 +828,35 @@ const AddAppointment = () => {
                 name="medicalHistory"
                 value={formData.medicalHistory}
                 onChange={handleInputChange}
-                placeholder="Any relevant medical history or current medications"
+                placeholder="Any relevant medical history"
                 type="textarea"
                 rows="3"
               />
             </div>
           </div>
+        )}
 
-          {/* Loading indicator for time slots */}
-          {loading && (
-            <div className="flex items-center justify-center py-4">
-              <Loader className="animate-spin mr-2" size={20} />
-              <span style={{ color: currentTheme.text.secondary }}>
-                Loading available time slots...
-              </span>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div
-            className="flex justify-end gap-4 pt-4 border-t"
-            style={{ borderColor: currentTheme.border }}
-          >
-            <CustomButton
-              type="button"
-              variant="outlined"
-              onClick={() => {
-                setFormData({
-                  patientName: "",
-                  patientEmail: "",
-                  patientPhone: "",
-                  patientAge: "",
-                  appointmentDate: "",
-                  appointmentTime: "",
-                  location: "",
-                  reasonForVisit: "",
-                  medicalHistory: "",
-                  appointmentType: "Consultation",
-                });
-                setErrors({});
-                setAvailableSlots([]);
-              }}
-              disabled={submitting}
-            >
-              Reset Form
-            </CustomButton>
-
+        {/* Submit Button */}
+        {formData.appointmentTime && (
+          <div className="flex justify-center">
             <CustomButton
               type="submit"
               disabled={submitting || loading}
-              icon={submitting ? Loader : Plus}
-              className={submitting ? "animate-pulse" : ""}
             >
-              {submitting ? "Creating..." : "Create Appointment"}
+              {submitting ? (
+                <>
+                  <Loader className="animate-spin mr-2" size={18} />
+                  Booking...
+                </>
+              ) : (
+                "Book Appointment"
+              )}
             </CustomButton>
           </div>
-        </form>
-      </>
+        )}
+      </form>
     </div>
   );
-};
+}
 
-export default AddAppointment;
+export default BookingForm;

@@ -1,36 +1,36 @@
 import React, { memo, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
-import SocialIconsResponsive from '../pages/SocialIcons';
+import SocialIconsResponsive from '../pages/User/SocialIcons';
 
 const Footer = () => {
   const { currentTheme } = useTheme();
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
   const accountHolderName = 'Dr. Laxminadh Sivaraju';
 
   // Handle scroll to services section
-  const handleServicesClick = (e) => {
-    e.preventDefault();
-    if (window.location.pathname === '/') {
-      const section = document.getElementById('services');
-      if (section) {
-        const headerHeight = document.querySelector('header')?.offsetHeight || 75;
-        const sectionTop = section.getBoundingClientRect().top + window.scrollY - headerHeight;
-        window.scrollTo({
-          top: sectionTop,
-          behavior: 'smooth',
-        });
-      }
-    } else {
-      navigate('/', { state: { scrollTo: 'services' } });
-    }
-  };
+  // const handleServicesClick = (e) => {
+  //   e.preventDefault();
+  //   if (window.location.pathname === '/') {
+  //     const section = document.getElementById('services');
+  //     if (section) {
+  //       const headerHeight = document.querySelector('header')?.offsetHeight || 75;
+  //       const sectionTop = section.getBoundingClientRect().top + window.scrollY - headerHeight;
+  //       window.scrollTo({
+  //         top: sectionTop,
+  //         behavior: 'smooth',
+  //       });
+  //     }
+  //   } else {
+  //     navigate('/', { state: { scrollTo: 'services' } });
+  //   }
+  // };
 
-  // Handle navigation to contact page
-  const handleContactClick = (e) => {
-    e.preventDefault();
-    navigate('/contactme', { state: { scrollToTop: true } });
-  };
+  // // Handle navigation to contact page
+  // const handleContactClick = (e) => {
+  //   e.preventDefault();
+  //   navigate('/contactme', { state: { scrollToTop: true } });
+  // };
 
   // Add structured data for SEO
   useEffect(() => {

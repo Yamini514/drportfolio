@@ -1,8 +1,8 @@
 import React, { useState, useEffect, memo } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import { ExternalLink } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db } from '../../firebase/config';
 
 const Publications = () => {
   const { currentTheme } = useTheme();
