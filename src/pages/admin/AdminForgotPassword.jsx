@@ -16,25 +16,17 @@ function AdminForgotPassword() {
   const checkEmailExists = async (email) => {
     try {
       const trimmedEmail = email.trim();
-      console.log('Checking email in Firestore:', trimmedEmail);
-
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('email', '==', trimmedEmail));
       const querySnapshot = await getDocs(q);
-
-      console.log('Query snapshot size:', querySnapshot.size);
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         const userData = userDoc.data();
-        console.log('User data:', userData);
         const role = userData.role ? userData.role.toLowerCase() : 'user';
-        console.log('Determined role:', role);
         return { exists: true, role };
       }
-      console.log('No user found for email:', trimmedEmail);
       return { exists: false, role: null };
     } catch (error) {
-      console.error('Firestore query error:', error.message, error.code);
       return { exists: false, role: null, error: error.message };
     }
   };
@@ -61,7 +53,6 @@ function AdminForgotPassword() {
 
       await sendPasswordResetEmail(auth, email);
       setMessage('Password reset email sent! Please check your inbox.');
-      console.log('Redirecting after reset to: /admin');
       setTimeout(() => {
         navigate('/admin');
       }, 3000);
@@ -74,7 +65,6 @@ function AdminForgotPassword() {
   };
 
   const handleBackToLogin = async () => {
-    console.log('Back to Login clicked, email:', email);
     setError('');
     setMessage('');
 
@@ -87,8 +77,6 @@ function AdminForgotPassword() {
         setError('No admin account found with this email address.');
       }
     }
-
-    console.log('Redirecting to: /admin');
     navigate('/admin');
   };
 

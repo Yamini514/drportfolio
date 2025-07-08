@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import { Star } from 'lucide-react';
 import { collection, addDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
-import { db, auth } from '../firebase/config';
+import { db, auth } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -153,8 +153,6 @@ function Review() {
           id: doc.id,
           ...doc.data(),
         }));
-
-        console.log('Fetched verified reviews:', fetchedReviews); // Debug log
         setReviews(fetchedReviews);
       } catch (error) {
         console.error('Error fetching reviews:', error);

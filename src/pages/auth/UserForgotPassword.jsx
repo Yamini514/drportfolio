@@ -65,8 +65,6 @@ const UserForgotPassword = () => {
         where('pid', '==', formData.pid.trim())
       );
       const querySnapshot = await getDocs(q);
-      console.log('Query Snapshot:', querySnapshot.docs.map(doc => doc.data()));
-
       if (querySnapshot.empty) {
         setErrors({ general: 'Invalid phone number or PID. Please try again.' });
         return;

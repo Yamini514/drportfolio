@@ -2,7 +2,7 @@ import React from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { Search as SearchIcon } from 'lucide-react';
 
-function CustomSearch({ 
+function CustomSearch({
   placeholder = "Search...",
   value,
   onChange,
@@ -10,34 +10,32 @@ function CustomSearch({
   label
 }) {
   const { currentTheme } = useTheme();
-  
+
   return (
-    <div>
+    <div className={`${className}`}>
       {label && (
-        <label 
-          className="block text-sm font-medium mb-1" 
+        <label
+          className="block text-sm font-medium mb-2"
           style={{ color: currentTheme.text.primary }}
         >
           {label}
         </label>
       )}
       <div className="relative">
-        <SearchIcon 
-          size={16} 
-          className="absolute left-3 top-1/2 -translate-y-1/2"
-          style={{ color: currentTheme.text.secondary }}
-        />
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <SearchIcon size={16} style={{ color: currentTheme.text.secondary }} />
+        </div>
         <input
           type="text"
-          placeholder={placeholder}
           value={value}
           onChange={onChange}
-          className={`w-full pl-9 pr-3 py-2 rounded-lg border focus:outline-none transition-all duration-200 ${className}`}
+          placeholder={placeholder}
+          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-colors"
           style={{
             backgroundColor: currentTheme.surface,
-            borderColor: currentTheme.primary,
+            borderColor: currentTheme.border,
             color: currentTheme.text.primary,
-            '--tw-ring-color': 'transparent'
+            '--tw-ring-color': currentTheme.primary,
           }}
         />
       </div>

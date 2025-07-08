@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import { Facebook, Linkedin, Instagram, Twitter, Youtube, X } from 'lucide-react';
 
 function SocialIconsResponsive() {

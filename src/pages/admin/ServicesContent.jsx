@@ -48,7 +48,7 @@ function ServicesContent() {
       FaLaptopMedical: <FaLaptopMedical size={16} />,
       FaBone: <FaBone size={16} />,
     };
-    return iconMap[iconName] || <FaBrain size={16} />;
+    return <div className="inline-flex items-center justify-center w-4 h-4">{iconMap[iconName] || <FaBrain size={16} />}</div>;
   };
 
   useEffect(() => {
@@ -94,9 +94,8 @@ function ServicesContent() {
 
   const NotificationPopup = ({ message, type, onClose }) => (
     <div
-      className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center transition-opacity duration-300 ${
-        type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-      }`}
+      className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center transition-opacity duration-300 ${type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+        }`}
     >
       {type === 'error' ? <AlertTriangle size={20} className="mr-2" /> : <CheckCircle size={20} className="mr-2" />}
       <span>{message}</span>
@@ -285,9 +284,8 @@ function ServicesContent() {
                     Status
                   </label>
                   <span
-                    className={`px-2 py-1 rounded-full text-xs ${
-                      viewingService.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}
+                    className={`px-2 py-1 rounded-full text-xs ${viewingService.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}
                   >
                     {viewingService.status}
                   </span>
@@ -478,7 +476,7 @@ function ServicesContent() {
                           {service.serviceId}
                         </td>
                         <td
-                          className="px-4 py-2 whitespace-nowrap text-sm text-center"
+                          className="px-4 py-2 whitespace-nowrap text-sm text-center flex items-center justify-center"
                           style={{ color: currentTheme.primary || '#6B46C1' }}
                         >
                           {getIconComponent(service.icon)}

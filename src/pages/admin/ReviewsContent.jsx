@@ -32,7 +32,6 @@ function ReviewsContent() {
           id: doc.id,
           ...doc.data(),
         }));
-        console.log('Fetched all reviews (admin):', fetchedReviews); // Debug log
         setReviews(fetchedReviews);
       } catch (error) {
         console.error('Error fetching reviews:', error);
@@ -94,10 +93,8 @@ function ReviewsContent() {
         const newReviews = prev.map((r) =>
           r.id === review.id ? { ...r, verified: newVerifiedStatus } : r
         );
-        console.log('New reviews state:', newReviews); // Debug state update
         return newReviews;
       });
-      console.log(`Toggled verification for review ${review.id} to ${newVerifiedStatus}`); // Log new status
     } catch (error) {
       console.error('Error toggling verification:', error);
       alert('Failed to update verification status.');
@@ -166,7 +163,7 @@ function ReviewsContent() {
             Verified:{' '}
           </span>
           <span style={{ color: review.verified ? currentTheme.success : currentTheme.error }}>
-            {review.verified ? 'Yes' : 'No'}
+            {review.verified ? 'No' : 'Yes'}
           </span>
         </div>
         <div>
@@ -322,7 +319,7 @@ function ReviewsContent() {
                     }}
                     title={review.verified ? 'Unverify Review' : 'Verify Review'}
                   >
-                    {review.verified ? <XCircle size={18} /> : <CheckCircle size={18} />}
+                    {review.verified ?  <CheckCircle size={18} />: <XCircle size={18} />}
                   </button>
                 </div>
               </td>

@@ -1,5 +1,4 @@
 import React, { useEffect } from "react";
-import { useTheme } from "../context/ThemeContext";
 import {
   FaUserMd,
   FaBrain,
@@ -11,8 +10,9 @@ import {
   FaSmile,
   FaStar,
 } from "react-icons/fa";
-import bgImage from "../assets/bgimg11.jpg"; // Add this import
-import bg from "../assets/brain-scan-image.jpg"
+// import bgImage from "../../assets/bgimg11.jpg"; // Add this import
+import bg from "../../assets/brain-scan-image.jpg"
+import { useTheme } from "../../context/ThemeContext";
 
 function Hero() {
   const { currentTheme } = useTheme();

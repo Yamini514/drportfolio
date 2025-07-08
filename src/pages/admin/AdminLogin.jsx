@@ -18,32 +18,42 @@ const AdminLogin = () => {
   const [rememberMe, setRememberMe] = useState(false);
 
   // Session expiration time (30 minutes in milliseconds)
-  const SESSION_TIMEOUT = 3*60 * 1000;
+  const SESSION_TIMEOUT = 30 * 60 * 1000;
 
   useEffect(() => {
-    // Check for saved email and session validity when component mounts
+    // Check for saved email and remember me preference
     const savedEmail = localStorage.getItem("adminEmail");
     const savedRememberMe = localStorage.getItem("adminRememberMe") === "true";
     const sessionStart = localStorage.getItem("adminSessionStart");
+    const isLoggedIn = localStorage.getItem("isAdminLoggedIn") === "true";
     const manualLogout = localStorage.getItem("manualLogout") === "true";
-
     if (savedEmail && savedRememberMe) {
       setCredentials((prev) => ({ ...prev, email: savedEmail }));
       setRememberMe(true);
     }
 
-    // Check if session exists and is still valid
-    if (sessionStart && !manualLogout) {
-      const currentTime = new Date().getTime();
+    // Only check session validity if the user is logged in
+    if (isLoggedIn && sessionStart && !manualLogout) {
       const sessionTime = parseInt(sessionStart, 10);
-      if (currentTime - sessionTime > SESSION_TIMEOUT) {
-        // Session expired, clear localStorage and sign out
-        signOut(auth).catch(console.error);
-        localStorage.removeItem("adminToken");
-        localStorage.removeItem("isAdminLoggedIn");
+      if (!isNaN(sessionTime)) {
+        const currentTime = new Date().getTime();
+        if (currentTime - sessionTime > SESSION_TIMEOUT) {
+          // Session expired, clear localStorage and sign out
+          signOut(auth).catch(console.error);
+          localStorage.removeItem("adminToken");
+          localStorage.removeItem("isAdminLoggedIn");
+          localStorage.removeItem("adminSessionStart");
+          setError("Session has expired. Please log in again.");
+        }
+      } else {
+        // Invalid sessionStart, clear it
         localStorage.removeItem("adminSessionStart");
-        setError("Session has expired. Please log in again.");
       }
+    } else if (sessionStart && (!isLoggedIn || manualLogout)) {
+      // Clear stale session data if user is not logged in or manually logged out
+      localStorage.removeItem("adminSessionStart");
+      localStorage.removeItem("adminToken");
+      localStorage.removeItem("isAdminLoggedIn");
     }
   }, []);
 
@@ -148,9 +158,7 @@ const AdminLogin = () => {
         className="max-w-md w-full space-y-8 p-8 rounded-xl"
         style={{
           backgroundColor: currentTheme.surface,
-          boxShadow: `0 4px 6px -1px ${
-            currentTheme.shadow || "rgba(0, 0, 0, 0.1)"
-          }, 0 2px 4px -1px ${currentTheme.shadow || "rgba(0, 0, 0, 0.06)"}`,
+          boxShadow: `0 4px 6px -1px ${currentTheme.shadow || "rgba(0, 0, 0, 0.1)"}, 0 2px 4px -1px ${currentTheme.shadow || "rgba(0, 0, 0, 0.06)"}`,
         }}
       >
         <div className="text-center">
@@ -172,6 +180,7 @@ const AdminLogin = () => {
                 setCredentials({ ...credentials, email: e.target.value })
               }
               required
+              autocomplete="off" // Added to disable suggestions
             />
             <div className="relative">
               <CustomInput
