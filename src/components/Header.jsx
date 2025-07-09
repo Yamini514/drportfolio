@@ -242,7 +242,7 @@ function Header() {
 
       if (href === "/" && sectionId) {
         if (location.pathname !== "/") {
-          navigate("/");
+          navigate('/');
           setTimeout(() => scrollToSection(0, 15, 300), 1000);
         } else {
           scrollToSection();
@@ -323,15 +323,7 @@ function Header() {
           aria-labelledby="user-menu"
         >
           <div className="py-1">
-            <div className="px-4 py-2 text-sm">PID: {pid || "Not Available"}</div>
-            {/* <Link
-              to="/my-appointments"
-              className="block px-4 py-2 hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-sm"
-              onClick={() => setIsUserMenuOpen(false)}
-              role="menuitem"
-            >
-              My Appointments
-            </Link> */}
+            <div className="px-4 py-2 text-sm">PID: {pid}</div>
             <button
               onClick={handleLogout}
               className="w-full px-4 py-2 text-red-700 font-medium hover:bg-opacity-10 hover:bg-gray-500 transition-all duration-200 text-left text-sm"
@@ -676,25 +668,15 @@ function Header() {
             )}
             {user ? (
               <div>
-                {/* <div
+                <div
                   className="px-4 py-2 text-sm"
                   style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
                 >
-                  PID: {pid || "Not Available"}
-                </div> */}
-                {/* <Link
-                  to="/my-appointments"
-                  className="block py-2 px-4 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
-                  style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
-                  onClick={() => setIsMenuOpen(false)}
-                  role="menuitem"
-                >
-                  My Appointments
-                </Link> */}
+                  PID: {pid}
+                </div>
                 <button
                   onClick={handleLogout}
-                  className="w-full py-2 px-4 text-red-600 font-medium  hover:bg-opacity-10 hover:bg-gray-500 text-left text-sm sm:text-base"
-                  // style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
+                  className="w-full py-2 px-4 text-red-600 font-medium hover:bg-opacity-10 hover:bg-gray-500 text-left text-sm sm:text-base"
                   role="menuitem"
                 >
                   Logout

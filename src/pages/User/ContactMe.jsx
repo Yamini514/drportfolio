@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useTheme } from "../../context/ThemeContext";
 import { addDoc, collection } from "firebase/firestore";
 import { db } from "../../firebase/config";
 import { FaPhone, FaWhatsapp, FaEnvelope } from "react-icons/fa";
-import emailjs from "@emailjs/browser";
 import { useLocation } from "react-router-dom";
 import CustomButton from "../../components/CustomButton";
 
@@ -24,10 +23,6 @@ function ContactMe() {
     message: "",
   });
   const location = useLocation();
-
-  useEffect(() => {
-    emailjs.init("2pSuAO6tF3T-sejH-");
-  }, []);
 
   const validatePhone = (phone) => {
     const phoneRegex = /^[6-9]\d{9}$/;
@@ -122,18 +117,6 @@ function ContactMe() {
         timestamp: new Date(),
       };
       await addDoc(collection(db, "contacts"), dataToSubmit);
-      const emailParams = {
-        name: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
-        message: formData.message,
-        subject: "We've received your message",
-      };
-      const response = await emailjs.send(
-        "service_l920egs",
-        "template_4t5xy58",
-        emailParams
-      );
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
@@ -152,9 +135,9 @@ function ContactMe() {
         });
       }, 3000);
     } catch (error) {
-      console.error("Error submitting form or sending notifications:", error);
+      console.error("Error submitting form:", error);
       const errorMessage =
-        error.text || error.message || JSON.stringify(error) || "Unknown error";
+        error.message || JSON.stringify(error) || "Unknown error";
       alert(
         `There was an error submitting your message. Please try again. Details: ${errorMessage}`
       );
@@ -164,7 +147,7 @@ function ContactMe() {
   return (
     <section id="contact">
       <div
-        className="px-5  mt-50 md:px-15 pb-12 md:pb-10 lg:px-20 p-8"
+        className="px-5 mt-50 md:px-15 pb-12 md:pb-10 lg:px-20 p-8"
         style={{ backgroundColor: currentTheme.background }}
       >
         <div className="container mx-auto">
@@ -300,13 +283,14 @@ function ContactMe() {
                     </p>
                   )}
                 </div>
-               <div className="flex justify-end"><CustomButton
-                  type="submit"
-                  disabled={Object.values(errors).some((error) => error)}
-                >
-                  Send
-                </CustomButton></div>
-                
+                <div className="flex justify-end">
+                  <CustomButton
+                    type="submit"
+                    disabled={Object.values(errors).some((error) => error)}
+                  >
+                    Send
+                  </CustomButton>
+                </div>
               </form>
             </div>
 

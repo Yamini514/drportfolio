@@ -8,30 +8,6 @@ const Footer = () => {
   // const navigate = useNavigate();
   const accountHolderName = 'Dr. Laxminadh Sivaraju';
 
-  // Handle scroll to services section
-  // const handleServicesClick = (e) => {
-  //   e.preventDefault();
-  //   if (window.location.pathname === '/') {
-  //     const section = document.getElementById('services');
-  //     if (section) {
-  //       const headerHeight = document.querySelector('header')?.offsetHeight || 75;
-  //       const sectionTop = section.getBoundingClientRect().top + window.scrollY - headerHeight;
-  //       window.scrollTo({
-  //         top: sectionTop,
-  //         behavior: 'smooth',
-  //       });
-  //     }
-  //   } else {
-  //     navigate('/', { state: { scrollTo: 'services' } });
-  //   }
-  // };
-
-  // // Handle navigation to contact page
-  // const handleContactClick = (e) => {
-  //   e.preventDefault();
-  //   navigate('/contactme', { state: { scrollToTop: true } });
-  // };
-
   // Add structured data for SEO
   useEffect(() => {
     const script = document.createElement('script');
@@ -124,8 +100,8 @@ const Footer = () => {
                 className="text-sm mb-4 md:mb-0 text-center"
                 style={{ color: currentTheme.text.secondary }}
               >
-                © 2025 {accountHolderName} Neurosurgeon | All Rights Reserved. |{' '}
-                <Link
+                © 2025 {accountHolderName} Neurosurgeon | All Rights Reserved.
+                {/* <Link
                   to="/terms-and-conditions"
                   className="text-sm"
                   style={{
@@ -136,7 +112,7 @@ const Footer = () => {
                   aria-disabled="true"
                 >
                   Terms and Conditions
-                </Link>
+                </Link> */}
               </p>
               <a
                 href="https://srinishtha.com/"

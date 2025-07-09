@@ -72,11 +72,11 @@ const MyAppointments = ({ theme }) => {
 
   const getStatusColor = (status) => {
     const colors = {
-      'pending': 'bg-yellow-100 text-yellow-800',
-      'confirmed': 'bg-green-100 text-green-800',
-      'cancelled': 'bg-red-100 text-red-800',
-      'completed': 'bg-blue-100 text-blue-800',
-      'no-show': 'bg-gray-100 text-gray-800'
+      'Pending': 'bg-yellow-100 text-yellow-800',
+      'Confirmed': 'bg-green-100 text-green-800',
+      'Cancelled': 'bg-red-100 text-red-800',
+      'Completed': 'bg-blue-100 text-blue-800',
+      'No-show': 'bg-gray-100 text-gray-800'
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
@@ -486,7 +486,7 @@ const MyAppointments = ({ theme }) => {
       await updateDoc(appointmentRef, {
         appointmentDate: rescheduleModal.newDate,
         appointmentTime: rescheduleModal.newTime,
-        status: 'pending',
+        status: 'Pending',
         rescheduledAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
@@ -855,7 +855,7 @@ const MyAppointments = ({ theme }) => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-col gap-2 lg:w-auto w-full">
-                  {isUpcoming(appointment) && appointment.status !== 'cancelled' && appointment.status !== 'completed' && (
+                  {isUpcoming(appointment) && appointment.status !== 'Cancelled' && appointment.status !== 'Completed' && (
                     <>
                       <CustomButton
                         variant="outlined"
@@ -877,13 +877,13 @@ const MyAppointments = ({ theme }) => {
                       </CustomButton>
                     </>
                   )}
-                  {appointment.status === 'completed' && (
+                  {appointment.status === 'Completed' && (
                     <div className="flex items-center gap-2 text-green-600 text-sm">
                       <CheckCircle className="w-4 h-4" />
                       <span>Completed</span>
                     </div>
                   )}
-                  {appointment.status === 'cancelled' && (
+                  {appointment.status === 'Cancelled' && (
                     <div className="flex items-center gap-2 text-red-600 text-sm">
                       <X className="w-4 h-4" />
                       <span>Cancelled</span>

@@ -177,8 +177,10 @@ function BookingForm({ onBookingSuccess, theme }) {
 
         const selectedDateObj = new Date(date);
         const dayName = selectedDateObj
-          .toLocaleDateString("en-US", { weekday: "long" })
-          .toLowerCase();
+  .toLocaleDateString("en-US", { weekday: "long" })
+  .toLowerCase()
+  .replace(/^\w/, c => c.toUpperCase());
+
         // Find ALL applicable periods for the location and date
         const applicablePeriods = [];
 
@@ -215,7 +217,7 @@ function BookingForm({ onBookingSuccess, theme }) {
         if (applicablePeriods.length === 0) {
           setAvailableSlots([]);
           showNotification(
-            `No schedule available for ${location} on ${dayName}s`,
+            `No schedule available for ${location} on ${dayName}`,
             "error"
           );
           return;
@@ -355,7 +357,7 @@ function BookingForm({ onBookingSuccess, theme }) {
           if (
             apt.appointmentDate === date &&
             apt.location === location &&
-            apt.status !== "cancelled"
+            apt.status !== "Cancelled"
           ) {
             bookedSlots.push(apt.appointmentTime);
           }
@@ -499,7 +501,7 @@ function BookingForm({ onBookingSuccess, theme }) {
           apt.appointmentDate === formData.appointmentDate &&
           apt.appointmentTime === timeIn24Hour &&
           apt.location === formData.location &&
-          apt.status !== "cancelled"
+          apt.status !== "Cancelled"
         );
       });
 
@@ -524,7 +526,7 @@ function BookingForm({ onBookingSuccess, theme }) {
         reasonForVisit: formData.reasonForVisit || "",
         medicalHistory: formData.medicalHistory || "",
         appointmentType: formData.appointmentType || "Consultation",
-        status: "pending",
+        status: "Pending",
         bookedBy: currentUser.uid, // Use currentUser.uid directly
         bookedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
