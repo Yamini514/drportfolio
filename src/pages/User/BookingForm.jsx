@@ -64,8 +64,8 @@ function BookingForm({ onBookingSuccess, theme }) {
             "Authentication required. Please log in to book an appointment.",
           type: "error",
         });
-        localStorage.setItem("redirectAfterLogin", "/book-appointment");
-        navigate("/login", { state: { redirectTo: "/book-appointment" } });
+        localStorage.setItem("redirectAfterLogin", "/bookappointment");
+        navigate("/login", { state: { redirectTo: "/bookappointment" } });
         return;
       }
 
@@ -477,7 +477,7 @@ function BookingForm({ onBookingSuccess, theme }) {
     const currentUser = auth.currentUser;
     if (!currentUser) {
       showNotification("Please log in to book an appointment", "error");
-      navigate("/login", { state: { redirectTo: "/book-appointment" } });
+      navigate("/login", { state: { redirectTo: "/bookappointment" } });
       return;
     }
 
