@@ -5,14 +5,7 @@ import { collection, getDocs, addDoc, doc, getDoc } from "firebase/firestore";
 import CustomInput from "../../components/CustomInput";
 import CustomButton from "../../components/CustomButton";
 import CustomSelect from "../../components/CustomSelect";
-import {
-  Clock,
-  User,
-  MapPin,
-  CheckCircle,
-  AlertTriangle,
-  Loader,
-} from "lucide-react";
+import { Clock, User, MapPin, CheckCircle, AlertTriangle, Loader } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 function BookingForm({ onBookingSuccess, theme }) {
@@ -60,8 +53,7 @@ function BookingForm({ onBookingSuccess, theme }) {
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (!currentUser) {
         setNotification({
-          message:
-            "Authentication required. Please log in to book an appointment.",
+          message: "Authentication required. Please log in to book an appointment.",
           type: "error",
         });
         localStorage.setItem("redirectAfterLogin", "/bookappointment");
@@ -71,15 +63,12 @@ function BookingForm({ onBookingSuccess, theme }) {
 
       try {
         setLoading(true);
-
-        // Set user data immediately from auth
         setUser({
           uid: currentUser.uid,
           email: currentUser.email,
           name: currentUser.displayName || "",
         });
 
-        // Try to get additional user data from Firestore
         const userRef = doc(db, "users", currentUser.uid);
         const userDoc = await getDoc(userRef);
 
@@ -94,7 +83,6 @@ function BookingForm({ onBookingSuccess, theme }) {
             patientAge: userData.age || "",
           }));
         } else {
-          // Use auth data if no Firestore user doc
           setFormData((prev) => ({
             ...prev,
             patientEmail: currentUser.email || "",
@@ -104,7 +92,6 @@ function BookingForm({ onBookingSuccess, theme }) {
       } catch (error) {
         console.error("Error loading user data:", error);
         showNotification("Failed to load user data", "error");
-        // Still set basic user data so booking can proceed
         setUser({
           uid: currentUser.uid,
           email: currentUser.email,
@@ -121,12 +108,7 @@ function BookingForm({ onBookingSuccess, theme }) {
   // Load available locations
   const loadAvailableLocations = useCallback(async () => {
     try {
-      const periodsRef = collection(
-        db,
-        "schedules",
-        "available-periods",
-        "periods"
-      );
+      const periodsRef = collection(db, "schedules", "available-periods", "periods");
       const snapshot = await getDocs(periodsRef);
 
       const locations = [];
@@ -157,58 +139,30 @@ function BookingForm({ onBookingSuccess, theme }) {
 
       setLoading(true);
       try {
-        // Get available periods for the location
-        const periodsRef = collection(
-          db,
-          "schedules",
-          "available-periods",
-          "periods"
-        );
+        const periodsRef = collection(db, "schedules", "available-periods", "periods");
         const periodsSnapshot = await getDocs(periodsRef);
-
         if (periodsSnapshot.empty) {
           setAvailableSlots([]);
-          showNotification(
-            "No schedule found. Please contact support.",
-            "error"
-          );
+          showNotification("No schedule found. Please set up available periods first.", "error");
           return;
         }
 
         const selectedDateObj = new Date(date);
-        const dayName = selectedDateObj
-  .toLocaleDateString("en-US", { weekday: "long" })
-  .toLowerCase()
-  .replace(/^\w/, c => c.toUpperCase());
-
-        // Find ALL applicable periods for the location and date
+        const dayName = selectedDateObj.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
         const applicablePeriods = [];
 
         periodsSnapshot.forEach((doc) => {
           const period = doc.data();
-          // Check if location matches
-          if (period.name !== location) {
-            return;
-          }
+          if (period.name !== location) return;
 
           const periodStartDate = new Date(period.startDate);
-
           if (period.isRecurring) {
-            // Check if the day is available in recurring schedule
-            if (
-              period.days &&
-              period.days[dayName] &&
-              selectedDateObj >= periodStartDate
-            ) {
+            if (period.days && period.days[dayName] && selectedDateObj >= periodStartDate) {
               applicablePeriods.push(period);
             }
           } else {
-            // Check if date falls within non-recurring period
             const periodEndDate = new Date(period.endDate);
-            if (
-              selectedDateObj >= periodStartDate &&
-              selectedDateObj <= periodEndDate
-            ) {
+            if (selectedDateObj >= periodStartDate && selectedDateObj <= periodEndDate) {
               applicablePeriods.push(period);
             }
           }
@@ -216,19 +170,11 @@ function BookingForm({ onBookingSuccess, theme }) {
 
         if (applicablePeriods.length === 0) {
           setAvailableSlots([]);
-          showNotification(
-            `No schedule available for ${location} on ${dayName}`,
-            "error"
-          );
+          showNotification(`No schedule available for ${location} on ${dayName}s`, "error");
           return;
         }
-        // Check for blocked periods
-        const blockedPeriodsRef = collection(
-          db,
-          "schedules",
-          "blocked-periods",
-          "periods"
-        );
+
+        const blockedPeriodsRef = collection(db, "schedules", "blocked-periods", "periods");
         const blockedSnapshot = await getDocs(blockedPeriodsRef);
 
         let isDateBlocked = false;
@@ -237,36 +183,19 @@ function BookingForm({ onBookingSuccess, theme }) {
 
         blockedSnapshot.forEach((doc) => {
           const blockedPeriod = doc.data();
-
           const blockStartDate = new Date(blockedPeriod.startDate);
-          const blockEndDate = new Date(
-            blockedPeriod.endDate || blockedPeriod.startDate
-          );
+          const blockEndDate = new Date(blockedPeriod.endDate || blockedPeriod.startDate);
 
-          // Check if the selected date falls within blocked period
-          if (
-            selectedDateObj >= blockStartDate &&
-            selectedDateObj <= blockEndDate
-          ) {
-            // Check if location matches
-            if (blockedPeriod.location === location) {
-              if (
-                blockedPeriod.type === "time-slot" &&
-                blockedPeriod.startTime &&
-                blockedPeriod.endTime
-              ) {
-                // Specific time slot blocked
-                blockedTimeRanges.push({
-                  startTime: blockedPeriod.startTime,
-                  endTime: blockedPeriod.endTime,
-                  reason: blockedPeriod.reason,
-                });
-              } else {
-                // Entire day blocked
-                isDateBlocked = true;
-                blockReason =
-                  blockedPeriod.reason || "This date is not available";
-              }
+          if (selectedDateObj >= blockStartDate && selectedDateObj <= blockEndDate && blockedPeriod.location === location) {
+            if (blockedPeriod.type === "time-slot" && blockedPeriod.startTime && blockedPeriod.endTime) {
+              blockedTimeRanges.push({
+                startTime: blockedPeriod.startTime,
+                endTime: blockedPeriod.endTime,
+                reason: blockedPeriod.reason,
+              });
+            } else {
+              isDateBlocked = true;
+              blockReason = blockedPeriod.reason || "This date is blocked";
             }
           }
         });
@@ -277,21 +206,17 @@ function BookingForm({ onBookingSuccess, theme }) {
           return;
         }
 
-        // Generate time slots from ALL applicable periods
         const allSlots = [];
-
         applicablePeriods.forEach((period) => {
           const startTime = period.startTime;
           const endTime = period.endTime;
           const appointmentDuration = period.appointmentDuration || 30;
           const bufferTime = period.bufferTime || 5;
-
           const [startHour, startMin] = startTime.split(":").map(Number);
           const [endHour, endMin] = endTime.split(":").map(Number);
 
           let currentTime = new Date();
           currentTime.setHours(startHour, startMin, 0, 0);
-
           const endTimeObj = new Date();
           endTimeObj.setHours(endHour, endMin, 0, 0);
 
@@ -302,78 +227,51 @@ function BookingForm({ onBookingSuccess, theme }) {
               hour12: false,
             });
 
-            // Check if this time slot is not already in allSlots (avoid duplicates)
             if (!allSlots.includes(timeString)) {
               allSlots.push(timeString);
             }
 
-            currentTime.setMinutes(
-              currentTime.getMinutes() + appointmentDuration + bufferTime
-            );
+            currentTime.setMinutes(currentTime.getMinutes() + appointmentDuration + bufferTime);
           }
         });
 
-        // Sort slots chronologically
         allSlots.sort((a, b) => {
           const timeA = new Date(`2000-01-01T${a}`);
           const timeB = new Date(`2000-01-01T${b}`);
           return timeA - timeB;
         });
 
-        // Filter out blocked time slots
         const slotsAfterBlockFilter = allSlots.filter((slot) => {
           const [slotHour, slotMin] = slot.split(":").map(Number);
           const slotMinutes = slotHour * 60 + slotMin;
 
-          // Check if slot falls within any blocked time range
           return !blockedTimeRanges.some((blockedRange) => {
-            const [blockStartHour, blockStartMin] = blockedRange.startTime
-              .split(":")
-              .map(Number);
-            const [blockEndHour, blockEndMin] = blockedRange.endTime
-              .split(":")
-              .map(Number);
+            const [blockStartHour, blockStartMin] = blockedRange.startTime.split(":").map(Number);
+            const [blockEndHour, blockEndMin] = blockedRange.endTime.split(":").map(Number);
             const blockStartMinutes = blockStartHour * 60 + blockStartMin;
             const blockEndMinutes = blockEndHour * 60 + blockEndMin;
 
-            return (
-              slotMinutes >= blockStartMinutes && slotMinutes < blockEndMinutes
-            );
+            return slotMinutes >= blockStartMinutes && slotMinutes < blockEndMinutes;
           });
         });
 
-        // Check for existing appointments
-        const appointmentsRef = collection(
-          db,
-          "appointments",
-          "bookings",
-          "appointments"
-        );
+        const appointmentsRef = collection(db, "appointments", "bookings", "appointments");
         const appointmentsSnapshot = await getDocs(appointmentsRef);
 
         const bookedSlots = [];
         appointmentsSnapshot.forEach((doc) => {
           const apt = doc.data();
-          if (
-            apt.appointmentDate === date &&
-            apt.location === location &&
-            apt.status !== "Cancelled"
-          ) {
+          if (apt.appointmentDate === date && apt.location === location && apt.status !== "cancelled") {
             bookedSlots.push(apt.appointmentTime);
           }
         });
 
-        // Filter out booked slots and past times for today
         const now = new Date();
         const isToday = selectedDateObj.toDateString() === now.toDateString();
 
         const availableSlots = slotsAfterBlockFilter.filter((slot) => {
-          // Check if slot is booked
-          if (bookedSlots.includes(slot)) {
-            return false;
-          }
+          if (bookedSlots.includes(slot)) return false;
 
-          // If it's today, check if slot is in the future
           if (isToday) {
             const [slotHour, slotMin] = slot.split(":").map(Number);
             const slotTime = new Date();
@@ -384,32 +282,20 @@ function BookingForm({ onBookingSuccess, theme }) {
           return true;
         });
 
-        // Convert to 12-hour format for display
-        const formattedSlots = availableSlots.map((slot) => {
-          const [hours, minutes] = slot.split(":").map(Number);
-          const date = new Date();
-          date.setHours(hours, minutes);
-          return date.toLocaleTimeString("en-US", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          });
-        });
+        setAvailableSlots(availableSlots);
 
-        setAvailableSlots(formattedSlots);
-
-        if (formattedSlots.length === 0) {
-          showNotification(
-            "No available time slots for selected date and location",
-            "error"
-          );
+        if (availableSlots.length === 0) {
+          if (blockedTimeRanges.length > 0) {
+            showNotification("Some time slots are blocked. No available slots remaining.", "error");
+          } else {
+            showNotification("No available time slots for selected date and location", "error");
+          }
+        } else {
+          showNotification(`Found ${availableSlots.length} available slots`, "success");
         }
       } catch (error) {
         console.error("Error generating time slots:", error);
-        showNotification(
-          `Failed to load available time slots: ${error.message}`,
-          "error"
-        );
+        showNotification(`Failed to load available time slots: ${error.message}`, "error");
         setAvailableSlots([]);
       } finally {
         setLoading(false);
@@ -427,25 +313,15 @@ function BookingForm({ onBookingSuccess, theme }) {
 
     if (!formData.patientPhone.trim()) {
       newErrors.patientPhone = "Phone number is required";
-    } else if (
-      !/^\+?[0-9]{10,15}$/.test(formData.patientPhone.replace(/\s/g, ""))
-    ) {
+    } else if (!/^\+?[0-9]{10,15}$/.test(formData.patientPhone.replace(/\s/g, ""))) {
       newErrors.patientPhone = "Please enter a valid phone number";
     }
 
-    if (
-      formData.patientEmail &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.patientEmail)
-    ) {
+    if (formData.patientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.patientEmail)) {
       newErrors.patientEmail = "Please enter a valid email address";
     }
 
-    if (
-      !formData.patientAge ||
-      isNaN(formData.patientAge) ||
-      formData.patientAge < 1 ||
-      formData.patientAge > 120
-    ) {
+    if (!formData.patientAge || isNaN(formData.patientAge) || formData.patientAge < 1 || formData.patientAge > 120) {
       newErrors.patientAge = "Please enter a valid age (1-120)";
     }
 
@@ -473,7 +349,6 @@ function BookingForm({ onBookingSuccess, theme }) {
       return;
     }
 
-    // Check authentication state
     const currentUser = auth.currentUser;
     if (!currentUser) {
       showNotification("Please log in to book an appointment", "error");
@@ -483,58 +358,45 @@ function BookingForm({ onBookingSuccess, theme }) {
 
     setSubmitting(true);
     try {
-      // Convert 12-hour time back to 24-hour for database consistency
-      const timeIn24Hour = convertTo24Hour(formData.appointmentTime);
-
-      // Double-check slot availability
-      const appointmentsRef = collection(
-        db,
-        "appointments",
-        "bookings",
-        "appointments"
-      );
+      const appointmentsRef = collection(db, "appointments", "bookings", "appointments");
       const appointmentsSnapshot = await getDocs(appointmentsRef);
 
       const isSlotTaken = appointmentsSnapshot.docs.some((doc) => {
         const apt = doc.data();
         return (
           apt.appointmentDate === formData.appointmentDate &&
-          apt.appointmentTime === timeIn24Hour &&
+          apt.appointmentTime === formData.appointmentTime &&
           apt.location === formData.location &&
-          apt.status !== "Cancelled"
+          apt.status !== "cancelled"
         );
       });
 
       if (isSlotTaken) {
-        showNotification(
-          "This time slot is no longer available. Please select another time.",
-          "error"
-        );
+        showNotification("This time slot is no longer available. Please select another time.", "error");
         generateTimeSlots(formData.appointmentDate, formData.location);
         return;
       }
 
-      // Create appointment with correct field names and proper user ID
       const appointmentData = {
         patientName: formData.patientName || "",
         patientEmail: formData.patientEmail || "",
         patientPhone: formData.patientPhone || "",
         patientAge: parseInt(formData.patientAge) || 0,
         appointmentDate: formData.appointmentDate,
-        appointmentTime: timeIn24Hour,
+        appointmentTime: formData.appointmentTime,
         location: formData.location,
         reasonForVisit: formData.reasonForVisit || "",
         medicalHistory: formData.medicalHistory || "",
         appointmentType: formData.appointmentType || "Consultation",
-        status: "Pending",
-        bookedBy: currentUser.uid, // Use currentUser.uid directly
+        status: "pending",
+        bookedBy: currentUser.uid,
         bookedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      const docRef = await addDoc(appointmentsRef, appointmentData);
+
+      await addDoc(appointmentsRef, appointmentData);
       showNotification("Appointment booked successfully!");
-      // Reset form
       setFormData((prev) => ({
         patientName: prev.patientName,
         patientEmail: prev.patientEmail,
@@ -550,7 +412,6 @@ function BookingForm({ onBookingSuccess, theme }) {
       setErrors({});
       setAvailableSlots([]);
 
-      // Call success callback to switch to appointments tab
       if (onBookingSuccess) {
         setTimeout(() => {
           onBookingSuccess();
@@ -564,23 +425,10 @@ function BookingForm({ onBookingSuccess, theme }) {
     }
   };
 
-  const convertTo24Hour = (time12h) => {
-    const [time, modifier] = time12h.split(" ");
-    let [hours, minutes] = time.split(":");
-    if (hours === "12") {
-      hours = "00";
-    }
-    if (modifier === "PM") {
-      hours = parseInt(hours, 10) + 12;
-    }
-    return `${hours.toString().padStart(2, "0")}:${minutes}`;
-  };
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
 
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -592,8 +440,6 @@ function BookingForm({ onBookingSuccess, theme }) {
     } else {
       setAvailableSlots([]);
     }
-
-    // Clear selected time when date or location changes
     setFormData((prev) => ({ ...prev, appointmentTime: "" }));
   };
 
@@ -618,13 +464,10 @@ function BookingForm({ onBookingSuccess, theme }) {
 
   return (
     <div className="space-y-6">
-      {/* Notification */}
       {notification && (
         <div
           className={`p-4 rounded-lg flex items-center transition-opacity duration-300 ${
-            notification.type === "error"
-              ? "bg-red-100 text-red-800"
-              : "bg-green-100 text-green-800"
+            notification.type === "error" ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
           }`}
         >
           {notification.type === "error" ? (
@@ -636,14 +479,9 @@ function BookingForm({ onBookingSuccess, theme }) {
         </div>
       )}
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Location and Date Selection */}
         <div>
-          <h3
-            className="text-lg font-medium mb-4"
-            style={{ color: actualTheme.text.primary }}
-          >
+          <h3 className="text-lg font-medium mb-4" style={{ color: actualTheme.text.primary }}>
             <MapPin size={18} className="inline mr-2" />
             Select Location & Date
           </h3>
@@ -653,13 +491,9 @@ function BookingForm({ onBookingSuccess, theme }) {
               name="location"
               value={formData.location}
               onChange={handleInputChange}
-              options={[
-                { value: "", label: "Select location" },
-                ...availableLocations,
-              ]}
+              options={[{ value: "", label: "Select location" }, ...availableLocations]}
               error={errors.location}
             />
-
             <CustomInput
               label="Appointment Date *"
               name="appointmentDate"
@@ -673,92 +507,65 @@ function BookingForm({ onBookingSuccess, theme }) {
           </div>
         </div>
 
-        {/* Time Slot Selection */}
         {formData.location && formData.appointmentDate && (
           <div>
-            <h3
-              className="text-lg font-medium mb-4"
-              style={{ color: actualTheme.text.primary }}
-            >
+            <h3 className="text-lg font-medium mb-4" style={{ color: actualTheme.text.primary }}>
               <Clock size={18} className="inline mr-2" />
               Select Time Slot
             </h3>
-
             {loading ? (
               <div className="flex justify-center py-4">
                 <Loader className="animate-spin" size={24} />
-                <span
-                  className="ml-2"
-                  style={{ color: actualTheme.text.secondary }}
-                >
+                <span className="ml-2" style={{ color: actualTheme.text.secondary }}>
                   Loading available slots...
                 </span>
               </div>
             ) : availableSlots.length > 0 ? (
               <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3">
-                {availableSlots.map((slot) => (
-                  <button
-                    key={slot}
-                    type="button"
-                    onClick={() =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        appointmentTime: slot,
-                      }))
-                    }
-                    className={`p-3 rounded-lg border text-center transition-all ${
-                      formData.appointmentTime === slot
-                        ? "border-blue-500 bg-blue-50 text-blue-700 font-medium"
-                        : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
-                    }`}
-                    style={{
-                      backgroundColor:
+                {availableSlots.map((slot) => {
+                  const displayTime = new Date(`2000-01-01T${slot}`).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  });
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, appointmentTime: slot }))}
+                      className={`p-3 rounded-lg border text-center transition-all ${
                         formData.appointmentTime === slot
-                          ? undefined
-                          : actualTheme.surface,
-                      color:
-                        formData.appointmentTime === slot
-                          ? undefined
-                          : actualTheme.text.primary,
-                      borderColor:
-                        formData.appointmentTime === slot
-                          ? "#3b82f6"
-                          : actualTheme.border,
-                    }}
-                  >
-                    {slot}
-                  </button>
-                ))}
+                          ? "border-blue-500 bg-blue-50 text-blue-700 font-medium"
+                          : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+                      }`}
+                      style={{
+                        backgroundColor: formData.appointmentTime === slot ? undefined : actualTheme.surface,
+                        color: formData.appointmentTime === slot ? undefined : actualTheme.text.primary,
+                        borderColor: formData.appointmentTime === slot ? "#3b82f6" : actualTheme.border,
+                      }}
+                    >
+                      {displayTime}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
-              <p
-                style={{ color: actualTheme.text.secondary }}
-                className="text-center py-4"
-              >
+              <p style={{ color: actualTheme.text.secondary }} className="text-center py-4">
                 No available slots for selected date and location.
               </p>
             )}
-
             {errors.appointmentTime && (
-              <p className="text-red-500 text-sm mt-2">
-                {errors.appointmentTime}
-              </p>
+              <p className="text-red-500 text-sm mt-2">{errors.appointmentTime}</p>
             )}
           </div>
         )}
 
-        {/* Patient Information */}
         {formData.appointmentTime && (
-          <div
-          >
-            <h3
-              className="text-lg font-medium mb-4"
-              style={{ color: actualTheme.text.primary }}
-            >
+          <div>
+            <h3 className="text-lg font-medium mb-4" style={{ color: actualTheme.text.primary }}>
               <User size={18} className="inline mr-2" />
               Patient Information
             </h3>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <CustomInput
                 label="Full Name *"
@@ -768,7 +575,6 @@ function BookingForm({ onBookingSuccess, theme }) {
                 placeholder="Enter full name"
                 error={errors.patientName}
               />
-
               <CustomInput
                 label="Age *"
                 name="patientAge"
@@ -780,7 +586,6 @@ function BookingForm({ onBookingSuccess, theme }) {
                 max="120"
                 error={errors.patientAge}
               />
-
               <CustomInput
                 label="Phone Number *"
                 name="patientPhone"
@@ -789,7 +594,6 @@ function BookingForm({ onBookingSuccess, theme }) {
                 placeholder="Enter phone number"
                 error={errors.patientPhone}
               />
-
               <CustomInput
                 label="Email Address"
                 name="patientEmail"
@@ -799,7 +603,6 @@ function BookingForm({ onBookingSuccess, theme }) {
                 placeholder="Enter email address"
                 error={errors.patientEmail}
               />
-
               <CustomSelect
                 label="Appointment Type"
                 name="appointmentType"
@@ -813,7 +616,6 @@ function BookingForm({ onBookingSuccess, theme }) {
                 ]}
               />
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <CustomInput
                 label="Reason for Visit"
@@ -824,7 +626,6 @@ function BookingForm({ onBookingSuccess, theme }) {
                 type="textarea"
                 rows="3"
               />
-
               <CustomInput
                 label="Medical History"
                 name="medicalHistory"
@@ -838,13 +639,9 @@ function BookingForm({ onBookingSuccess, theme }) {
           </div>
         )}
 
-        {/* Submit Button */}
         {formData.appointmentTime && (
           <div className="flex justify-center">
-            <CustomButton
-              type="submit"
-              disabled={submitting || loading}
-            >
+            <CustomButton type="submit" disabled={submitting || loading}>
               {submitting ? (
                 <>
                   <Loader className="animate-spin mr-2" size={18} />
