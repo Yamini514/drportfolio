@@ -163,7 +163,7 @@ function ReviewsContent() {
             Verified:{' '}
           </span>
           <span style={{ color: review.verified ? currentTheme.success : currentTheme.error }}>
-            {review.verified ? 'No' : 'Yes'}
+            {review.verified ? 'Yes' : 'No'}
           </span>
         </div>
         <div>
@@ -304,14 +304,15 @@ function ReviewsContent() {
                 <div className="flex items-center justify-center space-x-2">
                   <button
                     onClick={() => handleViewReview(review)}
-                    className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+                    className="p-1 text-gray-600 hover:text-gray-800 transition-colors cursor-pointer"
                     title="View"
+                    aria-label="View review"
                   >
                     <Eye size={20} />
                   </button>
                   <button
                     onClick={() => handleToggleVerify(review)}
-                    className="p-1 transition-colors"
+                    className="p-1 transition-colors cursor-pointer"
                     aria-label={review.verified ? 'Unverify review' : 'Verify review'}
                     style={{
                       color: review.verified ? currentTheme.error : currentTheme.success,
@@ -319,7 +320,7 @@ function ReviewsContent() {
                     }}
                     title={review.verified ? 'Unverify Review' : 'Verify Review'}
                   >
-                    {review.verified ?  <CheckCircle size={18} />: <XCircle size={18} />}
+                    {review.verified ? <CheckCircle size={18} /> : <XCircle size={18} />}
                   </button>
                 </div>
               </td>

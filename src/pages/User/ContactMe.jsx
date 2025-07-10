@@ -147,7 +147,7 @@ function ContactMe() {
   return (
     <section id="contact">
       <div
-        className="px-5 mt-50 md:px-15 pb-12 md:pb-10 lg:px-20 p-8"
+        className="px-5  md:px-15 pb-12 md:pb-10 lg:px-20 p-8"
         style={{ backgroundColor: currentTheme.background }}
       >
         <div className="container mx-auto">
@@ -406,20 +406,27 @@ function ContactMe() {
           </div>
         </div>
         {showSuccess && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-            <div
-              className="p-6 rounded-lg text-center"
-              style={{ backgroundColor: currentTheme.surface }}
-            >
-              <h3 className="text-xl font-semibold mb-2">
-                Message Sent Successfully!
-              </h3>
-              <p style={{ color: currentTheme.text.secondary }}>
-                Thank you for contacting us.
-              </p>
-            </div>
-          </div>
-        )}
+  <div className="fixed inset-0 flex items-center justify-center z-50">
+    <div
+      className="absolute inset-0 bg-black opacity-50"
+      style={{ zIndex: -1 }}
+    ></div>
+    <div
+      className="relative p-6 rounded-lg text-center"
+      style={{
+        backgroundColor: currentTheme.surface, // Solid surface color for the card
+        color: currentTheme.text.primary,
+      }}
+    >
+      <h3 className="text-xl font-semibold mb-2">
+        Message Sent Successfully!
+      </h3>
+      <p style={{ color: currentTheme.text.secondary }}>
+        Thank you for contacting us.
+      </p>
+    </div>
+  </div>
+)}
       </div>
     </section>
   );

@@ -165,7 +165,7 @@ function ServicesContent() {
       setServices((prev) =>
         prev
           .filter((service) => !serviceIds.includes(service.id))
-          .sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()))
+          .sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || ''). Litigant.toLowerCase()))
           .map((service, index) => ({ ...service, serviceId: `SRV${String(index + 1).padStart(3, '0')}` }))
       );
       showNotification('Selected services deleted successfully');
@@ -191,12 +191,11 @@ function ServicesContent() {
       return;
     }
     const currentDate = new Date().toISOString();
-    try {
+ try {
       if (editingService) {
         await updateDoc(doc(db, 'services', editingService), { ...formData, updatedAt: currentDate });
         setServices((prev) =>
-          prev
-            .map((service) =>
+          prev.map((service) =>
               service.id === editingService ? { ...service, ...formData, updatedAt: currentDate } : service
             )
             .sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()))
@@ -456,7 +455,7 @@ function ServicesContent() {
                         icon={PlusCircle}
                         onClick={() => {
                           setEditingService(null);
-                          setFormData({ title: '', description: '', icon: 'FaBrain', status: 'Active' });
+                          setFormData({ title: '', description: '', icon: 'FeBrain', status: 'Active' });
                           setShowForm(true);
                         }}
                         className="bg-purple-600 hover:bg-purple-700 w-full lg:w-auto"
@@ -508,7 +507,7 @@ function ServicesContent() {
                           <div className="flex justify-center space-x-2">
                             <button
                               onClick={() => handleViewClick(service)}
-                              className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                              className="p-1 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
                               title="View"
                               aria-label="View service"
                             >
@@ -516,7 +515,7 @@ function ServicesContent() {
                             </button>
                             <button
                               onClick={() => handleEditClick(service)}
-                              className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                              className="p-1 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
                               title="Edit"
                               aria-label="Edit service"
                             >
@@ -524,7 +523,7 @@ function ServicesContent() {
                             </button>
                             <button
                               onClick={() => handleDeleteClick(service.id)}
-                              className="p-1 text-red-600 hover:text-red-800 transition-colors"
+                              className="p-1 text-red-600 hover:text-red-800 transition-colors cursor-pointer"
                               title="Delete"
                               aria-label="Delete service"
                             >

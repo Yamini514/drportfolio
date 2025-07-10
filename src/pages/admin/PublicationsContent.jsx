@@ -62,20 +62,20 @@ function PublicationsContent() {
         ...formData,
         publishedYear: formData.publishedYear ? parseInt(formData.publishedYear) : null
       };
-      
+
       if (editingPublication) {
         const publicationRef = doc(db, 'publications', editingPublication);
         await updateDoc(publicationRef, formattedFormData);
-        setPublications(prev => 
-          prev.map(pub => 
-            pub.id === editingPublication 
+        setPublications(prev =>
+          prev.map(pub =>
+            pub.id === editingPublication
               ? { ...pub, ...formattedFormData }
               : pub
           ).sort((a, b) => (a.publishedYear || 0) - (b.publishedYear || 0))
-          .map((pub, index) => ({
-            ...pub,
-            publicationId: `${String(index + 1).padStart(3, '0')}`
-          }))
+            .map((pub, index) => ({
+              ...pub,
+              publicationId: `${String(index + 1).padStart(3, '0')}`
+            }))
         );
       } else {
         const publicationsCollection = collection(db, 'publications');
@@ -92,7 +92,7 @@ function PublicationsContent() {
             publicationId: `${String(index + 1).padStart(3, '0')}`
           })));
       }
-      
+
       setEditingPublication(null);
       setFormData({
         title: '',
@@ -135,14 +135,15 @@ function PublicationsContent() {
     {
       header: 'Title',
       accessor: 'title',
+      className: 'text-left',
       cell: (row) => (
         row.url ? (
-          <a 
-            href={row.url} 
-            target="_blank" 
+          <a
+            href={row.url}
+            target="_blank"
             rel="noopener noreferrer"
             style={{ color: currentTheme.primary, textDecoration: 'underline' }}
-            className="hover:opacity-80 whitespace-normal"
+            className="hover:opacity-80 whitespace-normal cursor-pointer"
           >
             {row.title}
           </a>
@@ -163,25 +164,29 @@ function PublicationsContent() {
     {
       header: 'Actions',
       accessor: 'actions',
+      className: 'text-center',
       cell: (row) => (
         <div className="flex justify-center space-x-1 sm:space-x-2">
           {row.url && (
             <button
               onClick={() => window.open(row.url, '_blank')}
-              className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+              className="p-1 text-gray-600 hover:text-gray-800 transition-colors cursor-pointer"
+              aria-label="View publication"
             >
               <Eye size={20} />
             </button>
           )}
           <button
             onClick={() => handleEditClick(row)}
-            className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+            className="p-1 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+            aria-label="Edit publication"
           >
             <Edit size={20} />
           </button>
           <button
             onClick={() => handleDeleteClick(row.id)}
-            className="p-1 text-red-600 hover:text-red-800 transition-colors"
+            className="p-1 text-red-600 hover:text-red-800 transition-colors cursor-pointer"
+            aria-label="Delete publication"
           >
             <Trash2 size={20} />
           </button>
@@ -202,7 +207,7 @@ function PublicationsContent() {
     setSearchTerm(e.target.value);
   };
 
-  const filteredPublications = publications.filter(publication => 
+  const filteredPublications = publications.filter(publication =>
     publication.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -213,7 +218,7 @@ function PublicationsContent() {
           Publications Management
         </h1>
         {!showForm && (
-          <CustomButton 
+          <CustomButton
             variant="primary"
             icon={PlusCircle}
             onClick={() => {
@@ -251,14 +256,15 @@ function PublicationsContent() {
               <td style={{ color: currentTheme.text.primary }}>
                 <div className="text-left pl-6">{publication.publicationId}</div>
               </td>
-              <td style={{ color: currentTheme.text.primary }}>
+              <td style={{ color: currentTheme.text.primary }} className="text-left">
                 {publication.url ? (
-                  <a 
-                    href={publication.url} 
-                    target="_blank" 
+                  <a
+                    href={publication.url}
+                    target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: currentTheme.primary, textDecoration: 'underline' }}
-                    className="hover:opacity-80 whitespace-normal"
+                    className="hover:opacity-80 whitespace-normal cursor-pointer"
+                    aria-label={`View publication: ${publication.title}`}
                   >
                     {publication.title}
                   </a>
@@ -274,20 +280,26 @@ function PublicationsContent() {
                   {publication.url && (
                     <button
                       onClick={() => window.open(publication.url, '_blank')}
-                      className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+                      className="p-1 text-gray-600 hover:text-gray-800 transition-colors cursor-pointer"
+                      title="View"
+                      aria-label="View review"
                     >
                       <Eye size={20} />
                     </button>
                   )}
                   <button
                     onClick={() => handleEditClick(publication)}
-                    className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                    className="p-1 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                    aria-label="Edit publication"
+                    title="Edit"
                   >
                     <Edit size={20} />
                   </button>
                   <button
                     onClick={() => handleDeleteClick(publication.id)}
-                    className="p-1 text-red-600 hover:text-red-800 transition-colors"
+                    className="p-1 text-red-600 hover:text-red-800 transition-colors cursor-pointer"
+                    aria-label="Delete publication"
+                    title="Delete"
                   >
                     <Trash2 size={20} />
                   </button>
@@ -297,9 +309,9 @@ function PublicationsContent() {
           ))}
         </CustomTable>
       ) : (
-        <div 
+        <div
           className="rounded-lg shadow p-6 max-w-md mx-auto bg-white"
-          style={{ 
+          style={{
             border: '1px solid #e5e7eb',
             color: currentTheme.text.primary
           }}
@@ -349,12 +361,12 @@ function PublicationsContent() {
           </form>
         </div>
       )}
-      <CustomDeleteConfirmation 
-        isOpen={deleteConfirmation.isOpen} 
-        onClose={() => setDeleteConfirmation({ isOpen: false, publicationId: null })} 
-        onConfirm={() => handleDelete(deleteConfirmation.publicationId)} 
-        title="Delete Publication" 
-        message="Are you sure you want to delete this publication? This action cannot be undone." 
+      <CustomDeleteConfirmation
+        isOpen={deleteConfirmation.isOpen}
+        onClose={() => setDeleteConfirmation({ isOpen: false, publicationId: null })}
+        onConfirm={() => handleDelete(deleteConfirmation.publicationId)}
+        title="Delete Publication"
+        message="Are you sure you want to delete this publication? This action cannot be undone."
       />
     </div>
   );
