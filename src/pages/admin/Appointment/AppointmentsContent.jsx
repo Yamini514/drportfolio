@@ -449,7 +449,7 @@ function AppointmentsContent() {
 
   const getStatusColor = useCallback((status) => ({
     confirmed: 'bg-green-100 text-green-800',
-    pending: 'bg-yellow-100 text-yellow-800',
+    Pending: 'bg-yellow-100 text-yellow-800',
     cancelled: 'bg-red-100 text-red-800',
     deleted: 'bg-gray-100 text-gray-800'
   }[status] || 'bg-gray-100 text-gray-800'), []);
@@ -726,7 +726,7 @@ function AppointmentsContent() {
                     options={[
                       { value: 'all', label: 'All Status' },
                       { value: 'confirmed', label: 'Confirmed' },
-                      { value: 'pending', label: 'Pending' },
+                      { value: 'Pending', label: 'Pending' },
                       { value: 'cancelled', label: 'Cancelled' }
                     ]}
                     value={filter}
@@ -796,7 +796,7 @@ function AppointmentsContent() {
                           </div>
                         </td>
                         <td className="px-4 py-2">{latestAppointment ? latestAppointment.appointmentType : 'Consultation'}</td>
-                        <td className="px-4 py-2"><StatusBadge status={latestAppointment ? latestAppointment.status : 'pending'} /></td>
+                        <td className="px-4 py-2"><StatusBadge status={latestAppointment ? latestAppointment.status : 'Pending'} /></td>
                         <td className="px-4 py-2 text-center"><ActionButtons appointment={latestAppointment} /></td>
                       </tr>
                     );

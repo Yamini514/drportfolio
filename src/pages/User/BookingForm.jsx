@@ -261,7 +261,7 @@ function BookingForm({ onBookingSuccess, theme }) {
         const bookedSlots = [];
         appointmentsSnapshot.forEach((doc) => {
           const apt = doc.data();
-          if (apt.appointmentDate === date && apt.location === location && apt.status !== "cancelled") {
+          if (apt.appointmentDate === date && apt.location === location && apt.status !== "Cancelled") {
             bookedSlots.push(apt.appointmentTime);
           }
         });
@@ -367,7 +367,7 @@ function BookingForm({ onBookingSuccess, theme }) {
           apt.appointmentDate === formData.appointmentDate &&
           apt.appointmentTime === formData.appointmentTime &&
           apt.location === formData.location &&
-          apt.status !== "cancelled"
+          apt.status !== "Cancelled"
         );
       });
 
@@ -388,7 +388,7 @@ function BookingForm({ onBookingSuccess, theme }) {
         reasonForVisit: formData.reasonForVisit || "",
         medicalHistory: formData.medicalHistory || "",
         appointmentType: formData.appointmentType || "Consultation",
-        status: "pending",
+        status: "Pending",
         bookedBy: currentUser.uid,
         bookedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),

@@ -179,7 +179,7 @@ const MyAppointments = ({ theme }) => {
       const appointmentRef = doc(db, "appointments", "bookings", "appointments", appointmentId);
       
       await updateDoc(appointmentRef, {
-        status: 'cancelled',
+        status: 'Cancelled',
         cancelledAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
@@ -377,7 +377,7 @@ const MyAppointments = ({ theme }) => {
       const bookedSlots = [];
       appointmentsSnapshot.forEach(doc => {
         const apt = doc.data();
-        if (apt.appointmentDate === date && apt.location === location && apt.status !== 'cancelled') {
+        if (apt.appointmentDate === date && apt.location === location && apt.status !== 'Cancelled') {
           bookedSlots.push(apt.appointmentTime);
         }
       });

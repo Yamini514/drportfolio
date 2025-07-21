@@ -287,7 +287,7 @@ const AddAppointment = () => {
           if (
             apt.appointmentDate === date &&
             apt.location === location &&
-            apt.status !== "cancelled"
+            apt.status !== "Cancelled"
           ) {
             bookedSlots.push(apt.appointmentTime);
           }
@@ -418,7 +418,7 @@ const AddAppointment = () => {
           apt.appointmentDate === formData.appointmentDate &&
           apt.appointmentTime === formData.appointmentTime &&
           apt.location === formData.location &&
-          apt.status !== "cancelled"
+          apt.status !== "Cancelled"
         );
       });
 
@@ -434,7 +434,7 @@ const AddAppointment = () => {
       // Create appointment
       const docRef = await addDoc(appointmentsRef, {
         ...formData,
-        status: "pending",
+        status: "Pending",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });

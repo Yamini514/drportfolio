@@ -103,7 +103,7 @@ const ViewAppointments = () => {
     const colors = {
       pending: "bg-yellow-100 text-yellow-800",
       confirmed: "bg-green-100 text-green-800",
-      cancelled: "bg-red-100 text-red-800",
+      Cancelled: "bg-red-100 text-red-800",
       completed: "bg-blue-100 text-blue-800",
       "no-show": "bg-gray-100 text-gray-800",
       rescheduled: "bg-purple-100 text-purple-800",
@@ -293,7 +293,7 @@ const ViewAppointments = () => {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleStatusUpdate(appointmentId, "cancelled");
+              handleStatusUpdate(appointmentId, "Cancelled");
             }}
             disabled={statusUpdateLoading[appointmentId]}
             className="p-1 rounded text-red-600 hover:bg-red-50 transition-colors"
@@ -498,7 +498,7 @@ const ViewAppointments = () => {
                   </CustomButton>
                   <CustomButton
                     onClick={() =>
-                      handleStatusUpdate(selectedAppointment.id, "cancelled")
+                      handleStatusUpdate(selectedAppointment.id, "Cancelled")
                     }
                     icon={X}
                     variant="outlined"
@@ -629,7 +629,7 @@ const ViewAppointments = () => {
             { value: "all", label: "All Status" },
             { value: "pending", label: "Pending" },
             { value: "confirmed", label: "Confirmed" },
-            { value: "cancelled", label: "Cancelled" },
+            { value: "Cancelled", label: "Cancelled" },
             { value: "completed", label: "Completed" },
             { value: "no-show", label: "No Show" },
             { value: "rescheduled", label: "Rescheduled" },

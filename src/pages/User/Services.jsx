@@ -8,7 +8,8 @@ import {
   FaStethoscope, 
   FaHospital, 
   FaHeartbeat, 
-  FaLaptopMedical 
+  FaLaptopMedical,
+  FaBone
 } from 'react-icons/fa';
 import { db } from '../../firebase/config';
 import { collection, getDocs } from 'firebase/firestore';
@@ -28,6 +29,7 @@ const Services = ({ id }) => {
       case 'FaHospital': return <FaHospital className="w-12 h-12" aria-hidden="true" />;
       case 'FaHeartbeat': return <FaHeartbeat className="w-12 h-12" aria-hidden="true" />;
       case 'FaLaptopMedical': return <FaLaptopMedical className="w-12 h-12" aria-hidden="true" />;
+      case 'FaBone': return <FaBone className="w-12 h-12" aria-hidden="true" />;
       default: return null;
     }
   };
