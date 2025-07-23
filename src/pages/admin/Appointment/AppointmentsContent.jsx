@@ -169,7 +169,7 @@ function AppointmentsContent() {
   }, [formatDate, checkIfDateIsBlocked]);
 
   const sendPhoneNotification = useCallback((appointment, action) => {
-    const message = action === 'confirmed'
+    const message = action === 'Confirmed'
       ? `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been confirmed.`
       : `Your appointment on ${formatDate(appointment.date)} at ${appointment.time} has been deleted and the slot is now available.`;
     console.log(`Sending SMS to ${appointment.phone || 'unknown phone'}: ${message}`);
@@ -316,9 +316,9 @@ function AppointmentsContent() {
         app.id === appointmentId ? { ...app, status: newStatus } : app
       );
       setAppointments(calculatePidData(updatedAppointments));
-      if (newStatus === 'confirmed') {
+      if (newStatus === 'Confirmed') {
         const appointment = appointments.flatMap(data => data.appointments).find(app => app.id === appointmentId);
-        sendPhoneNotification(appointment, 'confirmed');
+        sendPhoneNotification(appointment, 'Confirmed');
       }
     } catch (error) {
       console.error('Error updating appointment status:', error);
@@ -448,9 +448,9 @@ function AppointmentsContent() {
   }, [appointments, isFutureAppointment]);
 
   const getStatusColor = useCallback((status) => ({
-    confirmed: 'bg-green-100 text-green-800',
+    Confirmed: 'bg-green-100 text-green-800',
     Pending: 'bg-yellow-100 text-yellow-800',
-    cancelled: 'bg-red-100 text-red-800',
+    Cancelled: 'bg-red-100 text-red-800',
     deleted: 'bg-gray-100 text-gray-800'
   }[status] || 'bg-gray-100 text-gray-800'), []);
 
@@ -489,7 +489,7 @@ function AppointmentsContent() {
           <Eye size={20} />
         </button>
         <button
-          onClick={() => handleStatusUpdate(appointment.id, 'confirmed')}
+          onClick={() => handleStatusUpdate(appointment.id, 'Confirmed')}
           className="p-1 text-green-600 hover:opacity-80 transition-opacity"
           title="Approve Appointment"
           aria-label="Approve Appointment"
@@ -725,9 +725,9 @@ function AppointmentsContent() {
                   <CustomSelect
                     options={[
                       { value: 'all', label: 'All Status' },
-                      { value: 'confirmed', label: 'Confirmed' },
+                      { value: 'Confirmed', label: 'Confirmed' },
                       { value: 'Pending', label: 'Pending' },
-                      { value: 'cancelled', label: 'Cancelled' }
+                      { value: 'Cancelled', label: 'Cancelled' }
                     ]}
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
