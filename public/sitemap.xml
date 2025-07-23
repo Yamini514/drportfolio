@@ -3,7 +3,7 @@
   <url>
     <loc>https://drlaxminadh-dev.netlify.app/</loc>
     <lastmod>2025-07-22</lastmod>
-    <changefreq>monthly</changefreq>
+    <changefreq>Daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
@@ -19,12 +19,12 @@
   <url>
     <loc>https://drlaxminadh-dev.netlify.app/testimonials</loc>
     <lastmod>2025-07-22</lastmod>
-    <priority>0.8</priority>
+    <priority>1.0</priority>
   </url>
   <url>
     <loc>https://drlaxminadh-dev.netlify.app/contact</loc>
     <lastmod>2025-07-22</lastmod>
-    <priority>0.8</priority>
+    <priority>1.0</priority>
   </url>
   <url>
     <loc>https://drlaxminadh-dev.netlify.app/publications</loc>
