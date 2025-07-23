@@ -1,5 +1,5 @@
 User-agent: *
 Allow: /
-Sitemap: https://drlaxminadh-dev.netlify.app/sitemap.xml
+Sitemap: https://drlaxminadhneurocare.in/sitemap.xml
 
 
