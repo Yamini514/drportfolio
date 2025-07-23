@@ -101,7 +101,7 @@ const ViewAppointments = () => {
 
   const getStatusColor = useCallback((status) => {
     const colors = {
-      pending: "bg-yellow-100 text-yellow-800",
+      Pending: "bg-yellow-100 text-yellow-800",
       confirmed: "bg-green-100 text-green-800",
       Cancelled: "bg-red-100 text-red-800",
       completed: "bg-blue-100 text-blue-800",
@@ -275,9 +275,9 @@ const ViewAppointments = () => {
           status
         )}`}
       >
-        {status || "pending"}
+        {status || "Pending"}
       </span>
-      {upcoming && status === "pending" && !disabled && (
+      {upcoming && status === "Pending" && !disabled && (
         <div className="flex gap-1">
           <button
             onClick={(e) => {
@@ -484,7 +484,7 @@ const ViewAppointments = () => {
           {/* Status Update Actions */}
           {selectedAppointment.isUpcoming && (
             <div className="mt-6 flex gap-3">
-              {selectedAppointment.status === "pending" && (
+              {selectedAppointment.status === "Pending" && (
                 <>
                   <CustomButton
                     onClick={() =>
@@ -627,7 +627,7 @@ const ViewAppointments = () => {
           onChange={(e) => setFilter(e.target.value)}
           options={[
             { value: "all", label: "All Status" },
-            { value: "pending", label: "Pending" },
+            { value: "Pending", label: "Pending" },
             { value: "confirmed", label: "Confirmed" },
             { value: "Cancelled", label: "Cancelled" },
             { value: "completed", label: "Completed" },
@@ -833,11 +833,11 @@ const ViewAppointments = () => {
                           appointment.status
                         )}`}
                       >
-                        {appointment.status || "pending"}
+                        {appointment.status || "Pending"}
                       </span>
                       {appointment.isUpcoming && (
                         <div className="flex gap-1">
-                          {appointment.status === "pending" && (
+                          {appointment.status === "Pending" && (
                             <>
                               <button
                                 onClick={(e) => {

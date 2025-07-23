@@ -234,7 +234,7 @@ function AppointmentsContent() {
           return {
             id: doc.id,
             clientName: data.name || 'Unknown',
-            status: data.status || 'pending',
+            status: data.status || 'Pending',
             pid: data.pid || 'Unknown',
             date: data.date || '',
             time: data.time || '',
@@ -267,7 +267,7 @@ function AppointmentsContent() {
       const appointmentsList = snapshot.docs.map(doc => ({
         id: doc.id,
         clientName: doc.data().name || 'Unknown',
-        status: doc.data().status || 'pending',
+        status: doc.data().status || 'Pending',
         pid: doc.data().pid || 'Unknown',
         date: doc.data().date || '',
         time: doc.data().time || '',
