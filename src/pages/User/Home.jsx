@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { memo, useEffect } from 'react';
 import Hero from './Hero';
 import Video from './Video';
 import Testimonials from './Testimonials';
@@ -9,31 +9,7 @@ import ContactMe from './ContactMe';
 
 const Home = () => {
   useEffect(() => {
-    const metaTags = [
-      { name: 'description', content: 'Official website of Dr. Laxminadh Sivaraju, a leading Consultant Neuro & Spine Surgeon at Care Hospital specializing in brain tumors and minimally invasive techniques.' },
-      { name: 'keywords', content: 'neurosurgeon, spine surgeon, Dr. Laxminadh Sivaraju, Care Hospital, brain tumors, minimally invasive surgery, neurology' },
-      { name: 'author', content: 'Dr. Laxminadh Sivaraju' },
-      { property: 'og:title', content: 'Dr. Laxminadh Sivaraju - Neuro & Spine Surgeon' },
-      { property: 'og:description', content: 'Explore the expertise of Dr. Laxminadh Sivaraju, a leading neurosurgeon with over 2000 procedures and 30+ publications.' },
-      { property: 'og:image', content: '/assets/drimg.png' },
-      { property: 'og:type', content: 'website' },
-      { property: 'og:url', content: window.location.href },
-      { name: 'twitter:card', content: 'summary_large_image' },
-      { name: 'twitter:title', content: 'Dr. Laxminadh Sivaraju - Neuro & Spine Surgeon' },
-      { name: 'twitter:description', content: 'Renowned neurosurgeon specializing in brain tumors and minimally invasive techniques.' },
-      { name: 'twitter:image', content: '/assets/drimg.png' }
-    ];
-
-    // Add each meta tag to the head
-    metaTags.forEach(tag => {
-      const meta = document.createElement('meta');
-      Object.entries(tag).forEach(([key, value]) => {
-        meta.setAttribute(key, value);
-      });
-      document.head.appendChild(meta);
-    });
-
-    // Structured Data (Schema.org)
+    // Add structured data for SEO
     const script = document.createElement('script');
     script.type = 'application/ld+json';
     script.text = JSON.stringify({
@@ -49,30 +25,61 @@ const Home = () => {
     });
     document.head.appendChild(script);
 
-    // Cleanup on unmount
+    // Cleanup
     return () => {
-      metaTags.forEach(tag => {
-        const selector = tag.name
-          ? `meta[name="${tag.name}"]`
-          : `meta[property="${tag.property}"]`;
-        const el = document.head.querySelector(selector);
-        if (el) document.head.removeChild(el);
-      });
       document.head.removeChild(script);
     };
   }, []);
 
   return (
-    <main aria-label="Home page content">
-      <Hero id="hero" />
-      <About id="about" />
-      <Services id="services" />
-      <Testimonials />
-      <Gallery id="gallery" />
-      <Video />
-      <ContactMe id="contact" />
-    </main>
+    <>
+      {/* SEO Meta Tags */}
+      <meta
+        name="description"
+        content="Official website of Dr. Laxminadh Sivaraju, a leading Consultant Neuro & Spine Surgeon at Care Hospital specializing in brain tumors and minimally invasive techniques."
+      />
+      <meta
+        name="keywords"
+        content="neurosurgeon, spine surgeon, Dr. Laxminadh Sivaraju, Care Hospital, brain tumors, minimally invasive surgery, neurology"
+      />
+      <meta name="author" content="Dr. Laxminadh Sivaraju" />
+
+      {/* Open Graph Meta Tags for SMO */}
+      <meta
+        property="og:title"
+        content="Dr. Laxminadh Sivaraju - Neuro & Spine Surgeon"
+      />
+      <meta
+        property="og:description"
+        content="Explore the expertise of Dr. Laxminadh Sivaraju, a leading neurosurgeon with over 2000 procedures and 30+ publications."
+      />
+      <meta property="og:image" content="/assets/drimg.png" />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content={window.location.href} />
+
+      {/* Twitter Card Meta Tags for SMO */}
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta
+        name="twitter:title"
+        content="Dr. Laxminadh Sivaraju - Neuro & Spine Surgeon"
+      />
+      <meta
+        name="twitter:description"
+        content="Renowned neurosurgeon specializing in brain tumors and minimally invasive techniques."
+      />
+      <meta name="twitter:image" content="/assets/drimg.png" />
+
+      <main aria-label="Home page content">
+        <Hero id="hero" />
+        <About id="about" />
+        <Services id="services" />
+        <Testimonials />
+        <Gallery id="gallery" />
+        <Video />
+        <ContactMe id="contact" />
+      </main>
+    </>
   );
 };
 
-export default Home;
+export default memo(Home);
