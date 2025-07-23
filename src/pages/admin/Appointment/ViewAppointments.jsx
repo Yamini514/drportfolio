@@ -102,11 +102,11 @@ const ViewAppointments = () => {
   const getStatusColor = useCallback((status) => {
     const colors = {
       Pending: "bg-yellow-100 text-yellow-800",
-      confirmed: "bg-green-100 text-green-800",
+      Confirmed: "bg-green-100 text-green-800",
       Cancelled: "bg-red-100 text-red-800",
-      completed: "bg-blue-100 text-blue-800",
-      "no-show": "bg-gray-100 text-gray-800",
-      rescheduled: "bg-purple-100 text-purple-800",
+      Completed: "bg-blue-100 text-blue-800",
+      "No-show": "bg-gray-100 text-gray-800",
+      Rescheduled: "bg-purple-100 text-purple-800",
     };
     return colors[status] || "bg-gray-100 text-gray-800";
   }, []);
@@ -282,7 +282,7 @@ const ViewAppointments = () => {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleStatusUpdate(appointmentId, "confirmed");
+              handleStatusUpdate(appointmentId, "Confirmed");
             }}
             disabled={statusUpdateLoading[appointmentId]}
             className="p-1 rounded text-green-600 hover:bg-green-50 transition-colors"
@@ -303,11 +303,11 @@ const ViewAppointments = () => {
           </button>
         </div>
       )}
-      {upcoming && status === "confirmed" && !disabled && (
+      {upcoming && status === "Confirmed" && !disabled && (
         <button
           onClick={(e) => {
             e.stopPropagation();
-            handleStatusUpdate(appointmentId, "completed");
+            handleStatusUpdate(appointmentId, "Completed");
           }}
           disabled={statusUpdateLoading[appointmentId]}
           className="p-1 rounded text-blue-600 hover:bg-blue-50 transition-colors"
@@ -488,7 +488,7 @@ const ViewAppointments = () => {
                 <>
                   <CustomButton
                     onClick={() =>
-                      handleStatusUpdate(selectedAppointment.id, "confirmed")
+                      handleStatusUpdate(selectedAppointment.id, "Confirmed")
                     }
                     icon={Check}
                     className="bg-green-600 hover:bg-green-700 text-white"
@@ -509,11 +509,11 @@ const ViewAppointments = () => {
                   </CustomButton>
                 </>
               )}
-              {selectedAppointment.status === "confirmed" && (
+              {selectedAppointment.status === "Confirmed" && (
                 <>
                   <CustomButton
                     onClick={() =>
-                      handleStatusUpdate(selectedAppointment.id, "completed")
+                      handleStatusUpdate(selectedAppointment.id, "Completed")
                     }
                     icon={FileText}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -523,7 +523,7 @@ const ViewAppointments = () => {
                   </CustomButton>
                   <CustomButton
                     onClick={() =>
-                      handleStatusUpdate(selectedAppointment.id, "no-show")
+                      handleStatusUpdate(selectedAppointment.id, "No-show")
                     }
                     variant="outlined"
                     className="border-gray-500 text-gray-500 hover:bg-gray-50"
@@ -628,11 +628,11 @@ const ViewAppointments = () => {
           options={[
             { value: "all", label: "All Status" },
             { value: "Pending", label: "Pending" },
-            { value: "confirmed", label: "Confirmed" },
+            { value: "Confirmed", label: "Confirmed" },
             { value: "Cancelled", label: "Cancelled" },
-            { value: "completed", label: "Completed" },
-            { value: "no-show", label: "No Show" },
-            { value: "rescheduled", label: "Rescheduled" },
+            { value: "Completed", label: "Completed" },
+            { value: "No-show", label: "No Show" },
+            { value: "Rescheduled", label: "Rescheduled" },
           ]}
         />
 
@@ -844,7 +844,7 @@ const ViewAppointments = () => {
                                   e.stopPropagation();
                                   handleStatusUpdate(
                                     appointment.id,
-                                    "confirmed"
+                                    "Confirmed"
                                   );
                                 }}
                                 disabled={statusUpdateLoading[appointment.id]}
@@ -858,7 +858,7 @@ const ViewAppointments = () => {
                                   e.stopPropagation();
                                   handleStatusUpdate(
                                     appointment.id,
-                                    "cancelled"
+                                    "Cancelled"
                                   );
                                 }}
                                 disabled={statusUpdateLoading[appointment.id]}
@@ -869,11 +869,11 @@ const ViewAppointments = () => {
                               </button>
                             </>
                           )}
-                          {appointment.status === "confirmed" && (
+                          {appointment.status === "Confirmed" && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleStatusUpdate(appointment.id, "completed");
+                                handleStatusUpdate(appointment.id, "Completed");
                               }}
                               disabled={statusUpdateLoading[appointment.id]}
                               className="p-1 rounded text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
