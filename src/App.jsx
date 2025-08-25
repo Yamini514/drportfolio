@@ -29,12 +29,15 @@ import SocialIconsResponsive from './pages/User/SocialIcons';
 import AppointmentSchedular from './pages/admin/Appointment';
 import AdminForgotPassword from './pages/admin/AdminForgotPassword';
 import Appointments from './pages/admin/Appointment';
+import usePageTracking from './hooks/usePageTracking';
 // import ArticlesContent from './pages/admin/ArticlesContent';
 // Add this import at the top with other imports
 import ForgotPassword from './pages/User/ForgotPassword';
 import MyAppointments from './pages/User/MyAppointments';
 import BookAppointment from './pages/User/BookAppointment';
 import Forgotpassword from './pages/auth/UserForgotPassword';
+import AnalyticsIndex from "./Analytics/index";
+
 
 // Create a wrapper component to conditionally render social icons
 function SocialIconsWrapper() {
@@ -43,12 +46,18 @@ function SocialIconsWrapper() {
   
   return !isAdminRoute ? <SocialIconsResponsive /> : null;
 }
+function PageTrackingWrapper  () {
+  usePageTracking(); // ✅ correct hook usage inside a component
+  return null; // no UI
+};
 
 function App() {
+  
   return (
     <ThemeProvider>
       <BrowserRouter>
         {/* <SocialIconsWrapper /> */}
+        <PageTrackingWrapper/>
         <Routes>
           {/* Public routes with Layout */}
           <Route path="/" element={<Layout />}>
@@ -90,6 +99,8 @@ function App() {
               {/* <Route path="articles" element={<ArticlesContent/>} /> */}
               {/* <Route path="stats" element={<StatsContent/>} /> */}
               <Route path="reviews" element={<ReviewsContent/>}/>
+              <Route path="analytics" element={<AnalyticsIndex />} />
+
             </Route>
           </Route>
         </Routes>
