@@ -52,6 +52,7 @@ function Sidebar() {
     { id: 'publications', name: 'Publications', icon: <BookOpen size={18} /> },
     { id: 'messages', name: 'Messages', icon: <Mail size={18} /> },  // Add this line
     { id: 'reviews', name: 'Reviews', icon: <MessageSquare size={18} /> },  // Add this line
+    { id: 'analytics', name: 'Analytics', icon: <BarChart2 size={18} /> },  
     // { id: 'stats', name: 'Statistics', icon: <BarChart2 size={18} /> },
     // { id: 'content', name: 'Content', subItems: [
     //   { id: 'about', name: 'About', icon: <Info size={18} /> },
@@ -107,6 +108,10 @@ function Sidebar() {
       case 'about':
         navigate('/admin/about');
         break;
+      case 'analytics':
+  navigate('/admin/analytics');
+  break;
+
       default:
         navigate('/admin/services');  // Changed from dashboard to services
     }

@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import PageSpeed from "../pages/PageSpeed";
-import GoogleAnalytics from "../pages/GoogleAnalytics";
-import KeywordRankings from "../pages/KeywordRankings";
-import SearchConsole from "../pages/SearchConsole";
-import GoalTrackingDashboard from "../pages/GoalTrackingDashboard";
+// import GoogleAnalytics from "../pages/GoogleAnalytics";
+// import KeywordRankings from "../pages/KeywordRankings";
+// import SearchConsole from "../pages/SearchConsole";
+// import GoalTrackingDashboard from "../pages/GoalTrackingDashboard";
 // import LocalSEODashboard from "../pages/LocalSEODashboard";
 import CustomButton from "../components/CustomButton"; // Import your custom button component
 
@@ -19,12 +19,12 @@ const SocialSignals = () => <div><h2>Social Signals</h2><p>Social signals and en
 // Sidebar menu items config
 const menuItems = [
   { id: "dashboard", label: "Dashboard Overview", component: DashboardOverview },
-  { id: "rankings", label: "Website Rankings", component: KeywordRankings }, // ✅ Corrected line
-  { id: "analytics", label: "Google Analytics", component: GoogleAnalytics },
+  // { id: "rankings", label: "Website Rankings", component: KeywordRankings }, // ✅ Corrected line
+  // { id: "analytics", label: "Google Analytics", component: GoogleAnalytics },
   { id: "pageSpeed", label: "Page Speed", component: PageSpeed },
-  { id: "backlinks", label: "Backlinks", component: Backlinks },
-  { id: "searchConsole", label: "Search Console", component: SearchConsole },
-  { id: "goalTracking", label: "Goal Tracking", component: GoalTrackingDashboard },
+  // { id: "backlinks", label: "Backlinks", component: Backlinks },
+  // { id: "searchConsole", label: "Search Console", component: SearchConsole },
+  // { id: "goalTracking", label: "Goal Tracking", component: GoalTrackingDashboard },
   // { id: "localSEO", label: "Local SEO", component: LocalSEODashboard },
 ];
 
