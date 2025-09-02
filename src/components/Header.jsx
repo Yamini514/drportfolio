@@ -22,6 +22,9 @@ const navLinks = [
   },
 ];
 
+
+
+
 // SEO: Structured data for JSON-LD
 const structuredData = {
   "@context": "https://schema.org",
@@ -49,6 +52,7 @@ function Header() {
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
   const headerRef = useRef(null);
+  const [isMobileResearchOpen, setIsMobileResearchOpen] = useState(false);
 
   const isHomePage = location.pathname === "/" || location.pathname === "";
   const isTransparentHeader = isHomePage && !isScrolled && !isMenuOpen;
@@ -90,6 +94,10 @@ function Header() {
     }
     return meta;
   }, [location.pathname, location.hash]);
+
+  const handleMobileResearchToggle = () => {
+  setIsMobileResearchOpen(!isMobileResearchOpen);
+};
 
   // SEO: Update document meta tags and scroll to top
   useEffect(() => {
@@ -623,16 +631,34 @@ function Header() {
             {navLinks.map((link) =>
               link.dropdownItems ? (
                 <div key={link.name}>
-                  <div
-                    onClick={handleResearchToggle}
-                    className="px-4 py-2 font-medium text-sm sm:text-base"
-                    style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
-                    role="button"
-                    aria-expanded={isResearchDropdownOpen}
-                    aria-controls={`mobile-research-menu-${link.name}`}
-                  >
-                    {link.name}
-                  </div>
+                <div
+  onClick={() => setIsMobileResearchOpen(!isMobileResearchOpen)}
+  className="px-4 py-2 font-medium text-sm sm:text-base cursor-pointer"
+  style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
+  role="button"
+  aria-expanded={isMobileResearchOpen}
+  aria-controls={`mobile-research-menu-${link.name}`}
+>
+  {link.name}
+</div>
+{isMobileResearchOpen &&
+  link.dropdownItems.map((item) => (
+    <Link
+      key={item.name}
+      to={item.href}
+      className="block py-2 px-8 hover:bg-opacity-10 hover:bg-gray-500 text-sm sm:text-base"
+      style={{ color: theme === "light" ? "#000000" : "#e5e7eb" }}
+      onClick={(e) => {
+        handleNavClick(item.href, item.sectionId, e);
+        setIsMenuOpen(false);           // close full mobile menu
+        setIsMobileResearchOpen(false); // collapse dropdown
+      }}
+      role="menuitem"
+    >
+      {item.name}
+    </Link>
+  ))}
+
                   {isResearchDropdownOpen &&
                     link.dropdownItems.map((item) => (
                       <Link
